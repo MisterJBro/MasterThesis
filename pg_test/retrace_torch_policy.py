@@ -45,6 +45,33 @@ def actor_critic_loss(
     else:
         valid_mask = torch.ones(int(train_batch["obs"].shape[0]), dtype=torch.bool)
 
+    # Q function loss
+    if policy.config["use_qf"]:
+        obs = train_batch["obs"].float()
+        obs = obs.reshape(obs.shape[0], -1)
+
+        trainset = torch.utils.data.TensorDataset(obs, torch.masked_select(train_batch[Postprocessing.VALUE_TARGETS], valid_mask), valid_mask, train_batch[SampleBatch.ACTIONS])
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(policy.config["train_batch_size"]/10), shuffle=True)
+
+        for i in range(policy.config["qf_iters"]):
+            for obs_flat, qf_target, batch_valid_mask, actions in trainloader:
+                policy._optimizers[2].zero_grad()
+                model.obs_flat = obs_flat
+                q_values = model.q_function()
+                q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+                q_values = torch.masked_select(q_values, batch_valid_mask)
+
+                q_value_err = mse_loss(q_values, qf_target)
+                q_value_err.backward()
+                policy._optimizers[2].step()
+                #print("\t", i, q_value_err)
+
+        model.obs_flat = obs
+        q_values = model.q_function()
+        q_values = q_values.gather(1, train_batch[SampleBatch.ACTIONS].unsqueeze(1)).squeeze(1)
+        q_values = torch.masked_select(q_values, valid_mask)
+        train_batch[Postprocessing.ADVANTAGES] = q_values
+
     # Value function loss
     if policy.config["use_critic"]:
         obs = train_batch["obs"].float()
@@ -89,7 +116,7 @@ def actor_critic_loss(
     model.tower_stats["pi_err"] = pi_err
     model.tower_stats["value_err"] = value_err
 
-    return (torch.zeros(1, requires_grad=True), torch.zeros(1, requires_grad=True))
+    return (torch.zeros(1, requires_grad=True), torch.zeros(1, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
 def stats(policy: Policy, train_batch: SampleBatch) -> Dict[str, TensorType]:
@@ -135,11 +162,14 @@ def vf_preds_fetches(
 
 def torch_optimizer(policy: Policy, config: TrainerConfigDict) -> LocalOptimizer:
     actor_weights = policy.model.actor.parameters()
-    critic_weights = policy.model.value.parameters()
-    actor_opt = torch.optim.Adam(actor_weights, lr=config["lr"])
-    critic_opt = torch.optim.Adam(critic_weights, lr=config["vf_lr"])
+    value_weights = policy.model.value.parameters()
+    q_weights = policy.model.q.parameters()
 
-    return (actor_opt, critic_opt)
+    actor_opt = torch.optim.Adam(actor_weights, lr=config["lr"])
+    value_opt = torch.optim.Adam(value_weights, lr=config["vf_lr"])
+    q_opt = torch.optim.Adam(q_weights, lr=config["qf_lr"])
+
+    return (actor_opt, value_opt, q_opt)
 
 def build_model(policy, obs_space, action_space, config):
     model = ModelCatalog.get_model_v2(

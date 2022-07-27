@@ -57,5 +57,5 @@ class MPOModel(TorchModelV2, nn.Module):
         return value.squeeze(1)
 
     def q_function(self) -> TensorType:
-        value = self.value(self.obs_flat)
-        return value.squeeze(1)
+        q_value = self.q(self.obs_flat)
+        return q_value.squeeze(1)

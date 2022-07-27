@@ -1,4 +1,5 @@
 import logging
+from tkinter.tix import Tree
 from typing import Any, Dict, Type
  
 import numpy as np
@@ -77,7 +78,11 @@ DEFAULT_CONFIG = with_common_config({
     # Learning rates
     "lr": 0.0001,
     "vf_lr": 0.0001,
-    "vf_iters": 20,
+    "qf_lr": 0.0001,
+    "vf_iters": 3,
+    # Whether to use learn a Q function
+    "use_qf": True,
+    "qf_iters": 3,
     # Learning rate schedule
     "lr_schedule": None,
     # Entropy coefficient
@@ -86,11 +91,25 @@ DEFAULT_CONFIG = with_common_config({
     "entropy_coeff_schedule": None,
     "sample_async": False,
 
+    # Replay buffer
+    "replay_buffer_config": {
+        # Use the new ReplayBuffer API here
+        "_enable_replay_buffer_api": True,
+        # How many steps of the model to sample before learning starts.
+        "learning_starts": 0,
+        "type": "MultiAgentReplayBuffer",
+        "capacity": 100_000,
+        "replay_batch_size": 128,
+        # The number of contiguous environment steps to replay at once. This
+        # may be set to greater than 1 to support recurrent models.
+        "replay_sequence_length": 1,
+    },
+
     # Custom Model
     "mpo_model": {
         "custom_model": MPOModel,
         # General Network Parameters
-        "hidden_size": 512,
+        "hidden_size": 256,
     },
 
     # Use the Trainer's `training_iteration` function instead of `execution_plan`.
@@ -164,11 +183,16 @@ if __name__ == "__main__":
         "gamma": 0.99,
         "use_gae": False,
         "lambda": 0.9,
+
         "use_critic": False,
         "vf_lr": 1e-3,
         "vf_iters": 3,
 
-        "lr": 2e-3,
+        "use_qf": True,
+        "qf_lr": 1e-3,
+        "qf_iters": 5,
+
+        "lr": 1e-3,
         "entropy_coeff": 0.0,
         "rollout_fragment_length": 500,
         "train_batch_size": 60_000,
