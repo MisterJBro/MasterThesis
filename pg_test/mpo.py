@@ -1,7 +1,8 @@
 import logging
+import random
 from tkinter.tix import Tree
 from typing import Any, Dict, Type
- 
+
 import numpy as np
 import math
 import ray
@@ -16,6 +17,7 @@ from ray.rllib.execution.rollout_ops import AsyncGradients
 from ray.rllib.execution.train_ops import ApplyGradients
 from ray.rllib.policy.policy import Policy
 from ray.rllib.utils.annotations import override
+from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.utils.metrics import (
     APPLY_GRADS_TIMER,
     GRAD_WAIT_TIMER,
@@ -71,6 +73,8 @@ DEFAULT_CONFIG = with_common_config({
     "iters": 100,
     # Size of rollout batch
     "rollout_fragment_length": 10,
+    # Batch mode must be complete_episodes.
+    #"batch_mode": "complete_episodes",
     # GAE(gamma) parameter
     "lambda": 0.97,
     # Max global norm for each gradient calculated by worker
@@ -90,19 +94,17 @@ DEFAULT_CONFIG = with_common_config({
     # Entropy coefficient schedule
     "entropy_coeff_schedule": None,
     "sample_async": False,
+    # Sample batch size
+    "sample_batch_size": 1_500,
 
     # Replay buffer
     "replay_buffer_config": {
-        # Use the new ReplayBuffer API here
-        "_enable_replay_buffer_api": True,
+         "_enable_replay_buffer_api": False,
         # How many steps of the model to sample before learning starts.
-        "learning_starts": 0,
-        "type": "MultiAgentReplayBuffer",
-        "capacity": 100_000,
-        "replay_batch_size": 128,
-        # The number of contiguous environment steps to replay at once. This
-        # may be set to greater than 1 to support recurrent models.
-        "replay_sequence_length": 1,
+        #"learning_starts": 1_000,
+        "type": "ray.rllib.utils.replay_buffers.replay_buffer.ReplayBuffer",
+        "capacity": 10_000,
+        "storage_unit": "episodes",
     },
 
     # Custom Model
@@ -142,19 +144,46 @@ class MPOTrainer(Trainer):
         else:
             raise ValueError("Unsupported framework: {}".format(config["framework"]))
 
+    def sample_from_replay(self):
+        sampled_size = 0
+        samples = []
+        while sampled_size < self.config["train_batch_size"]:
+            i = random.randint(0, len(self.local_replay_buffer) - 1)
+            self.local_replay_buffer._hit_count[i] += 1
+            sample_episode = self.local_replay_buffer._storage[i]
+            sampled_size += len(sample_episode)
+            samples.append(sample_episode)
+
+        sample_type = type(samples[0])
+        out = sample_type.concat_samples(samples)
+        out.decompress_if_needed()
+
+        self.local_replay_buffer._num_timesteps_sampled += out.count
+        return out
+
     def training_iteration(self) -> ResultDict:
         # Collect SampleBatches from sample workers until we have a full batch.
         if self._by_agent_steps:
-            train_batch = synchronous_parallel_sample(
-                worker_set=self.workers, max_agent_steps=self.config["train_batch_size"]
+            new_sample_batches = synchronous_parallel_sample(
+                worker_set=self.workers, concat=False, max_agent_steps=self.config["sample_batch_size"]
             )
         else:
-            train_batch = synchronous_parallel_sample(
-                worker_set=self.workers, max_env_steps=self.config["train_batch_size"]
+            new_sample_batches = synchronous_parallel_sample(
+                worker_set=self.workers, concat=False, max_env_steps=self.config["sample_batch_size"]
             )
-        train_batch = train_batch.as_multi_agent()
-        self._counters[NUM_AGENT_STEPS_SAMPLED] += train_batch.agent_steps()
-        self._counters[NUM_ENV_STEPS_SAMPLED] += train_batch.env_steps()
+
+        # Add episodes of batches into replay buffer
+        for batch in new_sample_batches:
+            for eps in batch.split_by_episode():
+                # Update sampling step counters.
+                self._counters[NUM_ENV_STEPS_SAMPLED] += eps.env_steps()
+                self._counters[NUM_AGENT_STEPS_SAMPLED] += eps.agent_steps()
+
+                if eps.get(SampleBatch.DONES)[-1] == True:
+                    self.local_replay_buffer._add_single_batch(eps)
+
+        # Sample one training MultiAgentBatch from replay buffer.
+        train_batch = self.sample_from_replay()
 
         # Use simple optimizer (only for multi-agent or tf-eager; all other
         # cases should use the multi-GPU optimizer, even if only using 1 GPU).
@@ -176,10 +205,10 @@ if __name__ == "__main__":
     config = {
         # === Settings for Rollout Worker processes ===
         "num_workers": 3,
-        "num_envs_per_worker": 8,
+        "num_envs_per_worker": 1,
 
         # === Settings for the Trainer process ===
-        "iters": 50,
+        "iters": 200,
         "gamma": 0.99,
         "use_gae": False,
         "lambda": 0.9,
@@ -194,8 +223,9 @@ if __name__ == "__main__":
 
         "lr": 1e-3,
         "entropy_coeff": 0.0,
-        "rollout_fragment_length": 500,
-        "train_batch_size": 60_000,
+        "rollout_fragment_length": 300,
+        "sample_batch_size": 900,
+        "train_batch_size": 16_000,
 
         # === Environment Settings ===
         "env": "CartPole-v1",
