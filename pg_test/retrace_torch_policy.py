@@ -30,27 +30,73 @@ torch, nn = try_import_torch()
 from torch.nn.functional import mse_loss
 
 
-def actor_critic_loss(
+def mpo_loss(
     policy: Policy,
     model: ModelV2,
     dist_class: ActionDistribution,
     train_batch: SampleBatch,
 ) -> TensorType:
-    #print(train_batch["obs"].shape, train_batch[Postprocessing.ADVANTAGES].shape)
-    if policy.is_recurrent():
-        B = len(train_batch[SampleBatch.SEQ_LENS])
-        max_seq_len = train_batch["obs"].shape[0] // B
-        mask_orig = sequence_mask(train_batch[SampleBatch.SEQ_LENS], max_seq_len)
-        valid_mask = torch.reshape(mask_orig, [-1])
+    # Reshape observations
+    obs = train_batch["obs"].float()
+    obs = obs.reshape(obs.shape[0], -1)
+    valid_mask = torch.ones(int(train_batch["obs"].shape[0]), dtype=torch.bool)
+    # ['obs', 'new_obs', 'actions', 'prev_actions', 'rewards', 'prev_rewards', 'dones', 'infos', 'eps_id', 'unroll_id', 'agent_index', 't', 'vf_preds', 'action_dist_inputs', 'action_prob', 'action_logp', 'advantages', 'value_targets']
+
+    # Retrace operator for all episodes
+    if policy.config["retrace"]:
+        with torch.no_grad():
+            logits, _ = model(train_batch)
+            dist = dist_class(logits, model)
+            probs = dist.dist.probs
+            log_probs = dist.logp(train_batch[SampleBatch.ACTIONS]).reshape(-1)
+        old_log_probs = train_batch['action_logp']
+
+        q_values = model.q_function()
+        v_values = (probs * q_values).sum(1, keepdim=True)
+        q_single = q_values.gather(1, train_batch[SampleBatch.ACTIONS].unsqueeze(1)).squeeze(1)
+        train_batch['q_values'] = q_values
+        train_batch['v_values'] = v_values
+        train_batch['q_single'] = q_single
+
+        log_rho = log_probs - old_log_probs
+        log_c = torch.min(torch.zeros_like(log_rho), log_rho)
+        train_batch['log_c'] = log_c
+        #q_values = torch.masked_select(q_values, valid_mask)
+
+        Q_TARGETS = []
+        gamma = policy.config['gamma']
+        # Iterate over all episodes and calculate retrace operator
+        for eps in train_batch.split_by_episode():
+            c = torch.exp(eps['log_c'])
+
+            err = torch.tensor(eps['rewards'][:-1]) + eps['v_values'][1:].reshape(-1) - eps['q_single'][:-1]
+            err = torch.concat([err, torch.tensor([0]).to(eps['q_single'].device)])
+
+            #Calculate retrace operation
+            local_targets = []
+            q_ret = torch.zeros(1)
+            for i in reversed(range(len(eps))):
+                q_sum = err[i] + q_ret
+                local_target = eps['q_single'][i] + q_sum
+                print(local_target, q_sum, err[i], q_ret, gamma)
+                local_targets.append(local_target)
+                q_ret = gamma * c[i] * q_sum
+            Q_TARGETS.extend(list(reversed(local_target)))
+        Q_TARGETS = torch.tensor(Q_TARGETS)
     else:
-        valid_mask = torch.ones(int(train_batch["obs"].shape[0]), dtype=torch.bool)
+        Q_TARGETS = train_batch[Postprocessing.VALUE_TARGETS]
+
+    #if policy.is_recurrent():
+    #    B = len(train_batch[SampleBatch.SEQ_LENS])
+    #    max_seq_len = train_batch["obs"].shape[0] // B
+    #    mask_orig = sequence_mask(train_batch[SampleBatch.SEQ_LENS], max_seq_len)
+    #    valid_mask = torch.reshape(mask_orig, [-1])
+    #else:
+    #
 
     # Q function loss
     if policy.config["use_qf"]:
-        obs = train_batch["obs"].float()
-        obs = obs.reshape(obs.shape[0], -1)
-
-        trainset = torch.utils.data.TensorDataset(obs, torch.masked_select(train_batch[Postprocessing.VALUE_TARGETS], valid_mask), valid_mask, train_batch[SampleBatch.ACTIONS])
+        trainset = torch.utils.data.TensorDataset(obs, torch.masked_select(Q_TARGETS, valid_mask), valid_mask, train_batch[SampleBatch.ACTIONS])
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(policy.config["train_batch_size"]/10), shuffle=True)
 
         for i in range(policy.config["qf_iters"]):
@@ -74,10 +120,9 @@ def actor_critic_loss(
 
     # Value function loss
     if policy.config["use_critic"]:
-        obs = train_batch["obs"].float()
-        obs = obs.reshape(obs.shape[0], -1)
         trainset = torch.utils.data.TensorDataset(obs, torch.masked_select(train_batch[Postprocessing.VALUE_TARGETS], valid_mask), valid_mask)
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(policy.config["train_batch_size"]/10), shuffle=True)
+
         for i in range(policy.config["vf_iters"]):
             for obs_flat, vf_target, batch_valid_mask in trainloader:
                 policy._optimizers[1].zero_grad()
@@ -101,9 +146,7 @@ def actor_critic_loss(
             log_probs * train_batch[Postprocessing.ADVANTAGES], valid_mask
         )
     )
-
     entropy = torch.mean(torch.masked_select(dist.entropy(), valid_mask))
-    #print("Test: ", policy.config["vf_loss_coeff"])
 
     policy._optimizers[0].zero_grad()
     total_loss = pi_err# - entropy * policy.entropy_coeff #+ value_err * policy.config["vf_loss_coeff"]
@@ -246,7 +289,7 @@ MPOTorchPolicy = build_policy_class(
     framework="torch",
     get_default_config=lambda: MPO_DEFAULT_CONFIG,
     apply_gradients_fn=lambda a, b: None,
-    loss_fn=actor_critic_loss,
+    loss_fn=mpo_loss,
     stats_fn=stats,
     make_model=build_model,
     postprocess_fn=compute_gae_for_sample_batch,
