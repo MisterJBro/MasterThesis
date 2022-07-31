@@ -96,6 +96,8 @@ DEFAULT_CONFIG = with_common_config({
     "sample_async": False,
     # Sample batch size
     "sample_batch_size": 1_500,
+    # Using retrace operator
+    "retrace": True,
 
     # Replay buffer
     "replay_buffer_config": {
@@ -205,7 +207,7 @@ if __name__ == "__main__":
     config = {
         # === Settings for Rollout Worker processes ===
         "num_workers": 3,
-        "num_envs_per_worker": 1,
+        "num_envs_per_worker": 8,
 
         # === Settings for the Trainer process ===
         "iters": 200,
@@ -221,11 +223,12 @@ if __name__ == "__main__":
         "qf_lr": 1e-3,
         "qf_iters": 5,
 
+        "retrace": True,
         "lr": 1e-3,
         "entropy_coeff": 0.0,
-        "rollout_fragment_length": 300,
-        "sample_batch_size": 900,
-        "train_batch_size": 16_000,
+        "rollout_fragment_length": 500,
+        "sample_batch_size": 36_000,
+        "train_batch_size": 36_000,
 
         # === Environment Settings ===
         "env": "CartPole-v1",

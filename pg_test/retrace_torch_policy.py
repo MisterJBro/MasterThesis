@@ -1,3 +1,4 @@
+from cmath import log
 import gym
 import numpy as np
 from typing import Dict, List, Optional
@@ -30,6 +31,59 @@ torch, nn = try_import_torch()
 from torch.nn.functional import mse_loss
 
 
+def retrace(
+    policy: Policy,
+    model: ModelV2,
+    dist_class: ActionDistribution,
+    train_batch: SampleBatch,
+):
+    obs = train_batch["obs"].float()
+    obs = obs.reshape(obs.shape[0], -1)
+
+    with torch.no_grad():
+        logits, _ = model(train_batch)
+        dist = dist_class(logits, model)
+        probs = dist.dist.probs
+        log_probs = dist.logp(train_batch[SampleBatch.ACTIONS]).reshape(-1)
+    old_log_probs = train_batch['action_logp']
+
+    with torch.no_grad():
+        model.obs_flat = obs
+        q_values = model.q_function()
+        v_values = (probs * q_values).sum(1, keepdim=True)
+        q_single = q_values.gather(1, train_batch[SampleBatch.ACTIONS].unsqueeze(1)).squeeze(1)
+    train_batch['q_values'] = q_values
+    train_batch['v_values'] = v_values
+    train_batch['q_single'] = q_single
+
+    log_rho = log_probs - old_log_probs
+    log_c = torch.min(torch.zeros_like(log_rho), log_rho)
+    trace = torch.exp(log_c)
+    train_batch['trace'] = trace
+
+    Q_TARGETS = []
+    gamma = policy.config['gamma']
+    # Iterate over all episodes and calculate retrace operator
+    for eps in train_batch.split_by_episode():
+        c_s = eps['trace']
+        r_t = torch.tensor(eps['rewards'])
+        Eq = torch.concat([eps['v_values'].reshape(-1)[1:], torch.tensor([0])])
+        q_t = eps['q_single']
+        err = r_t + gamma * Eq - q_t
+
+        #Calculate retrace targets
+        local_targets = []
+        q_ret = torch.zeros(1)
+        for i in reversed(range(len(eps))):
+            q_sum = err[i] + q_ret
+            local_target = q_t[i] + q_sum
+            local_targets.append(local_target)
+            q_ret = gamma * c_s[i] * q_sum
+        local_targets = list(reversed(local_targets))
+        Q_TARGETS.extend(local_targets)
+    Q_TARGETS = torch.tensor(Q_TARGETS)
+    return Q_TARGETS
+
 def mpo_loss(
     policy: Policy,
     model: ModelV2,
@@ -40,49 +94,9 @@ def mpo_loss(
     obs = train_batch["obs"].float()
     obs = obs.reshape(obs.shape[0], -1)
     valid_mask = torch.ones(int(train_batch["obs"].shape[0]), dtype=torch.bool)
-    # ['obs', 'new_obs', 'actions', 'prev_actions', 'rewards', 'prev_rewards', 'dones', 'infos', 'eps_id', 'unroll_id', 'agent_index', 't', 'vf_preds', 'action_dist_inputs', 'action_prob', 'action_logp', 'advantages', 'value_targets']
 
-    # Retrace operator for all episodes
     if policy.config["retrace"]:
-        with torch.no_grad():
-            logits, _ = model(train_batch)
-            dist = dist_class(logits, model)
-            probs = dist.dist.probs
-            log_probs = dist.logp(train_batch[SampleBatch.ACTIONS]).reshape(-1)
-        old_log_probs = train_batch['action_logp']
-
-        q_values = model.q_function()
-        v_values = (probs * q_values).sum(1, keepdim=True)
-        q_single = q_values.gather(1, train_batch[SampleBatch.ACTIONS].unsqueeze(1)).squeeze(1)
-        train_batch['q_values'] = q_values
-        train_batch['v_values'] = v_values
-        train_batch['q_single'] = q_single
-
-        log_rho = log_probs - old_log_probs
-        log_c = torch.min(torch.zeros_like(log_rho), log_rho)
-        train_batch['log_c'] = log_c
-        #q_values = torch.masked_select(q_values, valid_mask)
-
-        Q_TARGETS = []
-        gamma = policy.config['gamma']
-        # Iterate over all episodes and calculate retrace operator
-        for eps in train_batch.split_by_episode():
-            c = torch.exp(eps['log_c'])
-
-            err = torch.tensor(eps['rewards'][:-1]) + eps['v_values'][1:].reshape(-1) - eps['q_single'][:-1]
-            err = torch.concat([err, torch.tensor([0]).to(eps['q_single'].device)])
-
-            #Calculate retrace operation
-            local_targets = []
-            q_ret = torch.zeros(1)
-            for i in reversed(range(len(eps))):
-                q_sum = err[i] + q_ret
-                local_target = eps['q_single'][i] + q_sum
-                print(local_target, q_sum, err[i], q_ret, gamma)
-                local_targets.append(local_target)
-                q_ret = gamma * c[i] * q_sum
-            Q_TARGETS.extend(list(reversed(local_target)))
-        Q_TARGETS = torch.tensor(Q_TARGETS)
+        Q_TARGETS = retrace(policy, model, dist_class, train_batch)
     else:
         Q_TARGETS = train_batch[Postprocessing.VALUE_TARGETS]
 
@@ -98,7 +112,6 @@ def mpo_loss(
     if policy.config["use_qf"]:
         trainset = torch.utils.data.TensorDataset(obs, torch.masked_select(Q_TARGETS, valid_mask), valid_mask, train_batch[SampleBatch.ACTIONS])
         trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(policy.config["train_batch_size"]/10), shuffle=True)
-
         for i in range(policy.config["qf_iters"]):
             for obs_flat, qf_target, batch_valid_mask, actions in trainloader:
                 policy._optimizers[2].zero_grad()
