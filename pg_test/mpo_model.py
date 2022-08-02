@@ -16,6 +16,11 @@ class MPOModel(TorchModelV2, nn.Module):
         self.obs_size = int(np.product(obs_space.shape))
         self.hidden_size = model_config["hidden_size"]
 
+        # Lagrange Multiplier
+        self.η = np.random.rand()
+        self.α = 0.0
+        self .action_num = num_outputs
+
         self.actor = nn.Sequential(
             nn.Linear(self.obs_size, self.hidden_size),
             nn.ReLU(),

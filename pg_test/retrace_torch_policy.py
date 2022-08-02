@@ -29,7 +29,13 @@ from ray.rllib.models.catalog import ModelCatalog
 
 torch, nn = try_import_torch()
 from torch.nn.functional import mse_loss
+from scipy.optimize import minimize
 
+# calculates KL between two Categorical distributions from https://github.com/daisatojp/mpo/blob/master/mpo/mpo.py
+def categorical_kl(p1, p2):
+    p1 = torch.clamp_min(p1, 0.0001)
+    p2 = torch.clamp_min(p2, 0.0001)
+    return torch.mean((p1 * torch.log(p1 / p2)).sum(dim=-1))
 
 def retrace(
     policy: Policy,
@@ -69,6 +75,8 @@ def retrace(
         r_t = torch.tensor(eps['rewards'])
         Eq = torch.concat([eps['v_values'].reshape(-1)[1:], torch.tensor([0])])
         q_t = eps['q_single']
+        if eps.get(SampleBatch.DONES)[-1]:
+            eps['q_single'][-1] = 0
         err = r_t + gamma * Eq - q_t
 
         #Calculate retrace targets
@@ -89,7 +97,8 @@ def mpo_loss(
     model: ModelV2,
     dist_class: ActionDistribution,
     train_batch: SampleBatch,
-) -> TensorType:
+) ->  TensorType:
+
     # Reshape observations
     obs = train_batch["obs"].float()
     obs = obs.reshape(obs.shape[0], -1)
@@ -146,10 +155,40 @@ def mpo_loss(
                 value_err = mse_loss(values, vf_target)
                 value_err.backward()
                 policy._optimizers[1].step()
-                #print("\t", i, value_err)
     else:
         value_err = torch.zeros(1, requires_grad=True)
 
+    trainset = torch.utils.data.TensorDataset(obs)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(policy.config["train_batch_size"]/100), shuffle=True)
+    #print(trainloader.next())
+
+    # E-Step adapted from https://github.com/daisatojp/mpo/blob/master/mpo/mpo.py
+    da = model.action_num
+    K = train_batch["obs"].shape[0]
+    actions = torch.arange(da)[..., None].expand(model.action_num, K)
+    with torch.no_grad():
+        logits, _ = model({"obs": obs})
+        dist = dist_class(logits, model)
+        b_prob = dist.dist.expand((da, K)).log_prob(actions).exp()
+        b_prob_np = b_prob.cpu().transpose(0, 1).numpy()
+
+        q_values = model.q_function().transpose(0, 1)
+        target_q_np = q_values.cpu().transpose(0, 1).numpy()
+
+
+    # Dual function
+    def dual(η):
+        max_q = np.max(target_q_np, 1)
+        return η * policy.config["ε_dual"] + np.mean(max_q) \
+            + η * np.mean(np.log(np.sum(
+                b_prob_np * np.exp((target_q_np - max_q[:, None]) / η), axis=1)))
+
+    bounds = [(1e-6, None)]
+    res = minimize(dual, np.array([model.η]), method='SLSQP', bounds=bounds)
+    model.η = res.x[0]
+    qij = torch.softmax(q_values / model.η, dim=0)
+
+    """
     # Policy loss
     logits, _ = model(train_batch)
     dist = dist_class(logits, model)
@@ -159,20 +198,53 @@ def mpo_loss(
             log_probs * train_batch[Postprocessing.ADVANTAGES], valid_mask
         )
     )
-    entropy = torch.mean(torch.masked_select(dist.entropy(), valid_mask))
-
     policy._optimizers[0].zero_grad()
-    total_loss = pi_err# - entropy * policy.entropy_coeff #+ value_err * policy.config["vf_loss_coeff"]
+    total_loss = pi_err
     total_loss.backward()
     policy._optimizers[0].step()
 
+    model.tower_stats["entropy"] = torch.zeros(1, requires_grad=True)
+    model.tower_stats["pi_err"] = torch.zeros(1, requires_grad=True)
+    model.tower_stats["value_err"] = torch.zeros(1, requires_grad=True)
+
+    return (model.tower_stats["entropy"], model.tower_stats["pi_err"], model.tower_stats["value_err"])
+    """
+
+    # M-Step
+    mean_loss_p = []
+    mean_loss_l = []
+    max_kl = []
+    for _ in range(policy.config["m_step_iters"]):
+        logits, _ = model({"obs": obs})
+        dist = dist_class(logits, model)
+        log_probs = dist.logp(actions)
+        prob = torch.exp(dist.logp(train_batch[SampleBatch.ACTIONS]))
+        loss_p = torch.mean(qij * log_probs)
+        mean_loss_p.append((-loss_p).item())
+
+        kl = categorical_kl(p1=prob, p2=b_prob)
+        max_kl.append(kl.item())
+
+        if np.isnan(kl.item()):  # This should not happen
+            raise RuntimeError('kl is nan')
+
+        model.α -= policy.config["α_scale"] * (policy.config["ε_kl"] - kl).detach().item()
+        model.α = np.clip(model.α, 0.0, policy.config["α_max"])
+
+        policy._optimizers[0].zero_grad()
+        # last eq of [2] p.5
+        loss_l = -(loss_p + model.α * (policy.config["ε_kl"] - kl))
+        mean_loss_l.append(loss_l.item())
+        loss_l.backward()
+        policy._optimizers[0].step()
+
     # Store values for stats function in model (tower), such that for
     # multi-GPU, we do not override them during the parallel loss phase.
-    model.tower_stats["entropy"] = entropy
-    model.tower_stats["pi_err"] = pi_err
-    model.tower_stats["value_err"] = value_err
+    model.tower_stats["entropy"] = torch.zeros(1, requires_grad=True)
+    model.tower_stats["pi_err"] = torch.zeros(1, requires_grad=True)
+    model.tower_stats["value_err"] = torch.zeros(1, requires_grad=True)
 
-    return (torch.zeros(1, requires_grad=True), torch.zeros(1, requires_grad=True), torch.zeros(1, requires_grad=True))
+    return (model.tower_stats["entropy"], model.tower_stats["pi_err"], model.tower_stats["value_err"])
 
 
 def stats(policy: Policy, train_batch: SampleBatch) -> Dict[str, TensorType]:
@@ -294,6 +366,7 @@ def setup_mixins(
     )
     LearningRateSchedule.__init__(policy, config["lr"], config["lr_schedule"])
     ValueNetworkMixin.__init__(policy, obs_space, action_space, config)
+
 
 from mpo import DEFAULT_CONFIG as MPO_DEFAULT_CONFIG
 

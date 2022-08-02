@@ -6,6 +6,7 @@ from typing import Any, Dict, Type
 import numpy as np
 import math
 import ray
+from scipy.optimize import minimize
 from ray import tune
 from ray.actor import ActorHandle
 from ray.rllib.agents.trainer import Trainer, with_common_config
@@ -99,12 +100,21 @@ DEFAULT_CONFIG = with_common_config({
     # Using retrace operator
     "retrace": True,
 
+    # MPO
+    # dual_constraint
+    "ε_dual": 0.1,
+    "ε_kl": 0.01,
+    "α_max": 1.0,
+    "α_scale": 10.0,
+    "m_step_iters": 10,
+
     # Replay buffer
     "replay_buffer_config": {
          "_enable_replay_buffer_api": False,
         # How many steps of the model to sample before learning starts.
         #"learning_starts": 1_000,
         "type": "ray.rllib.utils.replay_buffers.replay_buffer.ReplayBuffer",
+        # Capacity is counted in episodes (through some own changes)
         "capacity": 10_000,
         "storage_unit": "episodes",
     },
@@ -181,15 +191,18 @@ class MPOTrainer(Trainer):
                 self._counters[NUM_ENV_STEPS_SAMPLED] += eps.env_steps()
                 self._counters[NUM_AGENT_STEPS_SAMPLED] += eps.agent_steps()
 
-                if eps.get(SampleBatch.DONES)[-1] == True:
-                    self.local_replay_buffer._add_single_batch(eps)
+                # Correct counter of replay buffer, internally they count each sample, but we want to count only each episode
+                self.local_replay_buffer._num_timesteps_added -= eps.count - 1
+                self.local_replay_buffer._num_timesteps_added_wrap -= eps.count - 1
+
+                self.local_replay_buffer._add_single_batch(eps)
 
         # Sample one training MultiAgentBatch from replay buffer.
         train_batch = self.sample_from_replay()
 
         # Use simple optimizer (only for multi-agent or tf-eager; all other
         # cases should use the multi-GPU optimizer, even if only using 1 GPU).
-        train_results = multi_gpu_train_one_step(self, train_batch)
+        train_results = train_one_step(self, train_batch)
 
         # Update weights and global_vars - after learning on the local worker - on all
         # remote workers.
@@ -203,6 +216,10 @@ class MPOTrainer(Trainer):
 
 
 if __name__ == "__main__":
+    import os
+    clear = lambda: os.system('cls')
+    clear()
+
     # Configure the algorithm.
     config = {
         # === Settings for Rollout Worker processes ===
@@ -210,25 +227,31 @@ if __name__ == "__main__":
         "num_envs_per_worker": 8,
 
         # === Settings for the Trainer process ===
-        "iters": 200,
+        "iters": 300,
         "gamma": 0.99,
         "use_gae": False,
         "lambda": 0.9,
 
         "use_critic": False,
-        "vf_lr": 1e-3,
+        "vf_lr": 2e-4,
         "vf_iters": 3,
 
         "use_qf": True,
-        "qf_lr": 1e-3,
+        "qf_lr": 2e-4,
         "qf_iters": 5,
 
         "retrace": True,
-        "lr": 1e-3,
+        "lr": 2e-4,
         "entropy_coeff": 0.0,
         "rollout_fragment_length": 500,
         "sample_batch_size": 36_000,
         "train_batch_size": 36_000,
+
+        # === Replay Buffer Settings ===
+        "replay_buffer_config": {
+            # Capacity is counted in episodes (through some own changes)
+            "capacity": 10_000,
+        },
 
         # === Environment Settings ===
         "env": "CartPole-v1",
