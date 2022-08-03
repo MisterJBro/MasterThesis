@@ -138,7 +138,7 @@ def mpo_loss(
         q_values = model.q_function()
         q_values = q_values.gather(1, train_batch[SampleBatch.ACTIONS].unsqueeze(1)).squeeze(1)
         q_values = torch.masked_select(q_values, valid_mask)
-        train_batch[Postprocessing.ADVANTAGES] = q_values
+        train_batch[Postprocessing.ADVANTAGES] = Q_TARGETS#q_values
 
     # Value function loss
     if policy.config["use_critic"]:
@@ -188,7 +188,7 @@ def mpo_loss(
     model.η = res.x[0]
     qij = torch.softmax(q_values / model.η, dim=0)
 
-    """
+    
     # Policy loss
     logits, _ = model(train_batch)
     dist = dist_class(logits, model)
@@ -208,7 +208,7 @@ def mpo_loss(
     model.tower_stats["value_err"] = torch.zeros(1, requires_grad=True)
 
     return (model.tower_stats["entropy"], model.tower_stats["pi_err"], model.tower_stats["value_err"])
-    """
+    
 
     # M-Step
     mean_loss_p = []

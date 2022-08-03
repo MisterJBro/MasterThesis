@@ -240,7 +240,7 @@ if __name__ == "__main__":
         "qf_lr": 2e-4,
         "qf_iters": 5,
 
-        "retrace": True,
+        "retrace": False,
         "lr": 2e-4,
         "entropy_coeff": 0.0,
         "rollout_fragment_length": 500,
