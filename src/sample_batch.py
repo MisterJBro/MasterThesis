@@ -12,9 +12,13 @@ class SampleBatch:
         self.act = np.empty((num_envs, config["sample_len"]), dtype=self.act_dtype)
         self.rew = np.empty((num_envs, config["sample_len"]), dtype=self.rew_dtype)
         self.done = np.empty((num_envs, config["sample_len"]), dtype=np.bool8)
+        self.last_obs = np.empty((num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
 
     def reset(self):
         self.idx = 0
+
+    def set_last_obs(self, obs):
+        self.last_obs = obs.astype(self.obs_dtype, copy=False)
 
     def append(self, obs, act, rew, done):
         self.obs[:, self.idx] = obs.astype(self.obs_dtype, copy=False)

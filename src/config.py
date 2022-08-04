@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     "env": "CartPole-v1",
     "num_envs": 15,
     "sample_len": 500,
+    "gamma": 0.99,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,

@@ -1,4 +1,4 @@
-from multiprocessing import Pipe
+from multiprocessing import Pipe, freeze_support
 import gym
 import numpy as np
 from src.worker import Worker, Command
@@ -41,6 +41,7 @@ class Envs:
         act = np.concatenate([sb.act for sb in sample_batch_list], axis=0)
         rew = np.concatenate([sb.rew for sb in sample_batch_list], axis=0)
         done = np.concatenate([sb.done for sb in sample_batch_list], axis=0)
+        last_obs = np.concatenate([sb.last_obs for sb in sample_batch_list], axis=0)
 
         # Create one big sample
         sample_batch = SampleBatch(self.num_envs, self.config)
@@ -48,10 +49,12 @@ class Envs:
         sample_batch.act = act
         sample_batch.rew = rew
         sample_batch.done = done
+        sample_batch.last_obs = last_obs
 
         return sample_batch
 
     def __enter__(self):
+        freeze_support()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):

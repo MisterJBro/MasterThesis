@@ -55,6 +55,7 @@ class Worker(Process):
 
             self.sample_batch.append(obs, act, rew, done)
             obs = obs_next
+        self.sample_batch.set_last_obs(obs)
         return self.sample_batch
 
     def reset(self):
