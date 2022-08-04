@@ -1,8 +1,11 @@
 # MasterThesis
 
 ## Installation
-Install all dependencies via
+Create an conda environment with all dependencies via:
 
 ```
-pip install -r requirements.txt
+conda env create --file environment.yml
+conda activate rl
 ```
+
+

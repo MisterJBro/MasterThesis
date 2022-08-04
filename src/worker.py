@@ -1,3 +1,4 @@
+from django import conf
 import gym
 import numpy as np
 import os
@@ -31,7 +32,7 @@ class Worker(Process):
         # Create environments
         self.envs = [gym.make(self.env) for _ in range(num_envs)]
         for i in range(num_envs):
-            self.envs[i].seed(i+num_envs*idx)
+            self.envs[i].seed(i+num_envs*idx + config["seed"])
 
         # Sampled data
         self.sample_batch = SampleBatch(num_envs, config)

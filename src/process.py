@@ -1,3 +1,4 @@
+import statistics
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,7 +17,6 @@ def discount_cumsum(rew, gamma):
         ret[:len - k] += (gamma**k)*rew[k:]
     return ret
 
-@jit(nopython=True)
 def calc_return(done, rew, gamma, last_val):
     ret = np.zeros((rew.shape))
     for b in range(rew.shape[0]):
@@ -32,6 +32,27 @@ def calc_return(done, rew, gamma, last_val):
             else:
                 end += 1
     return ret
+
+def calc_statistics(sample_batch):
+    rew = sample_batch.rew
+    done = sample_batch.done
+
+    mean_returns = []
+    for b in range(rew.shape[0]):
+        start = 0
+        end = 0
+        for t in range(rew.shape[1]):
+            if done[b][t]:
+                mean_returns.append(np.sum(rew[b][start:end]))
+                start = end
+            elif t == rew.shape[1] - 1:
+                mean_returns.append(np.sum(rew[b][start:end]))
+            else:
+                end += 1
+    mean_return = np.mean(mean_returns)
+    return {
+        'mean_return': mean_return
+    }
 
 def post_processing(policy, sample_batch, config):
     # Value prediction
@@ -53,5 +74,8 @@ def post_processing(policy, sample_batch, config):
     # Return calculation
     ret = calc_return(sample_batch.done, sample_batch.rew, config["gamma"], last_val)
     sample_batch.ret = ret
+
+    # Calculate several statistics
+    sample_batch.statistics = calc_statistics(sample_batch)
 
     return sample_batch

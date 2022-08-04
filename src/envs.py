@@ -53,11 +53,7 @@ class Envs:
 
         return sample_batch
 
-    def __enter__(self):
-        freeze_support()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
+    def close(self):
         for c in self.channels:
             c[0].send([Command.CLOSE, None])
         for w in self.workers:

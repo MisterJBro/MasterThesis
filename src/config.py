@@ -12,10 +12,16 @@ DEFAULT_CONFIG = {
     "num_envs": 15,
     "sample_len": 500,
     "gamma": 0.99,
+    "seed": 0,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,
     "rew_dtype": np.float32,
+
+    # === Models settings ===
+    "train_iters": 10,
+    "pi_lr": 1e-3,
+    "model_lr": 1e-3,
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
