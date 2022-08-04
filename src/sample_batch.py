@@ -17,8 +17,8 @@ class SampleBatch:
         self.idx = 0
 
     def append(self, obs, act, rew, done):
-        self.obs[self.idx] = obs.astype(self.obs_dtype, copy=False)
-        self.act[self.idx] = act.astype(self.act_dtype, copy=False)
-        self.rew[self.idx] = rew.astype(self.rew_dtype, copy=False)
-        self.done[self.idx] = done
+        self.obs[:, self.idx] = obs.astype(self.obs_dtype, copy=False)
+        self.act[:, self.idx] = act.astype(self.act_dtype, copy=False)
+        self.rew[:, self.idx] = rew.astype(self.rew_dtype, copy=False)
+        self.done[:, self.idx] = done
         self.idx += 1

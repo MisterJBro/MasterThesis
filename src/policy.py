@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
+import pathlib
+
+PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+
 
 class ActorCriticPolicy(nn.Module):
     """Actor-Critic Policy network"""
@@ -9,7 +13,7 @@ class ActorCriticPolicy(nn.Module):
         super(ActorCriticPolicy, self).__init__()
 
         self.hidden = nn.Sequential(
-            nn.Linear(config["obs_dim"], 256),
+            nn.Linear(config["flat_obs_dim"], 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -47,3 +51,12 @@ class ActorCriticPolicy(nn.Module):
         x = self.hidden(x)
         val = self.value(x).reshape(-1)
         return val
+
+    def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
+        torch.save({
+            'parameters': self.state_dict(),
+        }, path)
+
+    def load(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
+        checkpoint = torch.load(path)
+        self.load_state_dict(checkpoint['parameters'])

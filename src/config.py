@@ -22,4 +22,11 @@ def check_config(config):
     assert config["num_cpus"] > 0, f'CPU num: {config["num_envs"]} has to be greater 0!'
     assert config["num_envs"] >= config["num_cpus"], f'Env num: {config["num_envs"]} has to be greater or equal to cpu num: {config["num_cpus"]}, so each cpu has atleast one env!'
     assert config["device"] == "cpu" or config["device"] == "cuda" and torch.cuda.is_available(), f'Using a device that is not supported: {config["device"]}!'
-    
+
+
+# Create new config by using own config arguments and the rest from default config
+def create_config(new_config):
+    config = DEFAULT_CONFIG.copy()
+    config.update(new_config)
+    check_config(config)
+    return config

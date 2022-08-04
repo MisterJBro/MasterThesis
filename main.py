@@ -1,18 +1,30 @@
-import gym
+import torch
 import numpy as np
-import ray
+from multiprocessing import freeze_support
 
-ray.init()
+from src.envs import Envs
+from src.config import create_config
+from src.policy import ActorCriticPolicy
 
-env = gym.make("CartPole-v1")
-obs = env.reset()
+if __name__ == '__main__':
+    freeze_support()
+    config = create_config({
+        "env": "CartPole-v1",
+        "num_cpus": 2,
+        "device": "cpu",
+        "num_envs": 64,
+        "sample_len": 500,
+    })
 
-for _ in range(500):
-    env.render()
+    with Envs(config) as envs:
+        policy = ActorCriticPolicy(config)
+        params = policy.state_dict()
 
-    act = env.action_space.sample()
-    obs, rew, done, _ = env.step(act)
+        import time
+        start = time.time()
 
-    if done:
-        break
-env.close()
+        sample_batch = envs.sample_batch(params)
+        print(sample_batch.obs.shape)
+
+        end = time.time()
+        print(f"Time elapsed: {end - start} s")

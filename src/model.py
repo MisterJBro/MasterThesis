@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import pathlib
+
+PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
 
 
 class ValueEquivalenceModel(nn.Module):
@@ -11,7 +14,7 @@ class ValueEquivalenceModel(nn.Module):
 
         # Representation function h
         self.rep = nn.Sequential(
-            nn.Linear(config["obs_dim"], 128),
+            nn.Linear(config["flat_obs_dim"], 128),
             nn.ReLU(),
             nn.Linear(128, self.hidden_size*2),
         )
@@ -56,3 +59,12 @@ class ValueEquivalenceModel(nn.Module):
 
     def get_reward(self, hidden):
         return self.pre_rew(hidden)
+
+    def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
+        torch.save({
+            'parameters': self.state_dict(),
+        }, path)
+
+    def load(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
+        checkpoint = torch.load(path)
+        self.load_state_dict(checkpoint['parameters'])
