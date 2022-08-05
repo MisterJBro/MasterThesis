@@ -1,67 +1,41 @@
-from django import conf
 import gym
-import numpy as np
-import os
-
+import torch
 from enum import Enum, auto
-from src.policy import ActorCriticPolicy
-from src.sample_batch import SampleBatch
-from multiprocessing import Process, Queue, Pipe
-from multiprocessing import freeze_support
+from multiprocessing import Process
 
 
 class Command(Enum):
-    SAMPLE = auto()
+    RESET = auto()
+    STEP = auto()
     CLOSE = auto()
 
 class Worker(Process):
     """Environment worker."""
 
     def __init__(self, idx, num_envs, channel, config):
-        Process.__init__(self)
-        os.environ["MKL_NUM_THREADS"] = "1"
+        super(Worker, self).__init__()
         self.idx = idx
         self.num_envs = num_envs
         self.channel = channel
-        self.env = config["env"]
-        self.sample_len = config["sample_len"]
-        self.obs_dim = config["obs_dim"]
-        self.behavior_policy = ActorCriticPolicy(config)
-        self.behavior_policy.eval()
 
         # Create environments
-        self.envs = [gym.make(self.env) for _ in range(num_envs)]
+        self.envs = [gym.make(config["env"]) for _ in range(num_envs)]
         for i in range(num_envs):
             self.envs[i].seed(i+num_envs*idx + config["seed"])
 
-        # Sampled data
-        self.sample_batch = SampleBatch(num_envs, config)
-
     def run(self):
-        command, params = self.channel.recv()
+        command, acts = self.channel.recv()
         while command != Command.CLOSE:
-            if command == Command.SAMPLE:
-                self.channel.send(self.get_sample_batch(params))
-            command, params = self.channel.recv()
+            if command == Command.RESET:
+                self.channel.send(self.reset())
+            elif command == Command.STEP:
+                self.channel.send(self.step(acts))
 
+            command, acts = self.channel.recv()
         self.close()
 
-    def get_sample_batch(self, policy_params):
-        self.behavior_policy.load_state_dict(policy_params)
-
-        obs = self.reset()
-        for _ in range(self.sample_len):
-            act = self.behavior_policy.get_action(obs)
-            obs_next, rew, done = self.step(act)
-
-            self.sample_batch.append(obs, act, rew, done)
-            obs = obs_next
-        self.sample_batch.set_last_obs(obs)
-        return self.sample_batch
-
     def reset(self):
-        obs = np.array([env.reset()
-                         for env in self.envs])
+        obs = torch.tensor([env.reset() for env in self.envs], )
         return obs
 
     def step(self, acts):

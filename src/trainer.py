@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import gym
 import time
 import random
@@ -8,12 +9,11 @@ from src.config import DEFAULT_CONFIG
 from src.model import ValueEquivalenceModel
 from src.policy import ActorCriticPolicy
 
-from .other.utils import to_tensors
-import multiprocessing as mp
 from multiprocessing import freeze_support
 from src.process import post_processing
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
+from src.sample_batch import SampleBatch
 
 
 class Trainer:
@@ -26,10 +26,11 @@ class Trainer:
         torch.cuda.manual_seed_all(seed)
 
         self.config = config
+        self.device = torch.device(config["device"])
         self.envs = Envs(config)
         self.policy = ActorCriticPolicy(config)
         self.model = ValueEquivalenceModel(config)
-        self.writer = SummaryWriter('runs/ppo_cartpole')
+        self.writer = SummaryWriter(comment=f'{config["env"]}_{config["num_samples"]}')
         self.max_avg_rew = float('-inf')
 
         print(tabulate([
@@ -37,77 +38,90 @@ class Trainer:
             ['Obs shape', config["obs_dim"]],
             ['Actions num', config["num_acts"]],
             ['CPU count', config["num_cpus"]],
-        ], tablefmt="github", colalign=("left", "right")))
+        ], colalign=("left", "right")))
+        print()
 
     def train(self):
-        for epoch in range(self.config["train_iters"]):
+        for iter in range(self.config["train_iters"]):
             sample_batch = self.get_sample_batch()
-            if avg_rew > self.max_avg_rew:
-                self.max_avg_rew = avg_rew
-                self.net.save()
-            self.update()
+            stats = sample_batch.statistics
+            self.update(sample_batch)
 
-            print('Epoch {:3}  Avg Rew: {:3}'.format(epoch, avg_rew))
-            self.writer.add_scalar('Average reward', avg_rew, epoch)
-        self.writer.flush()
-        self.writer.close()
-        self.envs.close()
+            avg_ret = stats["mean_return"]
+            print(f'Iteration: {iter}  Avg Ret: {np.round(avg_ret, 3)}')
+            self.writer.add_scalar('Average return', avg_ret, iter)
 
     def get_sample_batch(self):
-        params = self.policy.state_dict()
-        sample_batch = self.envs.sample_batch(params)
-        sample_batch = post_processing(self.policy, sample_batch, config)
+        sample_batch = SampleBatch(self.config["num_envs"], self.config)
+        obs = self.envs.reset()
+
+        for _ in range(self.config["sample_len"]):
+            act = self.policy.get_action(obs)
+            obs_next, rew, done = self.envs.step(act)
+
+            sample_batch.append(obs, act, rew, done)
+            obs = obs_next
+
+        sample_batch.set_last_obs(obs)
+        sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
-    def compute_policy_gradient(self, dist, act, adv, old_logp, clip_ratio=0.2):
+    def update(self, sample_batch):
+        # Get data
+        obs = torch.from_numpy(sample_batch.obs).float()
+        obs = obs.reshape(-1, obs.shape[-1]).to(self.device)
+        act = torch.from_numpy(sample_batch.act).long().reshape(-1).to(self.device)
+        rew = torch.from_numpy(sample_batch.rew).float().reshape(-1).to(self.device)
+        ret = torch.from_numpy(sample_batch.ret).float().reshape(-1).to(self.device)
+        val = torch.from_numpy(sample_batch.val).float().reshape(-1).to(self.device)
+
+        adv = ret - val
+        criterion = nn.MSELoss()
+
+        # Loss
+        self.policy.opt_policy.zero_grad()
+
+        dist = self.policy.get_dist(obs)
         logp = dist.log_prob(act)
+        loss_policy = -(logp * adv).mean()
+        loss_policy.backward()
+        #nn.utils.clip_grad_norm_(self.policy.parameters(), 100.0)
+        self.policy.opt_policy.step()
 
-        ratio = torch.exp(logp - old_logp)
-        clipped = torch.clamp(ratio, 1-clip_ratio, 1+clip_ratio)*adv
-        loss = -(torch.min(ratio*adv, clipped)).mean()
-        kl_approx = (old_logp - logp).mean().item()
-        return loss, kl_approx
+        # Critic learn
+        self.config["vf_iters"] = 3
+        trainset = torch.utils.data.TensorDataset(obs, ret)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
 
-    def update(self):
-        obs, act, rew, ret, adv = self.envs.get_data()
+        for i in range(self.config["vf_iters"]):
+            for obs_batch, ret_batch in trainloader:
+                self.policy.opt_value.zero_grad()
+                val_batch = self.policy.get_value(obs_batch)
+                loss_value = criterion(val_batch, ret_batch)
+                loss_value.backward()
+                self.policy.opt_value.step()
 
-        print('UPDATE')
+    def test(self):
+        env = gym.make(self.config["env"])
+        rews = []
+        input('Press any key to continue...')
 
-        obs = obs.reshape((-1,) + self.obs_dim).to(self.net.device)
-        act = act.reshape(-1).to(self.net.device)
-        ret = ret.reshape(-1).to(self.net.device)
-        adv = adv.reshape(-1).to(self.net.device)
-
-        with torch.no_grad():
-            old_logp = self.net.get_dist(
-                obs).log_prob(act)
-
-        for i in range(80):
-            self.net.optimizer.zero_grad()
-
-            dist, val = self.net(obs)
-
-            loss_policy, kl = self.compute_policy_gradient(
-                dist, act, adv, old_logp)
-            loss_value = self.net.criterion(val, ret)
-
-            if kl > 0.05:
-                return
-
-            loss = loss_policy + loss_value
-            loss.backward()
-
-            self.net.optimizer.step()
+        obs = env.reset()
+        for _ in range(self.config["test_len"]):
+            env.render()
+            act = self.policy.get_action(obs)
+            obs, rew, done = env.step(act)
+            rews.append(rew)
+            if done:
+                break
+        print(f'Undiscounted return: {np.sum(rews)}')
+        env.close()
 
     def __enter__(self):
         freeze_support()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self.writer.flush()
+        self.writer.close()
         self.envs.close()
-
-if __name__ == "__main__":
-    config = DEFAULT_CONFIG
-
-    with Trainer(config) as trainer:
-        trainer.train()

@@ -17,20 +17,20 @@ def discount_cumsum(rew, gamma):
         ret[:len - k] += (gamma**k)*rew[k:]
     return ret
 
+@jit(nopython=True)
 def calc_return(done, rew, gamma, last_val):
     ret = np.zeros((rew.shape))
     for b in range(rew.shape[0]):
         start = 0
-        end = 0
         for t in range(rew.shape[1]):
+            end = t + 1
             if done[b][t]:
                 ret[b][start:end] = discount_cumsum(rew[b][start:end], gamma)
                 start = end
             elif t == rew.shape[1] - 1:
+                lv = last_val[b]
                 # Episode was cut --> bootstrap
-                ret[b][start:] = discount_cumsum(np.append(rew[b][start:], last_val[b]), gamma)[:-1]
-            else:
-                end += 1
+                ret[b][start:] = discount_cumsum(np.append(rew[b][start:], lv), gamma)[:-1]
     return ret
 
 def calc_statistics(sample_batch):
@@ -40,15 +40,11 @@ def calc_statistics(sample_batch):
     mean_returns = []
     for b in range(rew.shape[0]):
         start = 0
-        end = 0
         for t in range(rew.shape[1]):
+            end = t + 1
             if done[b][t]:
                 mean_returns.append(np.sum(rew[b][start:end]))
                 start = end
-            elif t == rew.shape[1] - 1:
-                mean_returns.append(np.sum(rew[b][start:end]))
-            else:
-                end += 1
     mean_return = np.mean(mean_returns)
     return {
         'mean_return': mean_return
@@ -58,8 +54,8 @@ def post_processing(policy, sample_batch, config):
     # Value prediction
     buffer_shape = sample_batch.rew.shape
     obs = torch.tensor(sample_batch.obs)
-    obs = obs.reshape(-1, obs.shape[-1])
-    last_obs = torch.tensor(sample_batch.last_obs)
+    obs = obs.reshape(-1, obs.shape[-1]).to(policy.device)
+    last_obs = torch.tensor(sample_batch.last_obs).to(policy.device)
 
     with torch.no_grad():
         val = policy.get_value(obs)

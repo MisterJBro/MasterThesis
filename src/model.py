@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
@@ -34,6 +35,10 @@ class ValueEquivalenceModel(nn.Module):
             nn.Linear(self.hidden_size, 1),
         )
 
+        self.opt = optim.Adam(list(self.parameters()), lr=config["model_lr"])
+        self.device = torch.device(config["device"])
+        self.to(self.device)
+
     def representation(self, obs):
         """Using the representation function, transform the given observation into a state representation."""
         s = self.rep(obs)
@@ -63,8 +68,10 @@ class ValueEquivalenceModel(nn.Module):
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({
             'parameters': self.state_dict(),
+            'optimizer': self.opt.state_dict(),
         }, path)
 
     def load(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
+        self.opt.load_state_dict(checkpoint['optimizer'])
