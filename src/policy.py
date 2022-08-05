@@ -21,24 +21,25 @@ class ActorCriticPolicy(nn.Module):
         )
 
         # Heads
+        hidden_size = 512
         self.policy = nn.Sequential(
-            nn.Linear(config["flat_obs_dim"], 256),
+            nn.Linear(config["flat_obs_dim"], hidden_size),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(256, config["num_acts"]),
+            nn.Linear(hidden_size, config["num_acts"]),
         )
         self.value = nn.Sequential(
-            nn.Linear(config["flat_obs_dim"], 256),
+            nn.Linear(config["flat_obs_dim"], hidden_size),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(hidden_size, 1),
         )
 
         self.opt_policy = optim.Adam(list(self.policy.parameters()), lr=config["pi_lr"])
         self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
-        self.device = torch.device(config["device"])
+        self.device = config["device"]
         self.to(self.device)
 
     def forward(self, x):

@@ -1,7 +1,7 @@
 import gym
-import torch
 from enum import Enum, auto
 from multiprocessing import Process
+import numpy as np
 
 
 class Command(Enum):
@@ -35,7 +35,7 @@ class Worker(Process):
         self.close()
 
     def reset(self):
-        obs = torch.tensor([env.reset() for env in self.envs], )
+        obs = np.array([env.reset() for env in self.envs])
         return obs
 
     def step(self, acts):
@@ -50,7 +50,9 @@ class Worker(Process):
             obs_next_list.append(obs_next)
             rew_list.append(rew)
             done_list.append(done)
-        obs_next, rew, done = np.array(obs_next_list), np.array(rew_list), np.array(done_list)
+        obs_next = np.stack(obs_next_list, axis=0)
+        rew = np.stack(rew_list, axis=0)
+        done = np.stack(done_list, axis=0)
 
         return obs_next, rew, done
 

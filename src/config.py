@@ -36,7 +36,6 @@ def check_config(config):
 # Computes missing configuration parameters
 def compute_config(config):
     config["num_samples"] = config["sample_len"] * config["num_envs"]
-    config["device"] = torch.device(config["device"])
 
     # Create test env to get obs and act shapes
     test_env = gym.make(config["env"])

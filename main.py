@@ -13,18 +13,18 @@ if __name__ == '__main__':
     config = create_config({
         "train_iters": 50,
         "env": "CartPole-v1",
-        "num_cpus": 3,
-        "device": "cuda:0",
-        "num_envs": 1980,
+        "num_cpus": 4,
+        "device": "cpu",
+        "num_envs": 200,
         "sample_len": 500,
         "pi_lr": 1e-3,
         "vf_lr": 8e-4,
     })
 
-    #with Trainer(config) as trainer:
-    #    trainer.train()
-    #    trainer.test()
-    #quit()
+    with Trainer(config) as trainer:
+        trainer.train()
+        trainer.test()
+    quit()
 
     envs = Envs(config)
     print(tabulate([
@@ -36,7 +36,6 @@ if __name__ == '__main__':
     policy = ActorCriticPolicy(config)
     params = policy.state_dict()
 
-    print("Sampled!")
     import time
     start = time.time()
 

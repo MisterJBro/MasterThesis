@@ -26,7 +26,7 @@ class Trainer:
         torch.cuda.manual_seed_all(seed)
 
         self.config = config
-        self.device = torch.device(config["device"])
+        self.device = config["device"]
         self.envs = Envs(config)
         self.policy = ActorCriticPolicy(config)
         self.model = ValueEquivalenceModel(config)
@@ -48,7 +48,9 @@ class Trainer:
             self.update(sample_batch)
 
             avg_ret = stats["mean_return"]
-            print(f'Iteration: {iter}  Avg Ret: {np.round(avg_ret, 3)}')
+            max_ret = stats["max_return"]
+            min_ret = stats["min_return"]
+            print(f'Iteration: {iter}  Avg Ret: {np.round(avg_ret, 3)}  Max Ret: {np.round(max_ret, 3)}  Min Ret: {np.round(min_ret, 3)}')
             self.writer.add_scalar('Average return', avg_ret, iter)
 
     def get_sample_batch(self):
@@ -110,7 +112,7 @@ class Trainer:
         for _ in range(self.config["test_len"]):
             env.render()
             act = self.policy.get_action(obs)
-            obs, rew, done = env.step(act)
+            obs, rew, done, _ = env.step(act)
             rews.append(rew)
             if done:
                 break

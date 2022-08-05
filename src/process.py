@@ -37,17 +37,19 @@ def calc_statistics(sample_batch):
     rew = sample_batch.rew
     done = sample_batch.done
 
-    mean_returns = []
+    returns = []
     for b in range(rew.shape[0]):
         start = 0
         for t in range(rew.shape[1]):
             end = t + 1
             if done[b][t]:
-                mean_returns.append(np.sum(rew[b][start:end]))
+                returns.append(np.sum(rew[b][start:end]))
                 start = end
-    mean_return = np.mean(mean_returns)
+
     return {
-        'mean_return': mean_return
+        'mean_return': np.mean(returns),
+        'max_return': np.max(returns),
+        'min_return': np.min(returns),
     }
 
 def post_processing(policy, sample_batch, config):

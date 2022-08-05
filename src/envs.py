@@ -11,6 +11,7 @@ class Envs:
         self.config = config
         self.num_cpus = config["num_cpus"]
         self.num_envs = config["num_envs"]
+        self.device = config["device"]
 
         # Create rollout worker
         pipes = [Pipe() for _ in range(self.num_cpus)]
@@ -45,14 +46,14 @@ class Envs:
             obs_next.append(on)
             rew.append(r)
             done.append(d)
-        obs_next = np.concatenate(obs_next, axis=0)
-        rew = np.concatenate(rew, axis=0)
-        done = np.concatenate(done, axis=0)
+        obs_next = np.concatenate(obs_next)
+        rew = np.concatenate(rew)
+        done = np.concatenate(done)
 
         return obs_next, rew, done
 
     def close(self):
         for c in self.channels:
-            c[0].send([Command.CLOSE, None])
+            c.send([Command.CLOSE, None])
         for w in self.workers:
             w.join()

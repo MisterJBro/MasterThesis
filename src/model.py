@@ -36,7 +36,7 @@ class ValueEquivalenceModel(nn.Module):
         )
 
         self.opt = optim.Adam(list(self.parameters()), lr=config["model_lr"])
-        self.device = torch.device(config["device"])
+        self.device = config["device"]
         self.to(self.device)
 
     def representation(self, obs):
