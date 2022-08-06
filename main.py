@@ -11,11 +11,11 @@ from src.trainer import Trainer
 
 if __name__ == '__main__':
     config = create_config({
-        "train_iters": 50,
+        "train_iters": 200,
         "env": "CartPole-v1",
         "num_cpus": 4,
-        "device": "cpu",
-        "num_envs": 200,
+        "num_envs": 20,
+        "device": "cuda:0",
         "sample_len": 500,
         "pi_lr": 1e-3,
         "vf_lr": 8e-4,

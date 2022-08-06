@@ -24,7 +24,10 @@ DEFAULT_CONFIG = {
     "train_iters": 10,
     "pi_lr": 1e-3,
     "vf_lr": 1e-3,
+    "vf_iters": 10,
     "model_lr": 1e-3,
+    "model_unroll_len": 5,
+    "grad_clip": 100.0,
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate

@@ -29,15 +29,17 @@ class SampleBatch:
         self.done[:, self.idx] = done
         self.idx += 1
 
-    def get_episodes(self):
-        episodes = []
-        for b in range(self.obs.shape[0]):
+    def get_sections(self):
+        sections = []
+        batch_len = self.obs.shape[0]
+        step_len = self.obs.shape[1]
+        for b in range(batch_len):
             start = 0
-            for t in range(self.obs.shape[1]):
+            for t in range(step_len):
                 end = t + 1
                 if self.done[b][t]:
-                    episodes.append((self.obs[b][start:end], self.act[b][start:end], self.rew[b][start:end], self.ret[b][start:end], self.val[b][start:end], self.last_obs[b]))
+                    sections.append((b*step_len + start, b*step_len + end))
                     start = end
-            if start < self.obs.shape[1]:
-                episodes.append((self.obs[b][start:], self.act[b][start:], self.rew[b][start:], self.ret[b][start:], self.val[b][start:], self.last_obs[b]))
-        return episodes
+            if start < step_len:
+                sections.append((b*step_len + start, (b+1)*step_len))
+        return sections

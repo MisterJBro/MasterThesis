@@ -12,16 +12,16 @@ class ActorCriticPolicy(nn.Module):
 
     def __init__(self, config):
         super(ActorCriticPolicy, self).__init__()
+        hidden_size = 512
 
         self.hidden = nn.Sequential(
-            nn.Linear(config["flat_obs_dim"], 256),
+            nn.Linear(config["flat_obs_dim"],hidden_size),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
         )
 
         # Heads
-        hidden_size = 512
         self.policy = nn.Sequential(
             nn.Linear(config["flat_obs_dim"], hidden_size),
             nn.ReLU(),
@@ -37,6 +37,7 @@ class ActorCriticPolicy(nn.Module):
             nn.Linear(hidden_size, 1),
         )
 
+        #self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
         self.opt_policy = optim.Adam(list(self.policy.parameters()), lr=config["pi_lr"])
         self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
