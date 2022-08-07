@@ -1,4 +1,4 @@
-from random import sample
+import torch
 import numpy as np
 
 class SampleBatch:
@@ -46,14 +46,14 @@ class SampleBatch:
         return sections
 
     def to_tensor_dict(self):
-        obs = torch.from_numpy(sample_batch.obs).float()
+        obs = torch.from_numpy(self.obs).float()
         obs = obs.reshape(-1, obs.shape[-1]).to(self.device)
-        act = torch.from_numpy(sample_batch.act).long().reshape(-1).to(self.device)
-        rew = torch.from_numpy(sample_batch.rew).float().reshape(-1).to(self.device)
-        ret = torch.from_numpy(sample_batch.ret).float().reshape(-1).to(self.device)
-        val = torch.from_numpy(sample_batch.val).float().reshape(-1).to(self.device)
-        last_val = torch.from_numpy(sample_batch.last_val).float().reshape(-1).to(self.device)
-        done = torch.from_numpy(sample_batch.done).reshape(-1)
+        act = torch.from_numpy(self.act).long().reshape(-1).to(self.device)
+        rew = torch.from_numpy(self.rew).float().reshape(-1).to(self.device)
+        ret = torch.from_numpy(self.ret).float().reshape(-1).to(self.device)
+        val = torch.from_numpy(self.val).float().reshape(-1).to(self.device)
+        last_val = torch.from_numpy(self.last_val).float().reshape(-1).to(self.device)
+        done = torch.from_numpy(self.done).reshape(-1)
 
         return {
             "obs": obs,

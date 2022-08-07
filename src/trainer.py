@@ -73,19 +73,137 @@ class Trainer:
 
     def update(self, sample_batch):
         data = sample_batch.to_tensor_dict()
+        obs = data["obs"]
+        act = data["act"]
+        rew = data["rew"]
+        done = data["done"]
+        ret = data["ret"]
+        val = data["val"]
+        last_val = data["last_val"]
+        scalar_loss = nn.HuberLoss()
         sections = sample_batch.get_sections()
         act_onehot = to_onehot(act, self.config["num_acts"])
 
-        td_errors = []
-        model_q = []
+        with torch.no_grad():
+            state = self.model.representation(obs)
+            hidden, _ = self.model.dynamics(state, act_onehot)
+            model_val = self.model.get_value(hidden)
+
+        q_val = rew + self.config["gamma"] * model_val
+
+        adv = q_val - val
+        data["adv"] = adv
+
+        # Policy and Value loss
+        self.policy.loss(data)
+
+        # Model loss
+        episodes = []
+        for (start, end) in sections:
+            val_targets = []
+            act_ep = []
+            lengths = []
+            next_val_targets = torch.concat([ret[start:end], torch.zeros(1, device=self.device)])
+
+            for t in range(start, end):
+                end_ep = min(t+1, end)
+                next_actions = act_onehot[t:end_ep].squeeze(1)
+                val_target = next_val_targets[t-start:end_ep-start]
+                val_targets.append(val_target)
+                act_ep.append(next_actions)
+                lengths.append(next_actions.shape[0])
+
+            act_ep = pad_sequence(act_ep, batch_first=True)
+            act_ep = pack_padded_sequence(act_ep, lengths=lengths, batch_first=True)
+            val_targets = torch.concat(val_targets)
+
+            episodes.append({
+                'start': start,
+                'end': end,
+                'act_ep': act_ep,
+                'lengths': lengths,
+                'val_targets': val_targets,
+            })
+        batch_size = int(self.config["num_samples"]/10)
+
+        for _ in range(self.config["model_iters"]):
+            losses = []
+            steps = 0
+            np.random.shuffle(episodes)
+            for ep in episodes:
+                start = ep["start"]
+                end = ep["end"]
+                act_ep = ep["act_ep"]
+                val_targets = ep["val_targets"]
+
+                state = self.model.representation(obs[start:end])
+                hidden, _ = self.model.dynamics(state, act_ep)
+                hidden, lengths = pad_packed_sequence(hidden, batch_first=True)
+                hidden = [hidden[i][:len] for i, len in enumerate(lengths)]
+                hidden = torch.concat(hidden)
+                model_val = self.model.get_value(hidden)
+
+                loss_val = scalar_loss(model_val, val_targets)
+                loss = loss_val
+                losses.append(loss)
+
+                # Minibatch update
+                steps += end - start
+                if steps >= batch_size:
+                    self.model.opt.zero_grad()
+                    loss = torch.mean(torch.stack(losses))
+                    loss.backward()
+                    print(f"Steps {steps} Model loss: {loss.item()}")
+                    self.model.opt.step()
+                    steps = 0
+                    losses = []
+
+            if len(losses) != 0:
+                self.model.opt.zero_grad()
+                loss = torch.mean(torch.stack(losses))
+                loss.backward()
+                print(f"Steps {steps} Final Model loss: {loss.item()}")
+                self.model.opt.step()
+
+    def update2(self, sample_batch):
+        data = sample_batch.to_tensor_dict()
+        obs = data["obs"]
+        act = data["act"]
+        rew = data["rew"]
+        done = data["done"]
+        ret = data["ret"]
+        val = data["val"]
+        last_val = data["last_val"]
+        scalar_loss = nn.HuberLoss()
+        sections = sample_batch.get_sections()
+        act_onehot = to_onehot(act, self.config["num_acts"])
+
         with torch.no_grad():
             (h_0, c_0) = self.model.representation(obs)
             hidden, _ = self.model.dynamics((h_0, c_0), act_onehot)
-            model_rew = self.model.get_reward(hidden)
+            #model_rew = self.model.get_reward(hidden)
             model_val = self.model.get_value(hidden)
-        print("Mean predicted model rew: ", model_rew.mean())
-        q_val = rew + self.config["gamma"] * model_val
+        #print("Mean predicted model rew: ", model_rew.mean())
+        print("Mean predicted model val: ", model_val.mean())
 
+        next_vals = []
+        for (start, end) in sections:
+            # Value/Return targets for S_t+1 with bootstrapping
+            #if done[end-1]:
+            ret_targets_ep = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
+            #model_val[end-1] = torch.zeros(1, device=self.device)
+
+            ret_targets = []
+            for t in range(start, end):
+                end_ep = min(t+1, end)
+                next_rets = ret_targets_ep[t-start:end_ep-start]
+                ret_targets.append(next_rets)
+            ret_targets = torch.concat(ret_targets)
+            next_vals.append(ret_targets)
+        next_vals = torch.concat(next_vals)
+        q_val = rew + self.config["gamma"] * model_val # next_vals
+
+        td_errors = []
         for (start, end) in sections:
             td_err = rew[start:end] + self.config["gamma"] * torch.concat([val[start+1:end], torch.zeros(1, device=self.device)]) - val[start:end]
             td_errors.append(td_err)
@@ -121,9 +239,7 @@ class Trainer:
                 next_actions = act_onehot[t:end_ep].squeeze(1)
                 next_rews = rew[t:end_ep]
                 next_logits = logits_policy[t:end_ep]
-
-                end_ret = end_ep - start
-                next_rets = ret_targets_ep[t-start:end_ret]
+                next_rets = ret_targets_ep[t-start:end_ep-start]
 
                 rew_targets.append(next_rews)
                 ret_targets.append(next_rets)
@@ -143,13 +259,15 @@ class Trainer:
                 'start': start,
                 'end': end,
             })
+        batch_size = int(self.config["num_samples"]/10)
+        print("Batch_size: ", batch_size)
 
         for _ in range(self.config["model_iters"]):
-            self.model.opt.zero_grad()
-            (h_0, c_0) = self.model.representation(obs)
-
+            #(h_0, c_0) = self.model.representation(obs)
             # Iterate over episodes
             losses = []
+            steps = 0
+            #np.random.shuffle(episodes)
             for ep in episodes:
                 start = ep["start"]
                 end = ep["end"]
@@ -157,30 +275,45 @@ class Trainer:
                 rew_targets = ep["rew_targets"]
                 ret_targets = ep["ret_targets"]
                 dist_targets = ep["dist_targets"]
-                s_ep = (h_0[:, start:end], c_0[:, start:end])
+                s_ep = self.model.representation(obs[start:end])
+                #s_ep = (h_0[:, start:end], c_0[:, start:end])
 
                 # Calculate dynamics by unrolling the model
                 hidden, _ = self.model.dynamics(s_ep, act_ep)
-                hidden, lengths = pad_packed_sequence(hidden, batch_first=True)
-                hidden = [hidden[i][:len] for i, len in enumerate(lengths)]
-                hidden = torch.concat(hidden)
+                #hidden, lengths = pad_packed_sequence(hidden, batch_first=True)
+                #hidden = [hidden[i][:len] for i, len in enumerate(lengths)]
+                #hidden = torch.concat(hidden)
 
                 # Calculate rew, val and pi distributions and losses
-                pred_rew = self.model.get_reward(hidden)
+                #pred_rew = self.model.get_reward(hidden)
                 pred_val = self.model.get_value(hidden)
-                dist_model = self.model.get_policy(hidden)
+                #dist_model = self.model.get_policy(hidden)
 
-                loss_rew = scalar_loss(pred_rew, rew_targets)
+                #loss_rew = scalar_loss(pred_rew, rew_targets)
                 loss_val = scalar_loss(pred_val, ret_targets)
-                loss_pi = kl_divergence(dist_model, dist_targets).mean()
-                loss = 0.5 * loss_rew + 0.05 * loss_val + loss_pi
+                #loss_pi = kl_divergence(dist_model, dist_targets).mean()
+                loss = loss_val #0.5 * loss_rew + 0.05 * loss_val + loss_pi
                 losses.append(loss)
-            loss = torch.stack(losses).mean()
-            loss.backward()
-            print("Model loss: ", loss.item())
 
-            nn.utils.clip_grad_norm_(self.model.parameters(),  self.config["grad_clip"])
-            self.model.opt.step()
+                # Minibatch update
+                steps += end - start
+                if steps >= batch_size:
+                    self.model.opt.zero_grad()
+                    loss = torch.mean(torch.stack(losses))
+                    loss.backward()
+                    print(f"Steps {steps} Model loss: {loss.item()}")
+                    #nn.utils.clip_grad_norm_(self.model.parameters(), self.config["grad_clip"])
+                    self.model.opt.step()
+                    steps = 0
+                    losses = []
+
+            if len(losses) != 0:
+                self.model.opt.zero_grad()
+                loss = torch.mean(torch.stack(losses))
+                loss.backward()
+                print(f"Steps {steps} Final Model loss: {loss.item()}")
+                #nn.utils.clip_grad_norm_(self.model.parameters(),  self.config["grad_clip"])
+                self.model.opt.step()
 
     def test(self):
         env = gym.make(self.config["env"])
