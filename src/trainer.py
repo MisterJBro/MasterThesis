@@ -72,60 +72,58 @@ class Trainer:
         return sample_batch
 
     def update(self, sample_batch):
-        # Get data
-        obs = torch.from_numpy(sample_batch.obs).float()
-        obs = obs.reshape(-1, obs.shape[-1]).to(self.device)
-        act = torch.from_numpy(sample_batch.act).long().reshape(-1).to(self.device)
-        rew = torch.from_numpy(sample_batch.rew).float().reshape(-1).to(self.device)
-        ret = torch.from_numpy(sample_batch.ret).float().reshape(-1).to(self.device)
-        val = torch.from_numpy(sample_batch.val).float().reshape(-1).to(self.device)
+        data = sample_batch.to_tensor_dict()
+        sections = sample_batch.get_sections()
+        act_onehot = to_onehot(act, self.config["num_acts"])
 
-        adv = ret - val
-        scalar_loss = nn.HuberLoss()
+        td_errors = []
+        model_q = []
+        with torch.no_grad():
+            (h_0, c_0) = self.model.representation(obs)
+            hidden, _ = self.model.dynamics((h_0, c_0), act_onehot)
+            model_rew = self.model.get_reward(hidden)
+            model_val = self.model.get_value(hidden)
+        print("Mean predicted model rew: ", model_rew.mean())
+        q_val = rew + self.config["gamma"] * model_val
 
-        # Policy loss
-        self.policy.opt_policy.zero_grad()
+        for (start, end) in sections:
+            td_err = rew[start:end] + self.config["gamma"] * torch.concat([val[start+1:end], torch.zeros(1, device=self.device)]) - val[start:end]
+            td_errors.append(td_err)
+        td_errors = torch.concat(td_errors)
 
-        dist = self.policy.get_dist(obs)
-        logp = dist.log_prob(act)
-        loss_policy = -(logp * adv).mean()
-        loss_policy.backward()
-        nn.utils.clip_grad_norm_(self.policy.policy.parameters(),  self.config["grad_clip"])
-        self.policy.opt_policy.step()
+        adv = q_val - val #td_errors #ret - val
+        data["adv"] = adv
 
-        # Value loss
-        trainset = torch.utils.data.TensorDataset(obs, ret)
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=int(self.config["num_samples"]/5), shuffle=True)
-
-        for _ in range(self.config["vf_iters"]):
-            for obs_batch, ret_batch in trainloader:
-                self.policy.opt_value.zero_grad()
-                val_batch = self.policy.get_value(obs_batch)
-                loss_value = scalar_loss(val_batch, ret_batch)
-                loss_value.backward()
-                nn.utils.clip_grad_norm_(self.policy.value.parameters(),  self.config["grad_clip"])
-                self.policy.opt_value.step()
+        # Policy and Value loss
+        self.policy.loss(data)
 
         # Model loss
         with torch.no_grad():
             logits_policy = self.policy.get_dist(obs).logits
-        act_onehot = to_onehot(act, self.config["num_acts"])
-        sections = sample_batch.get_sections()
-
-        # Create episode information
         episodes = []
+        num_bootstraps = 0
         for (start, end) in sections:
             lengths = []
             act_ep = []
             rew_targets = []
             ret_targets = []
             dist_targets = []
+
+            # Value/Return targets for S_t+1 with bootstrapping
+            if done[end-1]:
+                ret_targets_ep = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
+            else:
+                ret_targets_ep = torch.concat([ret[start+1:end], last_val[num_bootstraps].unsqueeze(0)])
+                num_bootstraps += 1
+
             for t in range(start, end):
                 end_ep = min(t+self.config["model_unroll_len"], end)
                 next_actions = act_onehot[t:end_ep].squeeze(1)
                 next_rews = rew[t:end_ep]
-                next_rets = ret[t:end_ep]
                 next_logits = logits_policy[t:end_ep]
+
+                end_ret = end_ep - start
+                next_rets = ret_targets_ep[t-start:end_ret]
 
                 rew_targets.append(next_rews)
                 ret_targets.append(next_rets)
@@ -146,9 +144,6 @@ class Trainer:
                 'end': end,
             })
 
-        self.config["model_iters"] = 3
-        import time
-        start_time = time.time()
         for _ in range(self.config["model_iters"]):
             self.model.opt.zero_grad()
             (h_0, c_0) = self.model.representation(obs)
@@ -162,7 +157,7 @@ class Trainer:
                 rew_targets = ep["rew_targets"]
                 ret_targets = ep["ret_targets"]
                 dist_targets = ep["dist_targets"]
-                s_ep = (h_0[:, start:end].contiguous(), c_0[:, start:end].contiguous())
+                s_ep = (h_0[:, start:end], c_0[:, start:end])
 
                 # Calculate dynamics by unrolling the model
                 hidden, _ = self.model.dynamics(s_ep, act_ep)
@@ -178,7 +173,7 @@ class Trainer:
                 loss_rew = scalar_loss(pred_rew, rew_targets)
                 loss_val = scalar_loss(pred_val, ret_targets)
                 loss_pi = kl_divergence(dist_model, dist_targets).mean()
-                loss = 0.5 * loss_rew + 0.01 * loss_val + loss_pi
+                loss = 0.5 * loss_rew + 0.05 * loss_val + loss_pi
                 losses.append(loss)
             loss = torch.stack(losses).mean()
             loss.backward()
@@ -186,8 +181,6 @@ class Trainer:
 
             nn.utils.clip_grad_norm_(self.model.parameters(),  self.config["grad_clip"])
             self.model.opt.step()
-        print("Model update time: ", time.time() - start_time)
-
 
     def test(self):
         env = gym.make(self.config["env"])
@@ -213,9 +206,6 @@ class Trainer:
         self.envs.close()
         self.writer.flush()
         self.writer.close()
-
-def to_tensors(list, device):
-    return [torch.as_tensor(elem).to(device) for elem in list]
 
 def to_onehot(a, num_acts):
     # Convert action into one-hot encoded representation

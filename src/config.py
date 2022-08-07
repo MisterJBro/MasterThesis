@@ -21,11 +21,13 @@ DEFAULT_CONFIG = {
     "rew_dtype": np.float32,
 
     # === Models settings ===
-    "train_iters": 10,
+    "train_iters": 100,
     "pi_lr": 1e-3,
-    "vf_lr": 1e-3,
-    "vf_iters": 10,
-    "model_lr": 1e-3,
+    "vf_lr": 5e-4,
+    "vf_iters": 3,
+    "vf_minibatches": 10,
+    "model_lr": 5e-4,
+    "model_iters": 3,
     "model_unroll_len": 5,
     "grad_clip": 100.0,
 }

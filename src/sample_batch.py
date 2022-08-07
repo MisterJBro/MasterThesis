@@ -6,6 +6,7 @@ class SampleBatch:
         self.obs_dtype = config["obs_dtype"]
         self.act_dtype = config["act_dtype"]
         self.rew_dtype = config["rew_dtype"]
+        self.device = config["device"]
 
         self.idx = 0
         self.obs = np.empty((num_envs, config["sample_len"]) + config["obs_dim"], dtype=self.obs_dtype)
@@ -43,3 +44,23 @@ class SampleBatch:
             if start < step_len:
                 sections.append((b*step_len + start, (b+1)*step_len))
         return sections
+
+    def to_tensor_dict(self):
+        obs = torch.from_numpy(sample_batch.obs).float()
+        obs = obs.reshape(-1, obs.shape[-1]).to(self.device)
+        act = torch.from_numpy(sample_batch.act).long().reshape(-1).to(self.device)
+        rew = torch.from_numpy(sample_batch.rew).float().reshape(-1).to(self.device)
+        ret = torch.from_numpy(sample_batch.ret).float().reshape(-1).to(self.device)
+        val = torch.from_numpy(sample_batch.val).float().reshape(-1).to(self.device)
+        last_val = torch.from_numpy(sample_batch.last_val).float().reshape(-1).to(self.device)
+        done = torch.from_numpy(sample_batch.done).reshape(-1)
+
+        return {
+            "obs": obs,
+            "act": act,
+            "rew": rew,
+            "ret": ret,
+            "val": val,
+            "last_val": last_val,
+            "done": done,
+        }

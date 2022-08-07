@@ -12,14 +12,14 @@ class ValueEquivalenceModel(nn.Module):
 
     def __init__(self, config):
         super(ValueEquivalenceModel, self).__init__()
-        self.hidden_size = 128
+        self.hidden_size = 384
         self.num_acts = config["num_acts"]
 
         # Representation function h
         self.rep = nn.Sequential(
-            nn.Linear(config["flat_obs_dim"], 128),
+            nn.Linear(config["flat_obs_dim"], self.hidden_size),
             nn.ReLU(),
-            nn.Linear(128, self.hidden_size*2),
+            nn.Linear(self.hidden_size, self.hidden_size*2),
         )
 
         # Dynamic function g
@@ -45,7 +45,7 @@ class ValueEquivalenceModel(nn.Module):
         s = self.rep(obs)
         s = s.unsqueeze(0)
         s = s.split(self.hidden_size, dim=-1)
-        return s
+        return (s[0].contiguous(), s[1].contiguous())
 
     def dynamics(self, s, a_onehot):
         hidden, s_next = self.dyn(a_onehot, s)

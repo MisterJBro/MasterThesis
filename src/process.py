@@ -68,6 +68,7 @@ def post_processing(policy, sample_batch, config):
         last_val = last_val.cpu().numpy()
 
     sample_batch.val = val
+    sample_batch.last_val = last_val
 
     # Return calculation
     ret = calc_return(sample_batch.done, sample_batch.rew, config["gamma"], last_val)

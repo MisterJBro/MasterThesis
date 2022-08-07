@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
+from torch.utils.data import TensorDataset, DataLoader
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
@@ -12,6 +13,7 @@ class ActorCriticPolicy(nn.Module):
 
     def __init__(self, config):
         super(ActorCriticPolicy, self).__init__()
+        self.config = config
         hidden_size = 512
 
         self.hidden = nn.Sequential(
@@ -66,6 +68,36 @@ class ActorCriticPolicy(nn.Module):
         #x = self.hidden(x)
         val = self.value(x).reshape(-1)
         return val
+
+    def loss(self, data):
+        obs = data["obs"]
+        act = data["act"]
+        ret = data["ret"]
+        adv = data["adv"]
+        scalar_loss = nn.HuberLoss()
+
+        # Policy loss
+        self.opt_policy.zero_grad()
+
+        dist = self.get_dist(obs)
+        logp = dist.log_prob(act)
+        loss_policy = -(logp * adv).mean()
+        loss_policy.backward()
+        nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
+        self.opt_policy.step()
+
+        # Value loss
+        trainset = TensorDataset(obs, ret)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["vf_minibatches"]), shuffle=True)
+
+        for _ in range(self.config["vf_iters"]):
+            for obs_batch, ret_batch in trainloader:
+                self.opt_value.zero_grad()
+                val_batch = self.get_value(obs_batch)
+                loss_value = scalar_loss(val_batch, ret_batch)
+                loss_value.backward()
+                nn.utils.clip_grad_norm_(self.value.parameters(),  self.config["grad_clip"])
+                self.opt_value.step()
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         torch.save({
