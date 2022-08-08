@@ -27,7 +27,8 @@ DEFAULT_CONFIG = {
     "vf_iters": 5,
     "vf_minibatches": 10,
     "model_lr": 5e-4,
-    "model_iters": 3,
+    "model_iters": 5,
+    "model_minibatches": 10,
     "model_unroll_len": 5,
     "grad_clip": 100.0,
 }

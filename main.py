@@ -18,8 +18,8 @@ if __name__ == '__main__':
         "device": "cuda:0",
         "model_lr": 5e-4,
         "model_iters": 5,
-        "model_unroll_len": 2,
-        "grad_clip": 1000.0,
+        "model_unroll_len": 5,
+        "grad_clip": 100.0,
     })
 
     with Trainer(config) as trainer:
