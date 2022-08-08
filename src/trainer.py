@@ -87,11 +87,27 @@ class Trainer:
         with torch.no_grad():
             act_model = self.model.dyn_linear(act_onehot)
             state = self.model.representation(obs)
-            hidden, _ = self.model.dynamics(state, act_model)
+            hidden, next_state = self.model.dynamics(state, act_model)
             model_val = self.model.get_value(hidden)
-            #model_rew = self.model.get_reward(hidden)
+            model_rew = self.model.get_reward(hidden)
 
-        q_val = rew + self.config["gamma"] * model_val
+        # === DEBUG ===
+        q_vals = []
+        with torch.no_grad():
+            act_model = self.model.dyn_linear(act_onehot)
+            for (start, end) in sections:
+                s_1 = self.model.representation(obs[start:end])
+                h_1, s_2 = self.model.dynamics(s_1, act_model[start:end])
+                h_2, _ = self.model.dynamics(s_2, torch.concat([act_model[start+1:end], act_model[start].unsqueeze(0)]))
+                model_r_1 = self.model.get_reward(h_1)
+                model_r_2 = self.model.get_reward(h_2)
+                model_v_2 = self.model.get_value(h_2)
+
+                q_val = model_r_1 + self.config["gamma"] * model_r_2 + self.config["gamma"] ** 2 * model_v_2
+                q_vals.append(q_val)
+        q_val = torch.concat(q_vals)
+
+        #q_val = model_rew + self.config["gamma"] * model_val
 
         adv = q_val - val
         data["adv"] = adv
@@ -103,9 +119,10 @@ class Trainer:
         episodes = []
         num_bootstraps = 0
         for (start, end) in sections:
-            val_targets = []
             act_ep = []
             lengths = []
+            rew_targets = []
+            val_targets = []
             if done[end-1]:
                 next_val_targets = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
             else:
@@ -115,12 +132,16 @@ class Trainer:
             for t in range(start, end):
                 end_ep = min(t+self.config["model_unroll_len"], end)
                 next_actions = act_onehot[t:end_ep].squeeze(1)
+                rew_target = rew[t:end_ep]
                 val_target = next_val_targets[t-start:end_ep-start]
+
+                rew_targets.append(rew_target)
                 val_targets.append(val_target)
                 act_ep.append(next_actions)
                 lengths.append(next_actions.shape[0])
 
             act_ep = torch.concat(act_ep)
+            rew_targets = torch.concat(rew_targets)
             val_targets = torch.concat(val_targets)
 
             episodes.append({
@@ -128,6 +149,7 @@ class Trainer:
                 'end': end,
                 'act_ep': act_ep,
                 'lengths': lengths,
+                'rew_targets': rew_targets,
                 'val_targets': val_targets,
             })
         batch_size = int(self.config["num_samples"]/10)
@@ -141,10 +163,10 @@ class Trainer:
                 end = ep["end"]
                 act_ep = ep["act_ep"]
                 lengths = ep["lengths"]
+                rew_targets = ep["rew_targets"]
                 val_targets = ep["val_targets"]
 
-                act_ep = self.model.dyn_linear(act_ep)#.reshape(act_ep.shape[0], 1, -1))
-                #act_ep = act_ep.reshape(act_ep.shape[0], -1)
+                act_ep = self.model.dyn_linear(act_ep)
                 tmp = []
                 tmp_index = 0
                 for l in lengths:
@@ -159,10 +181,12 @@ class Trainer:
                 hidden, lengths = pad_packed_sequence(hidden, batch_first=True)
                 hidden = [hidden[i][:len] for i, len in enumerate(lengths)]
                 hidden = torch.concat(hidden)
+                model_rew = self.model.get_reward(hidden)
                 model_val = self.model.get_value(hidden)
 
+                loss_rew = scalar_loss(model_rew, rew_targets)
                 loss_val = scalar_loss(model_val, val_targets)
-                loss = loss_val
+                loss = loss_rew + loss_val
                 losses.append(loss)
 
                 # Minibatch update
@@ -171,7 +195,7 @@ class Trainer:
                     self.model.opt.zero_grad()
                     loss = torch.mean(torch.stack(losses))
                     loss.backward()
-                    print(f"Steps {steps} Model loss: {loss.item()}")
+                    print(f"Steps {steps} Model loss: {loss.item()}  Loss Reward: {loss_rew.item()}  Loss Value: {loss_val.item()}")
                     self.model.opt.step()
                     steps = 0
                     losses = []
