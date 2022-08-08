@@ -85,9 +85,11 @@ class Trainer:
         act_onehot = to_onehot(act, self.config["num_acts"])
 
         with torch.no_grad():
+            act_model = self.model.dyn_linear(act_onehot)
             state = self.model.representation(obs)
-            hidden, _ = self.model.dynamics(state, act_onehot)
+            hidden, _ = self.model.dynamics(state, act_model)
             model_val = self.model.get_value(hidden)
+            #model_rew = self.model.get_reward(hidden)
 
         q_val = rew + self.config["gamma"] * model_val
 
@@ -99,22 +101,26 @@ class Trainer:
 
         # Model loss
         episodes = []
+        num_bootstraps = 0
         for (start, end) in sections:
             val_targets = []
             act_ep = []
             lengths = []
-            next_val_targets = torch.concat([ret[start:end], torch.zeros(1, device=self.device)])
+            if done[end-1]:
+                next_val_targets = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
+            else:
+                next_val_targets = torch.concat([ret[start+1:end], last_val[num_bootstraps].unsqueeze(0)])
+                num_bootstraps += 1
 
             for t in range(start, end):
-                end_ep = min(t+1, end)
+                end_ep = min(t+self.config["model_unroll_len"], end)
                 next_actions = act_onehot[t:end_ep].squeeze(1)
                 val_target = next_val_targets[t-start:end_ep-start]
                 val_targets.append(val_target)
                 act_ep.append(next_actions)
                 lengths.append(next_actions.shape[0])
 
-            act_ep = pad_sequence(act_ep, batch_first=True)
-            act_ep = pack_padded_sequence(act_ep, lengths=lengths, batch_first=True)
+            act_ep = torch.concat(act_ep)
             val_targets = torch.concat(val_targets)
 
             episodes.append({
@@ -134,7 +140,19 @@ class Trainer:
                 start = ep["start"]
                 end = ep["end"]
                 act_ep = ep["act_ep"]
+                lengths = ep["lengths"]
                 val_targets = ep["val_targets"]
+
+                act_ep = self.model.dyn_linear(act_ep)#.reshape(act_ep.shape[0], 1, -1))
+                #act_ep = act_ep.reshape(act_ep.shape[0], -1)
+                tmp = []
+                tmp_index = 0
+                for l in lengths:
+                    tmp.append(act_ep[tmp_index:tmp_index + l])
+                    tmp_index += l
+                act_ep = tmp
+                act_ep = pad_sequence(act_ep, batch_first=True)
+                act_ep = pack_padded_sequence(act_ep, lengths=lengths, batch_first=True)
 
                 state = self.model.representation(obs[start:end])
                 hidden, _ = self.model.dynamics(state, act_ep)

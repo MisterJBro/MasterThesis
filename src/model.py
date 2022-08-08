@@ -18,11 +18,12 @@ class ValueEquivalenceModel(nn.Module):
 
         # Representation function h
         self.rep = nn.Sequential(
-            nn.Linear(config["flat_obs_dim"], self.hidden_size),
-            nn.ReLU(),
-            nn.Linear(self.hidden_size, 2*self.num_layers*self.hidden_size),
+            nn.Linear(config["flat_obs_dim"], 2*self.num_layers*self.hidden_size),
+            #nn.Linear(config["flat_obs_dim"], self.hidden_size),
             #nn.ReLU(),
+            #nn.Linear(self.hidden_size, 2*self.num_layers*self.hidden_size),
             #nn.Linear(self.hidden_size, self.hidden_size),
+            #nn.ReLU(),
             #nn.ReLU(),
         )
         self.rep_rnn = nn.LSTM(config["flat_obs_dim"], self.hidden_size, batch_first=True)
@@ -31,7 +32,10 @@ class ValueEquivalenceModel(nn.Module):
         #self.num_acts
         self.dyn_linear = nn.Sequential(
             nn.Linear(self.num_acts, self.hidden_size),
+            #nn.Unflatten(1, (1, -1)),
+            #nn.Conv1d(in_channels=1, out_channels=int(self.hidden_size/self.num_acts), kernel_size=1),
             nn.ReLU(),
+            #nn.Flatten(0, 1),
             #nn.Linear(self.hidden_size, self.hidden_size),
         )
         self.dyn = nn.LSTM(input_size=self.hidden_size, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True)
@@ -44,7 +48,7 @@ class ValueEquivalenceModel(nn.Module):
             nn.Linear(self.hidden_size, 1),
         )
         self.pre_pi = nn.Sequential(
-            nn.Linear(self.hidden_size, self.num_acts)
+            nn.Linear(self.hidden_size, self.num_acts),
         )
 
         self.opt = optim.Adam(list(self.parameters()), lr=config["model_lr"])
@@ -54,18 +58,12 @@ class ValueEquivalenceModel(nn.Module):
     def representation(self, obs):
         """Using the representation function, transform the given observation into a state representation."""
         s = self.rep(obs)
-        #return s.unsqueeze(0)
-        #s = obs.unsqueeze(1)
-        #_, (h_0, c_0) = self.rep_rnn(s)
-        #return (h_0, c_0)
         s = s.reshape(s.shape[0], self.num_layers, -1)
         s = s.permute(1, 0, 2)
         s = s.split(self.hidden_size, dim=-1)
         return (s[0].contiguous(), s[1].contiguous())
 
     def dynamics(self, s, a_onehot):
-        #return s[0], None
-        #a_onehot = self.dyn_linear(a_onehot)
         hidden, s_next = self.dyn(a_onehot, s)
         return hidden, s_next
 
