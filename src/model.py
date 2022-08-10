@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
+from torch.distributions.kl import kl_divergence
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
+import numpy as np
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
@@ -12,6 +15,7 @@ class ValueEquivalenceModel(nn.Module):
 
     def __init__(self, config):
         super(ValueEquivalenceModel, self).__init__()
+        self.config = config
         self.hidden_size = 512
         self.num_layers = 2
         self.num_acts = config["num_acts"]
@@ -32,11 +36,7 @@ class ValueEquivalenceModel(nn.Module):
         #self.num_acts
         self.dyn_linear = nn.Sequential(
             nn.Linear(self.num_acts, self.hidden_size),
-            #nn.Unflatten(1, (1, -1)),
-            #nn.Conv1d(in_channels=1, out_channels=int(self.hidden_size/self.num_acts), kernel_size=1),
             nn.ReLU(),
-            #nn.Flatten(0, 1),
-            #nn.Linear(self.hidden_size, self.hidden_size),
         )
         self.dyn = nn.LSTM(input_size=self.hidden_size, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True)
 
@@ -77,7 +77,118 @@ class ValueEquivalenceModel(nn.Module):
         return Categorical(logits=self.pre_pi(hidden).reshape(-1, self.num_acts))
 
     def loss(self, data):
-        pass
+        obs = data["obs"]
+        act = data["act"]
+        rew = data["rew"]
+        done = data["done"]
+        ret = data["ret"]
+        logits = data["logits"]
+        last_val = data["last_val"]
+        sections = data["sections"]
+        scalar_loss = nn.HuberLoss()
+        act_onehot = to_onehot(act, self.config["num_acts"])
+
+        # Prepare episodes
+        episodes = []
+        num_bootstraps = 0
+        for (start, end) in sections:
+            act_ep = []
+            lengths = []
+            rew_targets = []
+            val_targets = []
+            dist_targets = []
+            if done[end-1]:
+                next_val_targets = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
+            else:
+                next_val_targets = torch.concat([ret[start+1:end], last_val[num_bootstraps].unsqueeze(0)])
+                num_bootstraps += 1
+
+            for t in range(start, end):
+                end_ep = min(t+self.config["model_unroll_len"], end)
+                next_actions = act_onehot[t:end_ep].squeeze(1)
+                rew_target = rew[t:end_ep]
+                val_target = next_val_targets[t-start:end_ep-start]
+                dist_target = logits[t:end_ep]
+
+                rew_targets.append(rew_target)
+                val_targets.append(val_target)
+                dist_targets.append(dist_target)
+                act_ep.append(next_actions)
+                lengths.append(next_actions.shape[0])
+
+            act_ep = torch.concat(act_ep)
+            rew_targets = torch.concat(rew_targets)
+            val_targets = torch.concat(val_targets)
+            dist_targets = torch.concat(dist_targets)
+            dist_targets = Categorical(logits=dist_targets)
+
+            episodes.append({
+                'start': start,
+                'end': end,
+                'act_ep': act_ep,
+                'lengths': lengths,
+                'rew_targets': rew_targets,
+                'val_targets': val_targets,
+                'dist_targets': dist_targets,
+            })
+        batch_size = int(self.config["num_samples"]/self.config["model_minibatches"])
+
+        # Train model
+        for _ in range(self.config["model_iters"]):
+            losses = []
+            steps = 0
+            np.random.shuffle(episodes)
+            for ep in episodes:
+                start = ep["start"]
+                end = ep["end"]
+                act_ep = ep["act_ep"]
+                lengths = ep["lengths"]
+                rew_targets = ep["rew_targets"]
+                val_targets = ep["val_targets"]
+                dist_targets = ep["dist_targets"]
+
+                act_ep = self.dyn_linear(act_ep)
+                tmp = []
+                tmp_index = 0
+                for l in lengths:
+                    tmp.append(act_ep[tmp_index:tmp_index + l])
+                    tmp_index += l
+                act_ep = tmp
+                act_ep = pad_sequence(act_ep, batch_first=True)
+                act_ep = pack_padded_sequence(act_ep, lengths=lengths, batch_first=True)
+
+                state = self.representation(obs[start:end])
+                hidden, _ = self.dynamics(state, act_ep)
+                hidden, lengths = pad_packed_sequence(hidden, batch_first=True)
+                hidden = [hidden[i][:len] for i, len in enumerate(lengths)]
+                hidden = torch.concat(hidden)
+
+                model_rew = self.get_reward(hidden)
+                model_val = self.get_value(hidden)
+                model_dist = self.get_policy(hidden)
+
+                loss_rew = scalar_loss(model_rew, rew_targets)
+                loss_val = scalar_loss(model_val, val_targets)
+                # Mode seeking KL
+                loss_dist = kl_divergence(dist_targets, model_dist).mean()
+                loss = loss_rew + loss_val + loss_dist
+                losses.append(loss)
+
+                # Minibatch update
+                steps += end - start
+                if steps >= batch_size:
+                    self.opt.zero_grad()
+                    loss = torch.mean(torch.stack(losses))
+                    loss.backward()
+                    self.opt.step()
+                    steps = 0
+                    losses = []
+
+            if len(losses) != 0:
+                self.opt.zero_grad()
+                loss = torch.mean(torch.stack(losses))
+                loss.backward()
+                self.opt.step()
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({
@@ -89,3 +200,11 @@ class ValueEquivalenceModel(nn.Module):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
         self.opt.load_state_dict(checkpoint['optimizer'])
+
+def to_onehot(a, num_acts):
+    # Convert action into one-hot encoded representation
+    a_onehot = torch.zeros(a.shape[0], num_acts).to(a.device)
+    a_onehot.scatter_(1, a.view(-1, 1), 1)
+    a_onehot.unsqueeze_(1)
+
+    return a_onehot

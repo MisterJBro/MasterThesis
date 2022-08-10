@@ -54,6 +54,7 @@ class SampleBatch:
         val = torch.from_numpy(self.val).float().reshape(-1).to(self.device)
         last_val = torch.from_numpy(self.last_val).float().reshape(-1).to(self.device)
         done = torch.from_numpy(self.done).reshape(-1)
+        sections = self.get_sections()
 
         return {
             "obs": obs,
@@ -63,4 +64,5 @@ class SampleBatch:
             "val": val,
             "last_val": last_val,
             "done": done,
+            "sections": sections,
         }

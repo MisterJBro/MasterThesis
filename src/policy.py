@@ -69,12 +69,10 @@ class ActorCriticPolicy(nn.Module):
         val = self.value(x).reshape(-1)
         return val
 
-    def loss(self, data):
+    def loss_gradient(self, data):
         obs = data["obs"]
         act = data["act"]
-        ret = data["ret"]
         adv = data["adv"]
-        scalar_loss = nn.HuberLoss()
 
         # Policy loss
         self.opt_policy.zero_grad()
@@ -85,6 +83,11 @@ class ActorCriticPolicy(nn.Module):
         loss_policy.backward()
         nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
         self.opt_policy.step()
+
+    def loss_value(self, data):
+        obs = data["obs"]
+        ret = data["ret"]
+        scalar_loss = nn.HuberLoss()
 
         # Value loss
         trainset = TensorDataset(obs, ret)
