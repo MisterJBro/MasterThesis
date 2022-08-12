@@ -1,3 +1,4 @@
+from ensurepip import bootstrap
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,17 +24,10 @@ class ValueEquivalenceModel(nn.Module):
         # Representation function h
         self.rep = nn.Sequential(
             nn.Linear(config["flat_obs_dim"], 2*self.num_layers*self.hidden_size),
-            #nn.Linear(config["flat_obs_dim"], self.hidden_size),
-            #nn.ReLU(),
-            #nn.Linear(self.hidden_size, 2*self.num_layers*self.hidden_size),
-            #nn.Linear(self.hidden_size, self.hidden_size),
-            #nn.ReLU(),
-            #nn.ReLU(),
         )
         self.rep_rnn = nn.LSTM(config["flat_obs_dim"], self.hidden_size, batch_first=True)
 
         # Dynamic function g
-        #self.num_acts
         self.dyn_linear = nn.Sequential(
             nn.Linear(self.num_acts, self.hidden_size),
             nn.ReLU(),
@@ -86,7 +80,7 @@ class ValueEquivalenceModel(nn.Module):
         last_val = data["last_val"]
         sections = data["sections"]
         scalar_loss = nn.HuberLoss()
-        act_onehot = to_onehot(act, self.config["num_acts"])
+        act_onehot = to_onehot(act, self.num_acts)
 
         # Prepare episodes
         episodes = []
@@ -97,7 +91,8 @@ class ValueEquivalenceModel(nn.Module):
             rew_targets = []
             val_targets = []
             dist_targets = []
-            if done[end-1]:
+            bootstrap = done[end-1]
+            if bootstrap:
                 next_val_targets = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
             else:
                 next_val_targets = torch.concat([ret[start+1:end], last_val[num_bootstraps].unsqueeze(0)])
@@ -105,10 +100,19 @@ class ValueEquivalenceModel(nn.Module):
 
             for t in range(start, end):
                 end_ep = min(t+self.config["model_unroll_len"], end)
-                next_actions = act_onehot[t:end_ep].squeeze(1)
+                cut = (end_ep - t) != self.config["model_unroll_len"]
+
+                next_actions = act_onehot[t:end_ep]
                 rew_target = rew[t:end_ep]
                 val_target = next_val_targets[t-start:end_ep-start]
                 dist_target = logits[t:end_ep]
+                if bootstrap and cut:
+                    rew_target = torch.concat([rew_target, torch.zeros(1, device=self.device)])
+                    val_target = torch.concat([val_target, torch.zeros(1, device=self.device)])
+                    random_action = torch.randint(0, self.num_acts, (1,), device=self.device)
+                    random_action = to_onehot(random_action, self.num_acts)
+                    next_actions = torch.concat([next_actions, random_action])
+                    dist_target = torch.concat([dist_target, logits[end_ep-1].unsqueeze(0)])
 
                 rew_targets.append(rew_target)
                 val_targets.append(val_target)
@@ -151,7 +155,8 @@ class ValueEquivalenceModel(nn.Module):
                 tmp = []
                 tmp_index = 0
                 for l in lengths:
-                    tmp.append(act_ep[tmp_index:tmp_index + l])
+                    tmp_act = act_ep[tmp_index:tmp_index + l]
+                    tmp.append(tmp_act)
                     tmp_index += l
                 act_ep = tmp
                 act_ep = pad_sequence(act_ep, batch_first=True)
@@ -205,6 +210,5 @@ def to_onehot(a, num_acts):
     # Convert action into one-hot encoded representation
     a_onehot = torch.zeros(a.shape[0], num_acts).to(a.device)
     a_onehot.scatter_(1, a.view(-1, 1), 1)
-    a_onehot.unsqueeze_(1)
 
     return a_onehot

@@ -13,10 +13,13 @@ from src.policy import ActorCriticPolicy
 
 from multiprocessing import freeze_support
 from src.process import post_processing
+from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 from src.sample_batch import SampleBatch
 from src.model import to_onehot
+from torch.utils.data import TensorDataset, DataLoader
+from torch.distributions.kl import kl_divergence
 
 
 class Trainer:
@@ -46,7 +49,9 @@ class Trainer:
 
     def train(self):
         for iter in range(self.config["train_iters"]):
+            start = time.time()
             sample_batch = self.get_sample_batch()
+            end = time.time()
             stats = sample_batch.statistics
             self.update(sample_batch)
 
@@ -82,19 +87,20 @@ class Trainer:
         plan_targets = plan(self.policy, self.model, data, self.config)
         plan_actions = plan_targets.logits.argmax(-1)
         end = time.time()
-        print(f'Plan time: {end - start}')
+        #print(f'Plan time: {end - start}')
 
         # Distill planning targets into policy
-        for i in range(3):
-            self.policy.opt_policy.zero_grad()
+        trainset = TensorDataset(obs, plan_targets.logits)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
 
-            dist = self.policy.get_dist(obs)
-            # Calc loss using reverse KL divergence
-            loss = -dist.log_prob(plan_actions).mean()
-
-            loss.backward()
-            nn.utils.clip_grad_norm_(self.policy.policy.parameters(),  self.config["grad_clip"])
-            self.policy.opt_policy.step()
+        for i in range(1):
+            for obs_batch, plan_target_batch in trainloader:
+                self.policy.opt_policy.zero_grad()
+                dist_batch = self.policy.get_dist(obs_batch)
+                loss = kl_divergence(Categorical(logits=plan_target_batch), dist_batch).mean()
+                loss.backward()
+                nn.utils.clip_grad_norm_(self.policy.policy.parameters(),  self.config["grad_clip"])
+                self.policy.opt_policy.step()
 
         #act = data["act"]
         #act_onehot = to_onehot(act, self.config["num_acts"])

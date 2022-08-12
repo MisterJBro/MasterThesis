@@ -1,0 +1,25 @@
+[package]
+name = "hexgame"
+version = "0.1.0"
+edition = "2021"
+authors = ["Martin Altmayer"]
+license = "GPL-3.0-or-later"
+description = "Simple and performant implementation of the Hex board game"
+repository = "https://github.com/MartinAltmayer/hexgame"
+categories = ["games"]
+
+[target.'cfg(any(windows, unix))']
+rustflags = ["-C target-cpu=native"]
+
+[profile.release]
+lto = true
+
+[lib]
+name = "hexgame"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = {version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
+pyo3 = { version = "0.16.5", features = ["extension-module"] }
+numpy = "0.16"

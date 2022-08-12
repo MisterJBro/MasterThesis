@@ -19,7 +19,7 @@ def max_search(state, hidden, curr_ret, curr_depth, all_acts, model, config):
         next_hidden, next_state = model.dynamics(state, act)
 
         rew = model.get_reward(next_hidden)
-        dist = model.get_policy(next_hidden)
+        #dist = model.get_policy(next_hidden)
 
         next_ret = curr_ret + (config["gamma"] ** curr_depth) * rew
         curr_ret = max_search(next_state, next_hidden, next_ret, curr_depth + 1, all_acts, model, config)
@@ -42,12 +42,12 @@ def plan(policy, model, data, config):
     # Get all actions by iterating from 0 to num_acts and then to_onehot and model.dyn_linear
     all_acts = []
     for i in range(config["num_acts"]):
-        all_acts.append(to_onehot(torch.tensor([i]), config["num_acts"]).squeeze(1))
+        all_acts.append(to_onehot(torch.tensor([i]), config["num_acts"]))
     all_acts = torch.concat(all_acts).to(config["device"])
     with torch.no_grad():
         all_acts = model.dyn_linear(all_acts)
 
-    config["max_search_depth"] = 3
+    config["max_search_depth"] = 2
     # Iterate over all observation
     all_qvals = []
     for (start, end) in sections:
@@ -65,6 +65,10 @@ def plan(policy, model, data, config):
                 qvals[:, act_idx] = max_search(next_state, hidden, first_rew, 1, all_acts, model, config)
         all_qvals.append(qvals)
     all_qvals = torch.concat(all_qvals).to(config["device"])
-    dist_targets = Categorical(logits=all_qvals*100.0)
+
+    with torch.no_grad():
+        logits = policy.get_dist(obs).logits
+
+    dist_targets = Categorical(logits=logits + all_qvals*1.0)
 
     return dist_targets
