@@ -1,7 +1,7 @@
 import time
 import numpy as np
 from copy import deepcopy
-from numba import jit, float32, int32, boolean
+from numba import jit
 
 
 class Tree:
@@ -12,32 +12,14 @@ class Tree:
 
     def search(self, iters=1000):
         iter = 0
-        time_select = 0.0
-        time_expand = 0.0
-        time_simulate = 0.0
-        time_backpropagate = 0.0
 
         while iter < iters:
-            start = time.time()
             leaf = self.select()
-            time_select += time.time() - start
-            start = time.time()
             new_leaf = self.expand(leaf)
-            time_expand += time.time() - start
-
-            if new_leaf.state.is_terminal():
-                iter += 1
-                continue
-
-            start = time.time()
             ret = self.simulate(new_leaf)
-            time_simulate += time.time() - start
-            start = time.time()
             self.backpropagate(new_leaf, ret)
-            time_backpropagate += time.time() - start
             iter += 1
-        print(np.round(self.get_action_values(), 2).reshape(3, 3))
-        print(f"Times: {time_select:.2f}s {time_expand:.2f}s {time_simulate:.2f}s {time_backpropagate:.2f}s")
+        print(np.round(self.get_action_values(), 2))
 
     def select(self):
         node = self.root
@@ -47,7 +29,7 @@ class Tree:
 
     def expand(self, node):
         if node.state is None:
-            node.create_state()
+            node.create_state(self.num_players)
             return node
         if node.state.is_terminal():
             return node
@@ -59,8 +41,8 @@ class Tree:
             node.children.append(new_node)
 
         # Pick child node
-        child = node.children[np.random.randint(len(node.children))]
-        child.create_state()
+        child = np.random.choice(node.children)
+        child.create_state(self.num_players)
         return child
 
     def simulate(self, node):
@@ -70,6 +52,10 @@ class Tree:
         node.backpropagate(ret, self.num_players)
 
     def get_action_values(self):
+        # Print visit count of each children as well as uct
+        for node in self.root.children:
+            print(f"{node.action}: {node.num_visits} {node.uct()}")
+
         return self.root.get_action_values(self.num_players)
 
 class Node:
@@ -77,7 +63,7 @@ class Node:
 
     def __init__(self, state, action=None, parent=None):
         self.state = state
-        self.num_visits = 1e-12
+        self.num_visits = 0
         self.total_rews = 0.0
 
         self.action = action
@@ -96,59 +82,63 @@ class Node:
         return self.children[self.select_child_jit(uct_values)]
 
     @staticmethod
-    @jit(nopython=True, cache=True)
+    #@jit(nopython=True, cache=True)
     def select_child_jit(uct_values):
-        max_uct_values = max(uct_values)
-        max_uct_indices = [i for i, x in enumerate(uct_values) if x == max_uct_values]
+        max_uct_indices = np.flatnonzero(uct_values == np.max(uct_values))
 
         if len(max_uct_indices) == 1:
             return max_uct_indices[0]
-        return np.random.choice(np.array(max_uct_indices))
+        return np.random.choice(max_uct_indices)
 
     def uct(self):
         if self.num_visits == 0:
             return float('inf')
-        elif self.state is not None and self.state.is_terminal():
-            return -float('inf')
+        #elif self.state is not None and self.state.is_terminal():
+        #    return -float('inf')
         return self.uct_jit(self.num_visits, self.parent.num_visits, self.total_rews)
 
     @staticmethod
-    @jit(nopython=True, cache=True)
+    #@jit(nopython=True, cache=True)
     def uct_jit(num_visits, parent_visits, total_rews):
-        return total_rews/num_visits + 1.4142 * np.sqrt(np.log(parent_visits)/num_visits)
+        return total_rews/(num_visits+1e-12) + np.sqrt(2) * np.sqrt(np.log(parent_visits)/num_visits+1e-12)
 
-    def create_state(self):
+    def create_state(self, num_players):
         self.state = self.parent.state.copy()
-        self.state.make_action(self.action)
+        self.state.make_action(self.action, self.depth, num_players)
 
     def rollout(self, num_players):
-        return self.state.rollout(self.depth, num_players)
+        return self.state.rollout(num_players)
 
     def backpropagate(self, ret, num_players):
         self.num_visits += 1
         self.total_rews += ret
 
         if self.parent is not None:
-            player = self.depth % num_players
-            flip = -1.0 if (player == 0 and num_players > 1) or player == 1 else 1.0
+            player = (self.depth-1) % num_players
+            #flip = -1.0 if (player == 0 and num_players > 1) or player == 1 else 1.0
+            flip = -1.0 if num_players > 1 else 1.0
             self.parent.backpropagate(flip * ret, num_players)
 
     def get_action_values(self, num_players):
-        player = (self.depth+1) % num_players
-        flip = 1.0 if player == 0 else -1.0
-        return flip * np.array([child.total_rews/child.num_visits for child in self.children])
+        #player = (self.depth+1) % num_players
+        #flip = 1.0 if player == 0 else -1.0
+        flip = 1.0
+        return flip * np.array([child.total_rews/(child.num_visits+1e-12) for child in self.children])
 
 class State:
     """ State representation of the environment. """
-    def __init__(self, env, done=False):
+    def __init__(self, env, done=False, rew=0.0):
         self.env = env
         self.done = done
+        self.rew = rew
 
     def copy(self):
         return deepcopy(self)
 
-    def make_action(self, action):
-        _, _, self.done, _ = self.env.step(action)
+    def make_action(self, action, depth, num_players):
+        _, self.rew, self.done, _ = self.env.step(action)
+        #flip = 1.0 if ((depth-1) % num_players == 0 and num_players > 1) or num_players == 1 else -1.0
+        self.rew = np.abs(self.rew)
 
     def get_possible_actions(self):
         return self.env.available_actions()
@@ -156,12 +146,13 @@ class State:
     def is_terminal(self):
         return self.done
 
-    def rollout(self, depth, num_players):
+    def rollout(self, num_players):
         env = deepcopy(self.env)
         done = self.done
-        ret = 0
+        ret = self.rew
         player = 0
         while not done:
+            player = (player + 1) % num_players
             act = np.random.choice(env.available_actions())
             obs, rew, done, _ = env.step(act)
 
@@ -169,7 +160,6 @@ class State:
                 ret += np.abs(rew)
             else:
                 ret -= np.abs(rew)
-            player = (player + 1) % num_players
         return ret
 
     def __str__(self):
@@ -181,16 +171,17 @@ if __name__ == "__main__":
     env = TicTacToeEnv(show_number=True)
     state = env.reset()
 
-    tree = Tree(State(env), num_players=2)
-    tree.search(iters=2)
+    env.step(0)
+    env.step(4)
+    env.step(1)
 
     done = False
     while not done:
         tree = Tree(State(env), num_players=2)
-        tree.search(iters=10_000)
+        tree.search(iters=2000)
 
-        act = np.random.choice(env.available_actions())
+        #act = np.random.choice(env.available_actions())
 
-        state, reward, done, info = env.step(act)
+        #state, reward, done, info = env.step(act)
         env.render()
         quit()
