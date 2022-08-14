@@ -47,7 +47,7 @@ def plan(policy, model, data, config):
     with torch.no_grad():
         all_acts = model.dyn_linear(all_acts)
 
-    config["max_search_depth"] = 2
+    config["max_search_depth"] = 4
     # Iterate over all observation
     all_qvals = []
     for (start, end) in sections:

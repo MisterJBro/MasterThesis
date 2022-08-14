@@ -93,7 +93,7 @@ class Trainer:
         trainset = TensorDataset(obs, plan_targets.logits)
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
 
-        for i in range(1):
+        for i in range(20):
             for obs_batch, plan_target_batch in trainloader:
                 self.policy.opt_policy.zero_grad()
                 dist_batch = self.policy.get_dist(obs_batch)

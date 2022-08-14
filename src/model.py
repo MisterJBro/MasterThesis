@@ -2,6 +2,7 @@ from ensurepip import bootstrap
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
@@ -45,7 +46,17 @@ class ValueEquivalenceModel(nn.Module):
             nn.Linear(self.hidden_size, self.num_acts),
         )
 
-        self.opt = optim.Adam(list(self.parameters()), lr=config["model_lr"])
+        self.opt = optim.Adam(
+            list(self.parameters()),
+            lr=config["model_lr"],
+            weight_decay=config['model_weight_decay']
+        )
+        self.scheduler = lr_scheduler.StepLR(
+            self.opt,
+            step_size=10,
+            gamma=0.5,
+        )
+
         self.device = config["device"]
         self.to(self.device)
 
@@ -194,6 +205,7 @@ class ValueEquivalenceModel(nn.Module):
                 loss = torch.mean(torch.stack(losses))
                 loss.backward()
                 self.opt.step()
+        self.scheduler.step()
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({

@@ -103,19 +103,20 @@ impl Board {
     /// Convert this board to ndarray
     pub fn to_ndarray(&self) -> Array<f32, Ix3> {
         let size = self.size() as usize;
-        let mut array = Array::zeros((3, size, size));
+        let mut array = Array::zeros((2, size, size));
         for row in 0..size {
             for column in 0..size {
                 let color = self.get_color(Coords::new(row as u8, column as u8));
 
                 if let Some(color) = color {
                     match color {
-                        Color::Black => array[[1, row, column]] = 1.0,
-                        Color::White => array[[2, row, column]] = 1.0,
+                        Color::Black => array[[0, row, column]] = 1.0,
+                        Color::White => array[[1, row, column]] = 1.0,
                     }
-                } else {
-                    array[[0, row, column]] = 1.0;
                 }
+                //else {
+                //    array[[0, row, column]] = 1.0;
+                //}
             }
         }
         array
