@@ -1,22 +1,23 @@
 import time
 import numpy as np
 from copy import deepcopy
+from numba import jit, float32, int32, boolean
 
 
 class Tree:
     """ MCTS Tree presentation. Using index tree. """
-    def __init__(self, state, num_players=1):
+    def __init__(self, state, num_players=2):
         self.num_players=num_players
         self.root = Node(state)
 
-    def search(self):
+    def search(self, iters=1000):
         iter = 0
         time_select = 0.0
         time_expand = 0.0
         time_simulate = 0.0
         time_backpropagate = 0.0
 
-        while iter < 100_000:
+        while iter < iters:
             start = time.time()
             leaf = self.select()
             time_select += time.time() - start
@@ -24,7 +25,7 @@ class Tree:
             new_leaf = self.expand(leaf)
             time_expand += time.time() - start
 
-            if new_leaf is None:
+            if new_leaf.state.is_terminal():
                 iter += 1
                 continue
 
@@ -45,14 +46,11 @@ class Tree:
         return node
 
     def expand(self, node):
-        #if node.parent is not None:
-        #    print(f"\tParent: 'depth'={node.depth} 'total_rews'={node.parent.total_rews:.0f} 'num_visits'={node.parent.num_visits:.0f} 'action'={node.parent.action}")
         if node.state is None:
-            # Node was never visited, only expanded, use it
             node.create_state()
             return node
         if node.state.is_terminal():
-            return None
+            return node
 
         # Create new child nodes, lazy init
         actions = node.state.get_possible_actions()
@@ -60,12 +58,8 @@ class Tree:
             new_node = Node(None, action=action, parent=node)
             node.children.append(new_node)
 
-        num_children = len(node.children)
-        if num_children == 0:
-            return None
-
         # Pick child node
-        child = node.children[np.random.randint(num_children)]
+        child = node.children[np.random.randint(len(node.children))]
         child.create_state()
         return child
 
@@ -76,7 +70,7 @@ class Tree:
         node.backpropagate(ret, self.num_players)
 
     def get_action_values(self):
-        return self.root.get_action_values()
+        return self.root.get_action_values(self.num_players)
 
 class Node:
     """ Tree Node abstraction. All values are stored in the tree. """
@@ -98,19 +92,30 @@ class Node:
         return len(self.children) == 0
 
     def select_child(self):
-        uct_values = [child.uct() for child in self.children]
+        uct_values = np.array([child.uct() for child in self.children])
+        return self.children[self.select_child_jit(uct_values)]
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def select_child_jit(uct_values):
         max_uct_values = max(uct_values)
         max_uct_indices = [i for i, x in enumerate(uct_values) if x == max_uct_values]
 
         if len(max_uct_indices) == 1:
-            return self.children[max_uct_indices[0]]
-        return self.children[np.random.choice(max_uct_indices)]
+            return max_uct_indices[0]
+        return np.random.choice(np.array(max_uct_indices))
 
     def uct(self):
         if self.num_visits == 0:
             return float('inf')
-        else:
-            return self.total_rews/self.num_visits + 1.4142 * np.sqrt(np.log(self.parent.num_visits)/self.num_visits)
+        elif self.state is not None and self.state.is_terminal():
+            return -float('inf')
+        return self.uct_jit(self.num_visits, self.parent.num_visits, self.total_rews)
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def uct_jit(num_visits, parent_visits, total_rews):
+        return total_rews/num_visits + 1.4142 * np.sqrt(np.log(parent_visits)/num_visits)
 
     def create_state(self):
         self.state = self.parent.state.copy()
@@ -128,8 +133,10 @@ class Node:
             flip = -1.0 if (player == 0 and num_players > 1) or player == 1 else 1.0
             self.parent.backpropagate(flip * ret, num_players)
 
-    def get_action_values(self):
-        return np.array([child.total_rews/child.num_visits for child in self.children])
+    def get_action_values(self, num_players):
+        player = (self.depth+1) % num_players
+        flip = 1.0 if player == 0 else -1.0
+        return flip * np.array([child.total_rews/child.num_visits for child in self.children])
 
 class State:
     """ State representation of the environment. """
@@ -153,7 +160,7 @@ class State:
         env = deepcopy(self.env)
         done = self.done
         ret = 0
-        player = depth % num_players
+        player = 0
         while not done:
             act = np.random.choice(env.available_actions())
             obs, rew, done, _ = env.step(act)
@@ -174,10 +181,13 @@ if __name__ == "__main__":
     env = TicTacToeEnv(show_number=True)
     state = env.reset()
 
+    tree = Tree(State(env), num_players=2)
+    tree.search(iters=2)
+
     done = False
     while not done:
         tree = Tree(State(env), num_players=2)
-        tree.search()
+        tree.search(iters=10_000)
 
         act = np.random.choice(env.available_actions())
 
