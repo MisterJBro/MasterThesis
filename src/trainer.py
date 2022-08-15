@@ -6,7 +6,6 @@ import gym
 import time
 import random
 from src.envs import Envs
-from src.config import DEFAULT_CONFIG
 from src.model import ValueEquivalenceModel
 from src.plan import plan
 from src.policy import ActorCriticPolicy

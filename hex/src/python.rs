@@ -32,12 +32,12 @@ impl HexGame {
         let mut rew = 0f32;
 
         match self.game.get_status() {
-            Status::Ongoing(current_player) => {
+            Status::Ongoing(_current_player) => {
                 let coords = Coords::from_u16(action, self.size as u16);
                 self.game.play(coords).expect("Invalid action");
 
-                if let Status::Finished(winner) = self.game.get_status() {
-                    rew = if winner == current_player { 1f32 } else { -1f32 };
+                if let Status::Finished(_winner) = self.game.get_status() {
+                    rew = 1f32; //if winner == current_player { 1f32 } else { -1f32 };
                     done = true;
                 }
             }
