@@ -72,6 +72,10 @@ class TreeWorker(Process, Tree):
         while msg["command"] != "close":
             if msg["command"] == "search":
                 self.set_root(msg["state"])
-                qvals = self.search(self.iters)
+                if msg["iters"] is not None:
+                    iters = msg["iters"]
+                else:
+                    iters = self.iters
+                qvals = self.search(iters)
                 self.channel.send(qvals)
             msg = self.channel.recv()

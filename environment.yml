@@ -1,13 +1,16 @@
 name: rl
 channels:
   - pytorch
+  - numba
+  - conda-forge
   - defaults
 dependencies:
   - blas=1.0=mkl
-  - ca-certificates=2022.4.26=haa95532_0
-  - certifi=2022.5.18.1=py39haa95532_0
+  - ca-certificates=2022.6.15=h5b45459_0
+  - certifi=2022.6.15=py39hcbf5309_0
   - cudatoolkit=10.2.89=h74a9793_1
   - freetype=2.10.4=hd328e21_0
+  - icc_rt=2020.2=intel_254
   - intel-openmp=2021.4.0=haa95532_3556
   - jpeg=9e=h2bbff1b_0
   - libpng=1.6.37=h2a8f88b_0
@@ -21,9 +24,11 @@ dependencies:
   - mkl_random=1.2.2=py39hf11a4ad_0
   - numpy=1.22.3=py39h7a0a035_0
   - numpy-base=1.22.3=py39hca35cd5_0
-  - openssl=1.1.1o=h2bbff1b_0
+  - openssl=1.1.1q=h8ffe710_0
   - pip=21.2.4=py39haa95532_0
+  - pybox2d=2.3.10=py39h415ef7b_3
   - python=3.9.12=h6244533_0
+  - python_abi=3.9=2_cp39
   - pytorch=1.10.1=py3.9_cuda10.2_cudnn7_0
   - pytorch-mutex=1.0=cuda
   - six=1.16.0=pyhd3eb1b0_1
@@ -79,6 +84,7 @@ dependencies:
     - gym==0.21.0
     - gym-notices==0.0.6
     - h5py==3.7.0
+    - hexgame==0.1.0
     - idna==3.3
     - imageio==2.19.3
     - importlib-metadata==4.11.3
@@ -155,6 +161,7 @@ dependencies:
     - tifffile==2022.5.4
     - tomli==2.0.1
     - torch==1.11.0
+    - torch-tb-profiler==0.4.0
     - torchmetrics==0.9.0
     - tqdm==4.64.0
     - traitlets==5.1.1
@@ -166,3 +173,4 @@ dependencies:
     - wrapt==1.14.1
     - yarl==1.7.2
     - zipp==3.8.0
+prefix: D:\Programme\anaconda3\envs\rl

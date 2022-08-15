@@ -23,17 +23,14 @@ class MCTS:
         for w in self.workers:
             w.start()
 
-    def search(self, state):
+    def search(self, state, iters=None):
         for c in self.channels:
             c.send({
                 "command": "search",
-                "state": deepcopy(state)
+                "state": deepcopy(state),
+                "iters": iters,
             })
         msg = np.stack([c.recv() for c in self.channels])
-
-        print("Messages:")
-        for m in msg:
-            print(m)
 
         qvals = np.mean(msg, axis=0)
         return qvals
@@ -51,8 +48,8 @@ if __name__ == "__main__":
 
     config = {
         "uct_c": np.sqrt(2),
-        "mcts_iters": 2000,
-        "num_trees": 1,
+        "mcts_iters": 10_000,
+        "num_trees": 4,
         "bandit_policy": "uct",
         "num_players": 2,
     }
@@ -60,19 +57,18 @@ if __name__ == "__main__":
     env = TicTacToeEnv()
     mcts = MCTS(config)
     obs = env.reset()
-    qvals = mcts.search(State(env))
+    qvals = mcts.search(State(env), iters=10)
 
     done = False
     while not done:
         import time
         start = time.time()
         qvals = mcts.search(State(env))
-        print("Time:", time.time() - start)
+        print(f"Time: {time.time() - start:0.2f}s")
 
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
 
         env.render()
-
     env.close()
     mcts.close()
