@@ -11,7 +11,7 @@ class State:
 
     def transition_inplace(self, action):
         _, self.rew, self.done, _ = self.env.step(action)
-        self.rew = np.abs(self.rew)
+        #self.rew = np.abs(self.rew)
 
     def transition(self, action):
         next_state = deepcopy(self)
@@ -34,10 +34,11 @@ class State:
             act = np.random.choice(env.available_actions())
             _, rew, done, _ = env.step(act)
 
-            if player == 0:
-                ret += np.abs(rew)
-            else:
-                ret -= np.abs(rew)
+            ret += rew
+            #if player == 0:
+            #    ret += np.abs(rew)
+            #else:
+            #    ret -= np.abs(rew)
         return ret
 
     def __str__(self):

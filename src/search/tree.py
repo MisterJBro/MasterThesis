@@ -2,6 +2,7 @@ from concurrent.futures import process
 import numpy as np
 from multiprocessing import Process
 from node import UCTNode
+from util import measure_time
 
 
 class Tree:
@@ -14,13 +15,22 @@ class Tree:
 
     def search(self, iters=1_000):
         iter = 0
+        select_time = np.zeros(1)
+        expand_time = np.zeros(1)
+        simulate_time = np.zeros(1)
+        backpropagate_time = np.zeros(1)
 
         while iter < iters:
-            leaf = self.select()
-            new_leaf = self.expand(leaf)
-            ret = self.simulate(new_leaf)
-            self.backpropagate(new_leaf, ret)
+            leaf = measure_time(lambda: self.select(), select_time)
+            new_leaf = measure_time(lambda: self.expand(leaf), expand_time)
+            ret = measure_time(lambda: self.simulate(new_leaf), simulate_time)
+            measure_time(lambda: self.backpropagate(new_leaf, ret), backpropagate_time)
             iter += 1
+
+        #print(f"Select time: {select_time.item():0.2f}s")
+        #print(f"Expand time: {expand_time.item():0.2f}s")
+        #print(f"Simulate time: {simulate_time.item():0.2f}s")
+        #print(f"Backpropagate time: {backpropagate_time.item():0.2f}s \n")
 
         return self.root.get_action_values()
 

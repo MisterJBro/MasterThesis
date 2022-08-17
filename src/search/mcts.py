@@ -64,10 +64,10 @@ if __name__ == "__main__":
         import time
         start = time.time()
         qvals = mcts.search(State(env))
-        print(f"Time: {time.time() - start:0.2f}s")
 
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
+        print(f"Reward: {reward:0.2f}  Time: {time.time() - start:0.2f}s")
 
         env.render()
     env.close()
