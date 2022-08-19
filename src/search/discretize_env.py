@@ -1,4 +1,4 @@
-from copy import deepcopy, copy
+from copy import deepcopy
 import gym
 from pendulum import PendulumEnv
 import numpy as np
@@ -9,28 +9,21 @@ from state import State
 
 # Discretizes the action space of an gym environment
 class DiscreteActionWrapper(gym.ActionWrapper):
-    def __init__(self, env, n_bins=5):
-        super().__init__(env)
+    def __init__(self, env, n_bins=11):
+        super().__init__(env, new_step_api=True)
         self.n_bins = n_bins
         self.converter = np.linspace(-2, 2, num=n_bins)
         self.action_space = gym.spaces.Discrete(n_bins)
 
     def action(self, action):
-        """ Discrete to continous action."""
+        """ Discrete to continuous action."""
         action = self.converter[action]
-        #action = action.reshape(4, -1)
-        #action *= self.converter
-        #action = action.sum(-1)
         return np.array([action])
 
     def reverse_action(self, action):
-        """ Continouos action to discrete."""
+        """ Continuous to discrete action."""
         action = np.argwhere(self.converter == action)[0][0]
-        #action = np.eye(self.n_bins)[action]
         return action
-
-    def copy(self):
-        return deepcopy(self)
 
     def available_actions(self):
         return np.arange(self.n_bins)
@@ -40,7 +33,7 @@ if __name__ == "__main__":
 
     config = {
         "uct_c": np.sqrt(2),
-        "mcts_iters": 4,
+        "mcts_iters": 1_000,
         "num_trees": 4,
         "bandit_policy": "uct",
         "num_players": 1,
@@ -63,7 +56,6 @@ if __name__ == "__main__":
         start = time.time()
         qvals = mcts.search(State(env))
 
-        #print(qvals)
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
         print(f"Reward: {reward:0.2f}  Time: {time.time() - start:0.2f}s")

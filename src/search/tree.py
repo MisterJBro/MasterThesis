@@ -1,4 +1,3 @@
-from concurrent.futures import process
 import numpy as np
 from multiprocessing import Process
 from node import UCTNode
@@ -59,10 +58,18 @@ class Tree:
         return child
 
     def simulate(self, node):
-        return node.rollout(self.num_players)
+        return node.state.rollout(self.num_players)
 
     def backpropagate(self, node, ret):
-        node.backpropagate(ret, self.num_players)
+        curr_ret = ret
+
+        while node is not None:
+            node.num_visits += 1
+            node.total_rews += curr_ret
+
+            flip = -1.0 if self.num_players == 2 else 1.0
+            curr_ret = flip * (node.state.rew + curr_ret)
+            node = node.parent
 
     def set_root(self, state):
         self.root = self.NodeClass(state)
