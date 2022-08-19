@@ -4,17 +4,22 @@ import numpy as np
 from multiprocessing import freeze_support
 from discretize_env import DiscreteActionWrapper
 from policy import ActorCriticPolicy
+from alpha_zero import AlphaZero
 from state import State
-from alpha_zero import AZTree
+import time
 
 if __name__ == "__main__":
     # Init
     freeze_support()
     config = {
         "uct_c": np.sqrt(2),
-        "puct_c": 10.0,
-        "mcts_iters": 1_000,
-        "num_trees": 4,
+        "puct_c": 3.0,
+        "mcts_iters": 1000,
+        "az_iters": 1000,
+        "az_eval_batch": 3,
+        "az_eval_timeout": 0.001,
+
+        "num_trees": 3,
         "bandit_policy": "puct",
         "num_players": 1,
         "pi_lr": 1e-3,
@@ -24,19 +29,21 @@ if __name__ == "__main__":
         "device": "cpu",
     }
 
-    env = DiscreteActionWrapper(PendulumEnv(), n_bins=config["num_acts"])
     policy = ActorCriticPolicy(config)
+    az = AlphaZero(policy, config)
+    env = DiscreteActionWrapper(PendulumEnv(), n_bins=config["num_acts"])
     obs = env.reset()
 
     env.env.state = np.array([np.pi, 0.0])
 
+    start = time.time()
     done = False
     iter = 0
     ret = 0
     while not done:
-        tree = AZTree(State(env, obs=obs), policy, config)
-        qvals = tree.search(iters=1000)
-        print(qvals)
+        az.update_policy(policy.state_dict())
+        qvals = az.search(State(env, obs=obs))
+        #print(qvals)
 
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
@@ -46,5 +53,7 @@ if __name__ == "__main__":
         render_env.render()
         iter += 1
     print(ret)
+    print(time.time() - start)
     render_env.close()
     env.close()
+    az.close()

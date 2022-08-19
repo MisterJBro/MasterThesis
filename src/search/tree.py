@@ -1,15 +1,16 @@
 import numpy as np
 from multiprocessing import Process
-from node import UCTNode
+from node import UCTNode, PUCTNode, DirichletNode
 from util import measure_time
 
 
 class Tree:
-    """ Search Tree presentation. """
+    """ Search Tree for MCTS. """
     def __init__(self, state, config):
         self.config = config
         self.num_players = config["num_players"]
         self.NodeClass = UCTNode if config["bandit_policy"] == "uct" else UCTNode
+        self.expl_coeff = config["uct_c"]
         self.set_root(state)
 
     def search(self, iters=1_000):
@@ -36,7 +37,7 @@ class Tree:
     def select(self):
         node = self.root
         while not node.is_leaf():
-            node = node.select_child(self.config["uct_c"])
+            node = node.select_child(self.expl_coeff)
         return node
 
     def expand(self, node):
@@ -74,11 +75,75 @@ class Tree:
     def set_root(self, state):
         self.root = self.NodeClass(state)
 
+class AZTree(Tree):
+    """ Search Tree presentation for Alpha Zero. """
+
+    def __init__(self, state, eval_channel, config, idx=0):
+        self.config = config
+        self.eval_channel = eval_channel
+        self.idx = idx
+        self.num_players = config["num_players"]
+        self.NodeClass = PUCTNode
+        self.expl_coeff = config["puct_c"]
+        self.set_root(state)
+
+    def search(self, iters=1_000):
+        super().search(iters)
+
+        return self.get_policy_targets()
+
+    def simulate(self, node):
+        probs, val = self.eval_fn(node)
+        node.priors = probs
+        return node.state.rollout(self.num_players)
+        #return val
+
+    def set_root(self, state):
+        self.root = DirichletNode(state)
+        if state is not None:
+            probs, _ = self.eval_fn(self.root)
+            self.root.priors = probs
+
+    def eval_fn(self, node):
+        obs = node.state.obs
+        self.eval_channel.send({
+            "obs": obs,
+            "ind": self.idx,
+        })
+        msg = self.eval_channel.recv()
+        return msg["probs"], msg["val"]
+
+    def get_policy_targets(self, temp=1.0):
+        return [child.num_visits ** (1/temp) / self.root.num_visits ** (1/temp) for child in self.root.children]
+
 
 class TreeWorker(Process, Tree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
     def __init__(self, iters, config, channel):
         Tree.__init__(self, None, config)
+        Process.__init__(self)
+
+        self.iters = iters
+        self.channel = channel
+
+    def run(self):
+        msg = self.channel.recv()
+        while msg["command"] != "close":
+            if msg["command"] == "search":
+                self.set_root(msg["state"])
+                if msg["iters"] is not None:
+                    iters = msg["iters"]
+                else:
+                    iters = self.iters
+                qvals = self.search(iters)
+                self.channel.send(qvals)
+            msg = self.channel.recv()
+
+
+class AZTreeWorker(Process, AZTree):
+    """ Multiprocessing Tree Worker, for parallelization of MCTS."""
+    def __init__(self, iters, eval_channel, idx, config, channel):
+        AZTree.__init__(self, None, eval_channel, config, idx=idx)
         Process.__init__(self)
 
         self.iters = iters
