@@ -8,11 +8,11 @@ import pathlib
 PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
 
 
-class ActorCriticPolicy(nn.Module):
-    """Actor-Critic Policy network"""
+class PendulumPolicy(nn.Module):
+    """Policy network for Pendulum Env."""
 
     def __init__(self, config):
-        super(ActorCriticPolicy, self).__init__()
+        super(PendulumPolicy, self).__init__()
         self.config = config
         hidden_size = 512
 
@@ -93,14 +93,14 @@ class ActorCriticPolicy(nn.Module):
                 nn.utils.clip_grad_norm_(self.value.parameters(),  self.config["grad_clip"])
                 self.opt_value.step()
 
-    def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
+    def save(self, path=f'{PROJECT_PATH}/checkpoints/pendulum_policy.pt'):
         torch.save({
             'parameters': self.state_dict(),
             'optimizer_policy': self.opt_policy.state_dict(),
             'optimizer_value': self.opt_value.state_dict(),
         }, path)
 
-    def load(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
+    def load(self, path=f'{PROJECT_PATH}/checkpoints/pendulum_policy.pt'):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
         self.opt_policy.load_state_dict(checkpoint['optimizer_policy'])

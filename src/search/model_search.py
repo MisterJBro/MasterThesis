@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-from src.model import to_onehot
+from src.networks.model import to_onehot
 
 
 def max_search(state, hidden, curr_ret, curr_depth, all_acts, model, config):

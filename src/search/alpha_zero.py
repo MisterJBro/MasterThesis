@@ -1,14 +1,13 @@
 import numpy as np
-
-import numpy as np
 from copy import deepcopy
-from evaluator import Evaluator
+from src.search.evaluator import Evaluator
+from src.search.tree import AZTreeWorker
 from multiprocessing import Pipe
-from tree import AZTreeWorker
 
 
 class AlphaZero:
     """ Monte Carlo Tree Search, with root parallelization."""
+
     def __init__(self, policy, config):
         self.config = config
         self.num_workers = config["num_trees"]

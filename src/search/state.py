@@ -3,6 +3,7 @@ from copy import deepcopy
 
 
 class State:
+
     """ State representation of the environment. """
     def __init__(self, env, done=False, rew=0.0, obs=None):
         self.env = env

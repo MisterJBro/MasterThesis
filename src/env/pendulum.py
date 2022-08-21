@@ -1,11 +1,10 @@
 __credits__ = ["Carlos Luis"]
 
-from locale import normalize
 from os import path
 from typing import Optional
 
 import numpy as np
-from numba import njit, float32, int32
+from numba import njit
 
 import gym
 from gym import spaces
@@ -66,7 +65,6 @@ class PendulumEnv(gym.Env):
     @staticmethod
     @njit(cache=True)
     def step_jit(u, th, thdot, g, m, l, dt, max_torque, max_speed, iter):
-        rest_iters = 100 - iter
         u = np.clip(u, -max_torque, max_torque)[0]
         costs = angle_normalize(th) ** 2 + 0.1 * thdot**2 + 0.001 * (u**2)
 
@@ -77,7 +75,6 @@ class PendulumEnv(gym.Env):
         state = np.stack((newth, newthdot))
 
         norm_costs = costs / 8.1368022 - 1.0
-        #norm_costs = norm_costs / (rest_iters + 1e-10)
         obs = np.stack((np.array(np.cos(newth)), np.array(np.sin(newth)), newthdot))
 
         return u, norm_costs, state, obs

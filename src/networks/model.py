@@ -61,7 +61,6 @@ class ValueEquivalenceModel(nn.Module):
         self.to(self.device)
 
     def representation(self, obs):
-        """Using the representation function, transform the given observation into a state representation."""
         s = self.rep(obs)
         s = s.reshape(s.shape[0], self.num_layers, -1)
         s = s.permute(1, 0, 2)

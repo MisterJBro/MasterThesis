@@ -1,13 +1,7 @@
 import gym
-from enum import Enum, auto
 from multiprocessing import Process
 import numpy as np
 
-
-class Command(Enum):
-    RESET = auto()
-    STEP = auto()
-    CLOSE = auto()
 
 class Worker(Process):
     """Environment worker."""
@@ -24,14 +18,15 @@ class Worker(Process):
             self.envs[i].seed(i+num_envs*idx + config["seed"])
 
     def run(self):
-        command, acts = self.channel.recv()
-        while command != Command.CLOSE:
-            if command == Command.RESET:
+        while True:
+            msg = self.channel.recv()
+            if msg["command"] == "step":
+                self.channel.send(self.step(msg["act"]))
+            elif msg["command"] == "reset":
                 self.channel.send(self.reset())
-            elif command == Command.STEP:
-                self.channel.send(self.step(acts))
+            elif msg["command"] == "close":
+                break
 
-            command, acts = self.channel.recv()
         self.close()
 
     def reset(self):

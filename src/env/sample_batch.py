@@ -1,19 +1,23 @@
 import torch
 import numpy as np
 
+
 class SampleBatch:
-    def __init__(self, num_envs, config):
+    """Batch of sampled data."""
+
+    def __init__(self, config):
         self.obs_dtype = config["obs_dtype"]
         self.act_dtype = config["act_dtype"]
         self.rew_dtype = config["rew_dtype"]
+        self.num_envs = config["num_envs"]
         self.device = config["device"]
 
         self.idx = 0
-        self.obs = np.empty((num_envs, config["sample_len"]) + config["obs_dim"], dtype=self.obs_dtype)
-        self.act = np.empty((num_envs, config["sample_len"]), dtype=self.act_dtype)
-        self.rew = np.empty((num_envs, config["sample_len"]), dtype=self.rew_dtype)
-        self.done = np.empty((num_envs, config["sample_len"]), dtype=np.bool8)
-        self.last_obs = np.empty((num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
+        self.obs = np.empty((self.num_envs, config["sample_len"]) + config["obs_dim"], dtype=self.obs_dtype)
+        self.act = np.empty((self.num_envs, config["sample_len"]), dtype=self.act_dtype)
+        self.rew = np.empty((self.num_envs, config["sample_len"]), dtype=self.rew_dtype)
+        self.done = np.empty((self.num_envs, config["sample_len"]), dtype=np.bool8)
+        self.last_obs = np.empty((self.num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
         self.ret = None
         self.val = None
 

@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     # === Environments settings ===
     "env": "CartPole-v1",
     "num_envs": 15,
+    "num_players": 1,
     "sample_len": 500,
     "gamma": 0.99,
     "seed": 0,
@@ -32,6 +33,16 @@ DEFAULT_CONFIG = {
     "model_minibatches": 10,
     "model_unroll_len": 5,
     "grad_clip": 100.0,
+
+    # === MCTS/AlphaZero ===
+    "num_trees": 4,
+    "uct_c": np.sqrt(2),
+    "mcts_iters": 1_000,
+    "puct_c": 3.0,
+    "az_iters": 1_000,
+    "az_eval_batch": 3,
+    "az_eval_timeout": 0.001,
+
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
@@ -45,9 +56,12 @@ def compute_config(config):
     config["num_samples"] = config["sample_len"] * config["num_envs"]
 
     # Create test env to get obs and act shapes
-    test_env = gym.make(config["env"])
-    config["obs_dim"] = test_env.observation_space.shape
-    config["num_acts"] = test_env.action_space.n
+    if isinstance(config["env"], str):
+        env = gym.make(config["env"])
+    else:
+        env = config["env"]
+    config["obs_dim"] = env.observation_space.shape
+    config["num_acts"] = env.action_space.n
     config["flat_obs_dim"] = int(np.product(config["obs_dim"]))
 
     return config

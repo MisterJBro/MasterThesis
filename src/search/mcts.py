@@ -4,8 +4,10 @@ from state import State
 from copy import deepcopy
 from multiprocessing import Pipe, freeze_support
 
+
 class MCTS:
     """ Monte Carlo Tree Search, with root parallelization."""
+
     def __init__(self, config):
         self.config = config
         self.num_workers = config["num_trees"]

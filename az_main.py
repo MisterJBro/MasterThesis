@@ -1,39 +1,30 @@
 from copy import deepcopy
-from pendulum import PendulumEnv
+import time
 import numpy as np
 from multiprocessing import freeze_support
-from discretize_env import DiscreteActionWrapper
-from policy import ActorCriticPolicy
-from alpha_zero import AlphaZero
-from state import State
-import time
+from src.networks.policy_pend import PendulumPolicy
+from src.train.config import create_config
+from src.search.alpha_zero import AlphaZero
+from src.env.discretize_env import DiscreteActionWrapper
+from src.env.pendulum import PendulumEnv
+from src.search.state import State
 
-if __name__ == "__main__":
-    # Init
+
+if __name__ == '__main__':
     freeze_support()
-    config = {
-        "uct_c": np.sqrt(2),
+    env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
+    config = create_config({
         "puct_c": 3.0,
-        "mcts_iters": 1000,
         "az_iters": 1000,
         "az_eval_batch": 3,
-        "az_eval_timeout": 0.001,
-
         "num_trees": 3,
-        "bandit_policy": "puct",
-        "num_players": 1,
-        "pi_lr": 1e-3,
-        "vf_lr": 5e-4,
-        "flat_obs_dim": 3,
-        "num_acts": 11,
         "device": "cpu",
-    }
+    })
 
-    policy = ActorCriticPolicy(config)
+    policy = PendulumPolicy(config)
     az = AlphaZero(policy, config)
-    env = DiscreteActionWrapper(PendulumEnv(), n_bins=config["num_acts"])
-    obs = env.reset()
 
+    obs = env.reset()
     env.env.state = np.array([np.pi, 0.0])
 
     start = time.time()
@@ -43,7 +34,6 @@ if __name__ == "__main__":
     while not done:
         az.update_policy(policy.state_dict())
         qvals = az.search(State(env, obs=obs))
-        #print(qvals)
 
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)

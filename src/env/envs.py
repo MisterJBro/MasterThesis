@@ -1,6 +1,6 @@
 import numpy as np
 from multiprocessing import Pipe
-from src.worker import Worker, Command
+from src.env.worker import Worker
 
 
 class Envs:
@@ -27,7 +27,7 @@ class Envs:
 
     def reset(self):
         for c in self.channels:
-            c.send([Command.RESET, None])
+            c.send({"command": "reset"})
         msg = [c.recv() for c in self.channels]
 
         self.obs = np.concatenate(msg)
@@ -36,9 +36,15 @@ class Envs:
     def step(self, act):
         for i, c in enumerate(self.channels):
             if i == self.num_cpus-1:
-                c.send([Command.STEP, act[i*self.num_envs_worker:]])
+                c.send({
+                    "command": "step",
+                    "act": act[i*self.num_envs_worker:],
+                })
             else:
-                c.send([Command.STEP, act[i*self.num_envs_worker:(i+1)*self.num_envs_worker]])
+                c.send({
+                    "command": "step",
+                    "act": act[i*self.num_envs_worker:(i+1)*self.num_envs_worker],
+                })
 
         obs_next, rew, done = [], [], []
         msg = [c.recv() for c in self.channels]
@@ -54,6 +60,6 @@ class Envs:
 
     def close(self):
         for c in self.channels:
-            c.send([Command.CLOSE, None])
+            c.send({"command": "close"})
         for w in self.workers:
             w.join()

@@ -6,6 +6,7 @@ import numpy as np
 from multiprocessing import Process
 from multiprocessing.connection import wait
 
+
 class Evaluator(Process):
     """Evaluation Service for Nodes."""
     def __init__(self, policy, worker_channels, master_channel, batch_size=2, timeout=0.001):

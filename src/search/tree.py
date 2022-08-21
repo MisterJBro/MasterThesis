@@ -1,7 +1,7 @@
 import numpy as np
 from multiprocessing import Process
-from node import UCTNode, PUCTNode, DirichletNode
-from util import measure_time
+from src.search.node import UCTNode, PUCTNode, DirichletNode
+from src.search.util import measure_time
 
 
 class Tree:
@@ -9,7 +9,7 @@ class Tree:
     def __init__(self, state, config):
         self.config = config
         self.num_players = config["num_players"]
-        self.NodeClass = UCTNode if config["bandit_policy"] == "uct" else UCTNode
+        self.NodeClass = UCTNode
         self.expl_coeff = config["uct_c"]
         self.set_root(state)
 
