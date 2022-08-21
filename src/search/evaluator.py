@@ -9,13 +9,14 @@ from multiprocessing.connection import wait
 
 class Evaluator(Process):
     """Evaluation Service for Nodes."""
-    def __init__(self, policy, worker_channels, master_channel, batch_size=2, timeout=0.001):
+    def __init__(self, policy, worker_channels, master_channel, device="cpu", batch_size=2, timeout=0.001):
         super().__init__()
         self.policy = policy
         self.worker_channels = worker_channels
         self.master_channel = master_channel
         self.batch_size = batch_size
         self.timeout = timeout
+        self.device = device
 
     def run(self):
         done = False
@@ -58,7 +59,7 @@ class Evaluator(Process):
 
         # Eval
         obs = np.stack([m["obs"] for m in msg])
-        obs = torch.as_tensor(obs)
+        obs = torch.as_tensor(obs).to(self.device)
         inds = [m["ind"] for m in msg]
         probs, val = self.eval(obs)
 

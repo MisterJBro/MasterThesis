@@ -31,8 +31,9 @@ class PendulumPolicy(nn.Module):
             nn.Linear(hidden_size, 1),
         )
 
-        self.opt_policy = optim.Adam(list(self.hidden.parameters())+ list(self.policy.parameters()), lr=config["pi_lr"])
-        self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
+        self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
+        #self.opt_policy = optim.Adam(list(self.hidden.parameters())+ list(self.policy.parameters()), lr=config["pi_lr"])
+        #self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
         self.to(self.device)
 

@@ -1,3 +1,4 @@
+from math import dist
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,8 +8,10 @@ import time
 import random
 from src.env.envs import Envs
 from src.networks.model import ValueEquivalenceModel
+from src.networks.policy_pend import PendulumPolicy
+from src.search.alpha_zero import AlphaZero
 from src.search.model_search import plan
-from src.networks.policy import ActorCriticPolicy
+from src.search.state import State
 
 from multiprocessing import freeze_support
 from src.train.processer import post_processing
@@ -16,12 +19,11 @@ from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 from src.env.sample_batch import SampleBatch
-from src.networks.model import to_onehot
 from torch.utils.data import TensorDataset, DataLoader
 from torch.distributions.kl import kl_divergence
 
 
-class Trainer:
+class AZExitTrainer:
     def __init__(self, config):
         # RNG seed
         seed = config["seed"]
@@ -32,10 +34,11 @@ class Trainer:
 
         self.config = config
         self.device = config["device"]
+        self.num_acts = config["num_acts"]
         self.envs = Envs(config)
-        self.policy = ActorCriticPolicy(config)
-        self.model = ValueEquivalenceModel(config)
-        self.writer = SummaryWriter(comment=f'{config["env"]}_{config["num_samples"]}')
+        self.policy = PendulumPolicy(config)
+        self.az = AlphaZero(self.policy, config)
+        self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
         self.max_avg_rew = float('-inf')
 
         print(tabulate([
@@ -48,11 +51,9 @@ class Trainer:
 
     def train(self):
         for iter in range(self.config["train_iters"]):
-            start = time.time()
             sample_batch = self.get_sample_batch()
-            end = time.time()
-            stats = sample_batch.statistics
             self.update(sample_batch)
+            stats = sample_batch.statistics
 
             avg_ret = stats["mean_return"]
             max_ret = stats["max_return"]
@@ -61,72 +62,62 @@ class Trainer:
             self.writer.add_scalar('Average return', avg_ret, iter)
 
     def get_sample_batch(self):
+        self.az.update_policy(self.policy.state_dict())
         sample_batch = SampleBatch(self.config)
         obs = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act = self.policy.get_action(obs)
+            import time
+            start = time.time()
+            act, dist = self.search_action(obs)
             obs_next, rew, done = self.envs.step(act)
+            print(f'Time: {time.time() - start}')
 
-            sample_batch.append(obs, act, rew, done)
+            sample_batch.append(obs, act, rew, done, dist=dist)
             obs = obs_next
 
         sample_batch.set_last_obs(obs)
         sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
+    def search_action(self, obs):
+        envs = self.envs.get_all_env()
+        states = [State(env, obs=obs[i]) for i, env in enumerate(envs)]
+
+        dist = self.az.distributed_search(states)
+        act = np.concatenate([np.random.choice(self.num_acts, 1, p=p) for p in dist])
+
+        return act, dist
+
     def update(self, sample_batch):
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
+        dist = data["dist"]
         ret = data["ret"]
-        val = data["val"]
-
-        # Time
-        start = time.time()
-        plan_targets = plan(self.policy, self.model, data, self.config)
-        plan_actions = plan_targets.logits.argmax(-1)
-        end = time.time()
-        #print(f'Plan time: {end - start}')
+        scalar_loss = nn.HuberLoss()
 
         # Distill planning targets into policy
-        trainset = TensorDataset(obs, plan_targets.logits)
+        trainset = TensorDataset(obs, dist, ret)
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
 
-        for i in range(20):
-            for obs_batch, plan_target_batch in trainloader:
-                self.policy.opt_policy.zero_grad()
-                dist_batch = self.policy.get_dist(obs_batch)
-                loss = kl_divergence(Categorical(logits=plan_target_batch), dist_batch).mean()
+        for i in range(10):
+            for obs_batch, target_batch, ret_batch in trainloader:
+                self.policy.opt.zero_grad()
+
+                dist_batch, val_batch = self.policy(obs_batch)
+                loss_dist = kl_divergence(Categorical(logits=target_batch), dist_batch).mean()
+                loss_value = scalar_loss(val_batch, ret_batch)
+                loss = loss_dist + loss_value
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.policy.policy.parameters(),  self.config["grad_clip"])
-                self.policy.opt_policy.step()
 
-        #act = data["act"]
-        #act_onehot = to_onehot(act, self.config["num_acts"])
-        #with torch.no_grad():
-        #    act_model = self.model.dyn_linear(act_onehot)
-        #    state = self.model.representation(obs)
-        #    hidden, _ = self.model.dynamics(state, act_model)
-        #    model_val = self.model.get_value(hidden)
-        #    model_rew = self.model.get_reward(hidden)
-        #q_val = model_rew + self.config["gamma"] * model_val
-
-        adv = ret - val
-        data["adv"] = adv
-
-        # Policy and Value loss
-        #self.policy.loss_gradient(data)
-        self.policy.loss_value(data)
-
-        # Get new logits for model loss
-        with torch.no_grad():
-            data["logits"] = self.policy.get_dist(obs).logits
-
-        # Model loss
-        self.model.loss(data)
+                nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
+                self.policy.opt.step()
 
     def test(self):
-        env = gym.make(self.config["env"])
+        if isinstance(self.config["env"], str):
+            env = gym.make(self.config["env"])
+        else:
+            env = self.config["env"]
         rews = []
         input('Press any key to continue...')
 

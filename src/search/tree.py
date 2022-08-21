@@ -95,8 +95,7 @@ class AZTree(Tree):
     def simulate(self, node):
         probs, val = self.eval_fn(node)
         node.priors = probs
-        return node.state.rollout(self.num_players)
-        #return val
+        return val
 
     def set_root(self, state):
         self.root = DirichletNode(state)

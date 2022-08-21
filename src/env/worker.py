@@ -1,6 +1,7 @@
 import gym
-from multiprocessing import Process
 import numpy as np
+from copy import deepcopy
+from multiprocessing import Process
 
 
 class Worker(Process):
@@ -13,7 +14,12 @@ class Worker(Process):
         self.channel = channel
 
         # Create environments
-        self.envs = [gym.make(config["env"]) for _ in range(num_envs)]
+        self.envs = []
+        for _ in range(num_envs):
+            if isinstance(config["env"], str):
+                self.envs.append(gym.make(config["env"]))
+            else:
+                self.envs.append(deepcopy(config["env"]))
         for i in range(num_envs):
             self.envs[i].seed(i+num_envs*idx + config["seed"])
 
@@ -24,6 +30,8 @@ class Worker(Process):
                 self.channel.send(self.step(msg["act"]))
             elif msg["command"] == "reset":
                 self.channel.send(self.reset())
+            elif msg["command"] == "copy envs":
+                self.channel.send(deepcopy(self.envs))
             elif msg["command"] == "close":
                 break
 

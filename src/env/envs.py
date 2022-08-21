@@ -1,3 +1,4 @@
+from tkinter import E
 import numpy as np
 from multiprocessing import Pipe
 from src.env.worker import Worker
@@ -57,6 +58,15 @@ class Envs:
         done = np.concatenate(done)
 
         return obs_next, rew, done
+
+    def get_all_env(self):
+        for c in self.channels:
+            c.send({"command": "copy envs"})
+        envs = []
+        for c in self.channels:
+            msg = c.recv()
+            envs.extend(msg)
+        return envs
 
     def close(self):
         for c in self.channels:

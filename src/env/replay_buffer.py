@@ -14,6 +14,7 @@ class ReplayBuffer:
         self.sample_len = config["sample_len"]
         self.num_envs = config["num_envs"]
         self.device = config["device"]
+        self.num_acts = config["num_acts"]
         size = self.capacity * self.num_envs
 
         self.idx = 0
@@ -21,6 +22,7 @@ class ReplayBuffer:
         self.act =  np.empty((size, self.sample_len), dtype=self.act_dtype)
         self.rew =  np.empty((size, self.sample_len), dtype=self.rew_dtype)
         self.done = np.empty((size, self.sample_len), dtype=np.bool8)
+        self.dist = np.empty((size, self.sample_len, self.num_acts), dtype=np.float32)
         self.ret =    np.one((size, self.sample_len), dtype=self.rew_dtype)
         self.val =    np.one((size, self.sample_len), dtype=self.rew_dtype)
 
@@ -31,6 +33,7 @@ class ReplayBuffer:
         self.act[i1:i2] = sample_batch.act
         self.rew[i1:i2] = sample_batch.rew
         self.done[i1:i2] = sample_batch.done
+        self.dist[i1:i2] = sample_batch.dist
         self.ret[i1:i2] = sample_batch.ret
         self.val[i1:i2] = sample_batch.val
 
@@ -46,6 +49,7 @@ class ReplayBuffer:
         sample_batch.act = self.act[idx]
         sample_batch.rew = self.rew[idx]
         sample_batch.done = self.done[idx]
+        sample_batch.dist = self.dist[idx]
         sample_batch.ret = self.ret[idx]
         sample_batch.val = self.val[idx]
 

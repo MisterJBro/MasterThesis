@@ -8,19 +8,27 @@ from src.search.alpha_zero import AlphaZero
 from src.env.discretize_env import DiscreteActionWrapper
 from src.env.pendulum import PendulumEnv
 from src.search.state import State
+from src.train.exit import AZExitTrainer
 
 
 if __name__ == '__main__':
-    freeze_support()
     env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
     config = create_config({
+        "env": env,
         "puct_c": 3.0,
-        "az_iters": 1000,
-        "az_eval_batch": 3,
-        "num_trees": 3,
+        "az_iters": 200,
+        "az_eval_batch": 15,
+        "num_cpus": 3,
+        "num_envs": 15,
+        "num_trees": 15,
         "device": "cpu",
     })
 
+    with AZExitTrainer(config) as trainer:
+        trainer.train()
+    quit()
+
+    freeze_support()
     policy = PendulumPolicy(config)
     az = AlphaZero(policy, config)
 
@@ -32,6 +40,7 @@ if __name__ == '__main__':
     iter = 0
     ret = 0
     while not done:
+        print(iter)
         az.update_policy(policy.state_dict())
         qvals = az.search(State(env, obs=obs))
 

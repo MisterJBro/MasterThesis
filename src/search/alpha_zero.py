@@ -1,3 +1,4 @@
+from os import stat
 import numpy as np
 from copy import deepcopy
 from src.search.evaluator import Evaluator
@@ -34,7 +35,7 @@ class AlphaZero:
         # Create evaluation worker
         eval_channels = [p[0] for p in eval_pipes]
         eval_master_channel = eval_master_pipe[1]
-        self.eval_worker = Evaluator(policy, eval_channels, eval_master_channel, batch_size=config["az_eval_batch"], timeout=config["az_eval_timeout"])
+        self.eval_worker = Evaluator(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["az_eval_batch"], timeout=config["az_eval_timeout"])
         self.eval_worker.start()
 
     def update_policy(self, state_dict):
@@ -54,6 +55,26 @@ class AlphaZero:
 
         qvals = np.mean(msg, axis=0)
         return qvals
+
+    def distributed_search(self, states):
+        i = 0
+        dists = []
+        len_states = len(states)
+        while i < len_states:
+            max_c_idx = self.num_workers
+            for c_idx, c in enumerate(self.channels):
+                c.send({
+                    "command": "search",
+                    "state": states[i],
+                    "iters": self.num_iters,
+                })
+                i += 1
+                if i >= len_states:
+                    max_c_idx = c_idx+1
+                    break
+            msg = [c.recv() for c in self.channels[:max_c_idx]]
+            dists.extend(msg)
+        return np.array(dists)
 
     def close(self):
         for c in self.channels + [self.eval_channel]:
