@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from abc import ABC, abstractmethod
 
 import gym
 import time
@@ -16,12 +17,109 @@ from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 from src.env.sample_batch import SampleBatch
-from src.networks.model import to_onehot
 from torch.utils.data import TensorDataset, DataLoader
 from torch.distributions.kl import kl_divergence
+import pathlib
+
+PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+
+class Trainer(ABC):
+    def __init__(self, config):
+        # RNG seed
+        seed = config["seed"]
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+        self.config = config
+        self.device = config["device"]
+        self.envs = Envs(config)
+        self.policy = None
+        self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
+        self.max_avg_rew = float('-inf')
+
+        print(tabulate([
+            ['Environment', config["env"]],
+            ['Obs shape', config["obs_dim"]],
+            ['Actions num', config["num_acts"]],
+            ['CPU count', config["num_cpus"]],
+        ], colalign=("left", "right")))
+        print()
+
+    @abstractmethod
+    def train(self):
+        pass
+
+    def get_sample_batch(self):
+        sample_batch = SampleBatch(self.config)
+        obs = self.envs.reset()
+
+        for _ in range(self.config["sample_len"]):
+            act, dist = self.get_action(obs)
+            obs_next, rew, done = self.envs.step(act)
+
+            sample_batch.append(obs, act, rew, done, dist)
+            obs = obs_next
+
+        sample_batch.set_last_obs(obs)
+        sample_batch = post_processing(self.policy, sample_batch, self.config)
+        return sample_batch
+
+    def get_action(self, obs, use_best=False):
+        obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
+        with torch.no_grad():
+            dist = self.policy.get_dist(obs)
+        if use_best:
+            act = dist.logits.argmax(-1)
+        else:
+            act = dist.sample()
+
+        return act.cpu().numpy(), dist.logits.cpu().numpy()
+
+    @abstractmethod
+    def update(self, sample_batch):
+        pass
+
+    def test(self):
+        if isinstance(self.config["env"], str):
+            env = gym.make(self.config["env"])
+        else:
+            env = self.config["env"]
+        rews = []
+        input('Press any key to continue...')
+
+        obs = env.reset()
+        for _ in range(self.config["test_len"]):
+            env.render()
+            act, _ = self.get_action(obs, use_best=True)
+            obs, rew, done, _ = env.step(act)
+            rews.append(rew)
+
+            time.sleep(0.1)
+            if done:
+                obs = env.reset()
+                continue
+        print(f'Undiscounted return: {np.sum(rews)}')
+        env.close()
+
+    def save(self):
+        self.policy.save()
+
+    def load(self):
+        self.policy.load()
+
+    def __enter__(self):
+        freeze_support()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.envs.close()
+        self.writer.flush()
+        self.writer.close()
 
 
-class Trainer:
+class ModelTrainer:
     def __init__(self, config):
         # RNG seed
         seed = config["seed"]

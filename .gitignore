@@ -31,9 +31,8 @@ share/python-wheels/
 MANIFEST
 
 # Custom
-checkpoints/
 .vscode/
 runs/
-gym-tictactoe
 notes
+gym-tictactoe
 gym_rust

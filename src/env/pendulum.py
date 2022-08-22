@@ -87,19 +87,20 @@ class PendulumEnv(gym.Env):
         options: Optional[dict] = None
     ):
         super().reset(seed=seed)
-        self.iter = 0
-        if options is None:
-            high = np.array([DEFAULT_X, DEFAULT_Y])
-        else:
+        #if options is None:
+        #    high = np.array([DEFAULT_X, DEFAULT_Y])
+        #else:
             # Note that if you use custom reset bounds, it may lead to out-of-bound
             # state/observations.
-            x = options.get("x_init") if "x_init" in options else DEFAULT_X
-            y = options.get("y_init") if "y_init" in options else DEFAULT_Y
-            x = utils.verify_number_and_cast(x)
-            y = utils.verify_number_and_cast(y)
-            high = np.array([x, y])
-        low = -high  # We enforce symmetric limits.
-        self.state = self.np_random.uniform(low=low, high=high)
+        #    x = options.get("x_init") if "x_init" in options else DEFAULT_X
+        #    y = options.get("y_init") if "y_init" in options else DEFAULT_Y
+        #    x = utils.verify_number_and_cast(x)
+        #    y = utils.verify_number_and_cast(y)
+        #    high = np.array([x, y])
+        #low = -high  # We enforce symmetric limits.
+        #self.state = self.np_random.uniform(low=low, high=high)
+        self.iter = 0
+        self.state = np.array([np.pi, 0.0])
         self.last_u = None
 
         self.renderer.reset()

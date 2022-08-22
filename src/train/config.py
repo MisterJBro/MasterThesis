@@ -24,6 +24,7 @@ DEFAULT_CONFIG = {
     # === Models settings ===
     "train_iters": 100,
     "pi_lr": 1e-3,
+    "pi_entropy": 0.1,
     "vf_lr": 5e-4,
     "vf_iters": 5,
     "vf_minibatches": 10,

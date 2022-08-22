@@ -5,7 +5,7 @@ from torch.distributions import Categorical
 from torch.utils.data import TensorDataset, DataLoader
 import pathlib
 
-PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 
 class PendulumPolicy(nn.Module):
@@ -14,26 +14,35 @@ class PendulumPolicy(nn.Module):
     def __init__(self, config):
         super(PendulumPolicy, self).__init__()
         self.config = config
-        hidden_size = 512
+        hidden_size = 1024
 
-        self.hidden = nn.Sequential(
+        #self.hidden = nn.Sequential(
+        #    nn.Linear(config["flat_obs_dim"], hidden_size),
+        #    nn.ReLU(),
+        #    nn.Linear(hidden_size, hidden_size),
+        #    nn.ReLU(),
+        #)
+        self.hidden = nn.Identity()
+
+        # Heads
+        self.policy = nn.Sequential(
             nn.Linear(config["flat_obs_dim"], hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-        )
-
-        # Heads
-        self.policy = nn.Sequential(
             nn.Linear(hidden_size, config["num_acts"]),
         )
         self.value = nn.Sequential(
+            nn.Linear(config["flat_obs_dim"], hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
             nn.Linear(hidden_size, 1),
         )
 
-        self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
-        #self.opt_policy = optim.Adam(list(self.hidden.parameters())+ list(self.policy.parameters()), lr=config["pi_lr"])
-        #self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
+        #self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
+        self.opt_policy = optim.Adam(list(self.hidden.parameters())+ list(self.policy.parameters()), lr=config["pi_lr"])
+        self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
         self.to(self.device)
 
@@ -72,7 +81,9 @@ class PendulumPolicy(nn.Module):
         dist = self.get_dist(obs)
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
-        loss_policy.backward()
+        loss_entropy = - dist.entropy().mean()
+        loss = loss_policy + self.config["pi_entropy"] * loss_entropy
+        loss.backward()
         nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
         self.opt_policy.step()
 

@@ -46,6 +46,9 @@ def calc_statistics(sample_batch):
                 returns.append(np.sum(rew[b][start:end]))
                 start = end
 
+    if len(returns) == 0:
+        returns = [np.sum(rew[b]) for b in range(rew.shape[0])]
+
     return {
         'mean_return': np.mean(returns),
         'max_return': np.max(returns),

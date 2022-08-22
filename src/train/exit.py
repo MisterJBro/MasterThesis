@@ -67,11 +67,8 @@ class AZExitTrainer:
         obs = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            import time
-            start = time.time()
             act, dist = self.search_action(obs)
             obs_next, rew, done = self.envs.step(act)
-            print(f'Time: {time.time() - start}')
 
             sample_batch.append(obs, act, rew, done, dist=dist)
             obs = obs_next
@@ -80,12 +77,15 @@ class AZExitTrainer:
         sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
-    def search_action(self, obs):
+    def search_action(self, obs, use_best=False):
         envs = self.envs.get_all_env()
         states = [State(env, obs=obs[i]) for i, env in enumerate(envs)]
 
         dist = self.az.distributed_search(states)
-        act = np.concatenate([np.random.choice(self.num_acts, 1, p=p) for p in dist])
+        if use_best:
+            act = np.max(dist)
+        else:
+            act = np.concatenate([np.random.choice(self.num_acts, 1, p=p) for p in dist])
 
         return act, dist
 
@@ -124,7 +124,7 @@ class AZExitTrainer:
         obs = env.reset()
         for _ in range(self.config["test_len"]):
             env.render()
-            act = self.policy.get_action(obs)
+            act, _ = self.search_action(obs, use_best=True)
             obs, rew, done, _ = env.step(act)
             rews.append(rew)
             if done:

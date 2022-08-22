@@ -9,6 +9,7 @@ from src.env.discretize_env import DiscreteActionWrapper
 from src.env.pendulum import PendulumEnv
 from src.search.state import State
 from src.train.exit import AZExitTrainer
+from src.train.pg import PGTrainer
 
 
 if __name__ == '__main__':
@@ -16,16 +17,23 @@ if __name__ == '__main__':
     config = create_config({
         "env": env,
         "puct_c": 3.0,
+        "train_iters": 150,
         "az_iters": 200,
         "az_eval_batch": 15,
         "num_cpus": 3,
-        "num_envs": 15,
+        "num_envs": 30,
         "num_trees": 15,
         "device": "cpu",
+        "pi_lr": 8e-4,
+        "vf_lr": 5e-4,
+        "vf_iters": 5,
+        "sample_len": 500,
     })
 
-    with AZExitTrainer(config) as trainer:
-        trainer.train()
+    with AZExitTrainer(config) as tr:
+        tr.train()
+        tr.test()
+        tr.save()
     quit()
 
     freeze_support()
