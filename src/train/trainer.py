@@ -99,8 +99,8 @@ class Trainer(ABC):
             time.sleep(0.1)
             if done:
                 obs = env.reset()
-                continue
-        print(f'Undiscounted return: {np.sum(rews)}')
+                break
+        print(f'Undiscounted return: {np.mean(rews)}')
         env.close()
 
     def save(self):

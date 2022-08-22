@@ -8,7 +8,7 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
     config = create_config({
         "env": env,
-        "train_iters": 150,
+        "train_iters": 100,
         "num_cpus": 3,
         "num_envs": 30,
         "device": "cpu",
