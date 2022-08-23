@@ -3,11 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from copy import deepcopy
 
-from multiprocessing import Process
+from multiprocessing import Process, Pipe
 from src.search.node import UCTNode, PUCTNode, DirichletNode
 from src.search.tree import Tree
 from src.search.util import measure_time
+from src.search.evaluator import EvaluatorPGS
 
 
 class MCSTree(PGSTree):
@@ -40,8 +42,8 @@ class PGSTree(Tree):
         while iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
-            rew, hs = self.simulate(new_leaf)
-            self.update_policy(rew, hs)
+            rew, pol_hs, val_hs = self.simulate(new_leaf)
+            self.update_policy(rew, pol_hs, val_hs)
             self.backpropagate(new_leaf, rew, hs)
             iter += 1
 
@@ -73,12 +75,14 @@ class PGSTree(Tree):
         obs = self.state.obs
 
         player, iter = 0, 0
-        rews, hs = [], []
+        rews, pol_hs, val_hs = [], [], []
         while not done:
             player = (player + 1) % num_players
-            hidden = self.eval_fn(obs)
-            hs.append(hidden)
-            act = Categorical(logits=self.sim_policy(hidden)).sample()
+            pol_h, val_h = self.eval_fn(obs)
+            pol_hs.append(pol_h)
+            val_hs.append(val_h)
+
+            act = Categorical(logits=self.sim_policy(pol_h)).sample()
             obs, rew, done, _ = env.step(act)
 
             # Add return
@@ -93,20 +97,22 @@ class PGSTree(Tree):
             # Truncated rollout
             iter += 1
             if iter >= 10:
-                hidden = self.eval_fn(obs)
-                hs.append(hidden)
-                rews.append(self.value(hidden))
+                pol_h, val_h = self.eval_fn(obs)
+                pol_hs.append(pol_h)
+                val_hs.append(val_h)
+                rews.append(self.value(pol_h))
                 break
-        return np.array(rews), torch.concat(hs, 0)
+        return np.array(rews), torch.concat(pol_hs, 0), torch.concat(val_hs, 0)
 
-    def update_policy(self, rew, hs):
+    def update_policy(self, rew, pol_hs, val_hs):
         ret = discount_cumsum(rew, self.config["gamma"])
         ret = torch.tensor(ret).to(self.device)
         adv = ret
-        hs = hs.to(self.device)
+        pol_hs = pol_hs.to(self.device)
+        val_hs = val_hs.to(self.device)
 
         # REINFORCE
-        dist = Categorical(logits=self.sim_policy(hs))
+        dist = Categorical(logits=self.sim_policy(pol_hs))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
         loss_entropy = - dist.entropy().mean()
@@ -128,8 +134,10 @@ class PGSTree(Tree):
             "obs": obs,
             "ind": self.idx,
         })
-        hidden = self.eval_channel.recv()
-        return hidden
+        msg = self.eval_channel.recv()
+        pol_hidden = msg["pol_hidden"]
+        val_hidden = msg["val_hidden"]
+        return pol_hidden, val_hidden
 
 class PGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
@@ -152,3 +160,82 @@ class PGSTreeWorker(Process, PGSTree):
                 qvals = self.search(iters)
                 self.channel.send(qvals)
             msg = self.channel.recv()
+
+
+class PGS:
+    """ Policy Gradient Search with PUCT."""
+
+    def __init__(self, policy, config):
+        self.config = config
+        self.num_workers = config["num_trees"]
+        self.num_iters = config["pgs_iters"]
+
+        # Create parallel tree workers
+        pipes = [Pipe() for _ in range(self.num_workers)]
+        eval_pipes = [Pipe() for _ in range(self.num_workers)]
+        eval_master_pipe = Pipe()
+        self.channels = [p[0] for p in pipes]
+        self.eval_channel = eval_master_pipe[0]
+        self.num_iters_worker = int(self.num_iters/self.num_workers)
+        self.rest_iters = (self.num_iters % self.num_workers) + self.num_iters_worker
+
+        self.workers = []
+        for i in range(self.num_workers):
+            iters = self.rest_iters if i == self.num_workers-1 else self.num_iters_worker
+            eval_pipe = eval_pipes[i][1]
+
+            pol_head = deepcopy(policy.policy_head)
+            val_head = deepcopy(policy.value_head)
+            worker = PGSTreeWorker(iters, eval_pipe, pol_head, val_head, i, config, pipes[i][1])
+            worker.start()
+            self.workers.append(worker)
+
+        # Create evaluation worker
+        eval_channels = [p[0] for p in eval_pipes]
+        eval_master_channel = eval_master_pipe[1]
+        self.eval_worker = EvaluatorPGS(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["pgs_eval_batch"], timeout=config["pgs_eval_timeout"])
+        self.eval_worker.start()
+
+    def update_policy(self, state_dict):
+        self.eval_channel.send({
+            "command": "update",
+            "state_dict": state_dict,
+        })
+
+    def search(self, state, iters=None):
+        for c in self.channels:
+            c.send({
+                "command": "search",
+                "state": deepcopy(state),
+                "iters": iters,
+            })
+        msg = np.stack([c.recv() for c in self.channels])
+
+        qvals = np.mean(msg, axis=0)
+        return qvals
+
+    def distributed_search(self, states):
+        i = 0
+        dists = []
+        len_states = len(states)
+        while i < len_states:
+            max_c_idx = self.num_workers
+            for c_idx, c in enumerate(self.channels):
+                c.send({
+                    "command": "search",
+                    "state": states[i],
+                    "iters": self.num_iters,
+                })
+                i += 1
+                if i >= len_states:
+                    max_c_idx = c_idx+1
+                    break
+            msg = [c.recv() for c in self.channels[:max_c_idx]]
+            dists.extend(msg)
+        return np.array(dists)
+
+    def close(self):
+        for c in self.channels + [self.eval_channel]:
+            c.send({"command": "close"})
+        for w in self.workers:
+            w.join()

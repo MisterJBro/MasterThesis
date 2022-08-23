@@ -8,7 +8,7 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "train_iters": 50,
+        "train_iters": 5,
         "num_cpus": 3,
         "num_envs": 30,
         "device": "cpu",
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     })
 
     with PGTrainer(config) as tr:
-        #tr.load()
+        tr.load()
         tr.train()
         tr.test()
-        #tr.save('checkpoints/policy_pdlm_new.pt')
+        tr.save()

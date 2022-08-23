@@ -30,26 +30,27 @@ class PendulumPolicy(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, config["num_acts"]),
         )
+        self.policy_head = nn.Linear(hidden_size, config["num_acts"])
+
         self.value = nn.Sequential(
             nn.Linear(config["flat_obs_dim"], hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1),
         )
+        self.value_head = nn.Linear(hidden_size, 1)
 
         #self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
-        self.opt_policy = optim.Adam(list(self.hidden.parameters())+ list(self.policy.parameters()), lr=config["pi_lr"])
-        self.opt_value = optim.Adam(list(self.value.parameters()), lr=config["vf_lr"])
+        self.opt_policy = optim.Adam(list(self.hidden.parameters()) + list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
+        self.opt_value = optim.Adam(list(self.value.parameters()) + list(self.value_head.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
         self.to(self.device)
 
     def forward(self, x):
         x = self.hidden(x)
-        dist = Categorical(logits=self.policy(x))
-        val = self.value(x).reshape(-1)
+        dist = Categorical(logits=self.policy_head(self.policy(x)))
+        val = self.value_head(self.value(x)).reshape(-1)
         return dist, val
 
     def get_action(self, x_numpy):
@@ -62,13 +63,17 @@ class PendulumPolicy(nn.Module):
 
     def get_dist(self, x):
         x = self.hidden(x)
-        dist = Categorical(logits=self.policy(x))
+        dist = Categorical(logits=self.policy_head(self.policy(x)))
         return dist
 
     def get_value(self, x):
         x = self.hidden(x)
-        val = self.value(x).reshape(-1)
+        val = self.value_head(self.value(x)).reshape(-1)
         return val
+
+    def get_hidden(self, x):
+        x = self.hidden(x)
+        return self.policy(x), self.value(x)
 
     def loss_gradient(self, data):
         obs = data["obs"]
