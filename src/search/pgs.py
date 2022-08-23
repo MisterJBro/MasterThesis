@@ -10,6 +10,13 @@ from src.search.tree import Tree
 from src.search.util import measure_time
 
 
+class MCSTree(PGSTree):
+    """ Monte Carlo Search. Using PGS without any update of simulation policy. """
+
+    def update_policy(self, rew, hs):
+        pass
+
+
 class PGSTree(Tree):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
@@ -20,12 +27,12 @@ class PGSTree(Tree):
         self.num_players = config["num_players"]
         self.NodeClass = PUCTNode
         self.expl_coeff = config["puct_c"]
+        self.device = config["device"]
 
-        self.policy = pol_head
+        self.sim_policy = pol_head
         self.value = val_head
-        self.optim = optim.Adam(self.policy.parameters(), lr=1e-4)
+        self.optim = optim.Adam(self.sim_policy.parameters(), lr=1e-4)
         self.set_root(state)
-
 
     def search(self, iters=1_000):
         iter = 0
@@ -33,8 +40,9 @@ class PGSTree(Tree):
         while iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
-            ret = self.simulate(new_leaf)
-            self.backpropagate(new_leaf, ret)
+            rew, hs = self.simulate(new_leaf)
+            self.update_policy(rew, hs)
+            self.backpropagate(new_leaf, rew, hs)
             iter += 1
 
         return self.root.get_action_values()
@@ -64,29 +72,50 @@ class PGSTree(Tree):
         done = self.state.done
         obs = self.state.obs
 
-        ret, player, iter = 0, 0, 0
+        player, iter = 0, 0
+        rews, hs = [], []
         while not done:
             player = (player + 1) % num_players
             hidden = self.eval_fn(obs)
-            act = Categorical(logits=self.policy(hidden)).sample()
+            hs.append(hidden)
+            act = Categorical(logits=self.sim_policy(hidden)).sample()
             obs, rew, done, _ = env.step(act)
 
             # Add return
             if num_players == 2:
                 if player == 0:
-                    ret += rew
+                    rews.append(rew)
                 else:
-                    ret -= rew
+                    rews.append(-rew)
             else:
-                ret += rew
+                rews.append(rew)
 
             # Truncated rollout
             iter += 1
             if iter >= 10:
                 hidden = self.eval_fn(obs)
-                ret += self.value(hidden)
+                hs.append(hidden)
+                rews.append(self.value(hidden))
                 break
-        return ret
+        return np.array(rews), torch.concat(hs, 0)
+
+    def update_policy(self, rew, hs):
+        ret = discount_cumsum(rew, self.config["gamma"])
+        ret = torch.tensor(ret).to(self.device)
+        adv = ret
+        hs = hs.to(self.device)
+
+        # REINFORCE
+        dist = Categorical(logits=self.sim_policy(hs))
+        logp = dist.log_prob(act)
+        loss_policy = -(logp * adv).mean()
+        loss_entropy = - dist.entropy().mean()
+        loss = loss_policy + 0.01 * loss_entropy
+
+        self.optim.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self.sim_policy.parameters(),  self.config["grad_clip"])
+        self.optim.step()
 
     def set_root(self, state):
         self.root = PUCTNode(state)
@@ -102,34 +131,10 @@ class PGSTree(Tree):
         hidden = self.eval_channel.recv()
         return hidden
 
-
-class TreeWorker(Process, Tree):
+class PGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, iters, config, channel):
-        Tree.__init__(self, None, config)
-        Process.__init__(self)
-
-        self.iters = iters
-        self.channel = channel
-
-    def run(self):
-        msg = self.channel.recv()
-        while msg["command"] != "close":
-            if msg["command"] == "search":
-                self.set_root(msg["state"])
-                if msg["iters"] is not None:
-                    iters = msg["iters"]
-                else:
-                    iters = self.iters
-                qvals = self.search(iters)
-                self.channel.send(qvals)
-            msg = self.channel.recv()
-
-
-class AZTreeWorker(Process, AZTree):
-    """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, iters, eval_channel, idx, config, channel):
-        AZTree.__init__(self, None, eval_channel, config, idx=idx)
+    def __init__(self, iters, eval_channel,  pol_head, val_head, idx, config, channel):
+        PGSTree.__init__(self, None, eval_channel, pol_head, val_head, config, idx=idx)
         Process.__init__(self)
 
         self.iters = iters

@@ -43,6 +43,8 @@ DEFAULT_CONFIG = {
     "az_iters": 1_000,
     "az_eval_batch": 3,
     "az_eval_timeout": 0.001,
+    "dirichlet_eps": 0.25,
+    "dirichlet_noise": 1.0,
 
 }
 

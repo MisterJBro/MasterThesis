@@ -25,7 +25,7 @@ class State:
     def is_terminal(self):
         return self.done
 
-    def rollout(self, num_players):
+    def rollout(self, num_players, gamma):
         env = deepcopy(self.env)
         done = self.done
         ret = 0
@@ -35,13 +35,14 @@ class State:
             act = np.random.choice(env.available_actions())
             _, rew, done, _ = env.step(act)
 
+            # Return
             if num_players == 2:
                 if player == 0:
-                    ret += rew
+                    ret = rew + gamma*ret
                 else:
-                    ret -= rew
+                    ret = -rew + gamma*ret
             else:
-                ret += rew
+                ret = rew + gamma*ret
         return ret
 
     def __str__(self):

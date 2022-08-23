@@ -94,10 +94,10 @@ class PUCTNode(Node):
 class DirichletNode(PUCTNode):
     """PUCT node where prior is perturbed with Dirichlet noise for better exploration."""
 
-    def __init__(self, state, action=None, parent=None, eps=0.25, dir_noise=1.0):
+    def __init__(self, state, action=None, parent=None, eps=0.25, noise=1.0):
         super().__init__(state, action, parent)
         self.eps = eps
-        self.dir_noise = dir_noise
+        self.dir_noise = noise
 
     def select_child(self, c):
         perturbed_priors = (1-self.eps) * self.priors + self.eps * np.random.dirichlet([self.dir_noise] * self.priors.shape[0])

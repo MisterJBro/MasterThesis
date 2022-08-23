@@ -1,7 +1,7 @@
 import numpy as np
-from tree import TreeWorker
-from state import State
 from copy import deepcopy
+from src.search.tree import TreeWorker
+from src.search.state import State
 from multiprocessing import Pipe, freeze_support
 
 

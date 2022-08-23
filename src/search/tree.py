@@ -59,7 +59,7 @@ class Tree:
         return child
 
     def simulate(self, node):
-        return node.state.rollout(self.num_players)
+        return node.state.rollout(self.num_players, self.config["gamma"])
 
     def backpropagate(self, node, ret):
         curr_ret = ret
@@ -99,7 +99,7 @@ class AZTree(Tree):
         return val
 
     def set_root(self, state):
-        self.root = DirichletNode(state)
+        self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if state is not None:
             probs, _ = self.eval_fn(self.root.state.obs)
             self.root.priors = probs
