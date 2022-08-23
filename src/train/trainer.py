@@ -92,7 +92,7 @@ class Trainer(ABC):
 
         obs = env.reset()
         for _ in range(self.config["test_len"]):
-            env.render()
+            deepcopy(env).render()
             act, _ = self.get_action(obs, envs=[deepcopy(env)], use_best=True)
             obs, rew, done, _ = env.step(act)
             rews.append(rew)
@@ -104,11 +104,17 @@ class Trainer(ABC):
         print(f'Undiscounted return: {np.sum(rews)}')
         env.close()
 
-    def save(self):
-        self.policy.save()
+    def save(self, path=None):
+        if path is not None:
+            self.policy.save(path=path)
+        else:
+            self.policy.save()
 
-    def load(self):
-        self.policy.load()
+    def load(self, path=None):
+        if path is not None:
+            self.policy.load(path=path)
+        else:
+            self.policy.load()
 
     def __enter__(self):
         freeze_support()

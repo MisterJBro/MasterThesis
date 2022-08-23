@@ -5,12 +5,12 @@ from src.train.exit import AZExitTrainer
 
 
 if __name__ == '__main__':
-    env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
+    env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
         "puct_c": 10.0,
         "train_iters": 100,
-        "az_iters": 50,
+        "az_iters": 11,
         "az_eval_batch": 15,
         "num_cpus": 3,
         "num_envs": 15,

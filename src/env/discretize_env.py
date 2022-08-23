@@ -5,7 +5,7 @@ import numpy as np
 class DiscreteActionWrapper(gym.ActionWrapper):
     """Discretizes the action space of an gym continuous environment."""
 
-    def __init__(self, env, n_bins=11):
+    def __init__(self, env, n_bins=20):
         super().__init__(env, new_step_api=True)
         self.n_bins = n_bins
         self.converter = np.linspace(-2, 2, num=n_bins)

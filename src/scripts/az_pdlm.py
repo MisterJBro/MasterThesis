@@ -14,7 +14,6 @@ from tqdm import tqdm
 
 def eval(env, get_action, render=False):
     obs = env.reset()
-    env.env.state = np.array([np.pi, 0.0])
 
     done = False
     ret = 0
@@ -32,25 +31,19 @@ def eval(env, get_action, render=False):
 
 
 if __name__ == '__main__':
-    env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
+    env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 20.0,
-        "train_iters": 100,
-        "az_iters": 200,
+        "puct_c": 5.0,
+        "az_iters": 1000,
         "az_eval_batch": 1,
-        "num_cpus": 3,
-        "num_envs": 15,
         "num_trees": 1,
         "device": "cpu",
-        "pi_lr": 8e-4,
-        "vf_lr": 5e-4,
-        "sample_len": 500,
     })
 
     freeze_support()
     policy = PendulumPolicy(config)
-    policy.load()
+    policy.load('checkpoints/policy_pdlm73_2.pt')
     az = AlphaZero(policy, config)
 
     def get_action_az(env, obs):
@@ -73,12 +66,11 @@ if __name__ == '__main__':
     rets_az = []
     rets_nn = []
     for _ in tqdm(range(1)):
-        ret_az = eval(env, get_action_az, render=False)
+        ret_az = eval(env, get_action_az, render=True)
         rets_az.append(ret_az)
-        #ret_nn = eval(env, get_action_nn, render=False)
-        #rets_nn.append(ret_nn)
+        ret_nn = eval(env, get_action_nn, render=False)
+        rets_nn.append(ret_nn)
     print(f'AZ return: {np.mean(rets_az):.03f}')
-    # 55.176
-    #print(f'NN return: {np.mean(rets_nn):.03f}')
+    print(f'NN return: {np.mean(rets_nn):.03f}')
     env.close()
     az.close()

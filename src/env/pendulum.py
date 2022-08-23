@@ -30,6 +30,7 @@ class PendulumEnv(gym.Env):
         self.m = 1.0
         self.l = 1.0
         self.iter = 0
+        self.max_ts = 100
 
         self.render_mode = render_mode
         self.renderer = Renderer(self.render_mode, self._render)
@@ -39,7 +40,7 @@ class PendulumEnv(gym.Env):
         self.clock = None
         self.isopen = True
 
-        high = np.array([1.0, 1.0, self.max_speed], dtype=np.float32)
+        high = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         # This will throw a warning in tests/envs/test_envs in utils/env_checker.py as the space is not symmetric
         #   or normalised as max_torque == 2 by default. Ignoring the issue here as the default settings are too old
         #   to update to follow the openai gym api
@@ -55,16 +56,16 @@ class PendulumEnv(gym.Env):
         m = self.m
         l = self.l
         dt = self.dt
-        u, costs, self.state, obs = self.step_jit(u, th, thdot, g, m, l, dt, self.max_torque, self.max_speed, self.iter)
+        u, costs, self.state, obs = self.step_jit(u, th, thdot, g, m, l, dt, self.max_torque, self.max_speed, self.iter, self.max_ts)
 
         self.last_u = u  # for rendering
         self.renderer.render_step()
         self.iter += 1
-        return obs.astype(np.float32), -costs, self.iter > 100, {}
+        return obs.astype(np.float32), -costs, self.iter > self.max_ts, {}
 
     @staticmethod
     @njit(cache=True)
-    def step_jit(u, th, thdot, g, m, l, dt, max_torque, max_speed, iter):
+    def step_jit(u, th, thdot, g, m, l, dt, max_torque, max_speed, iter, max_ts):
         u = np.clip(u, -max_torque, max_torque)[0]
         costs = angle_normalize(th) ** 2 + 0.1 * thdot**2 + 0.001 * (u**2)
 
@@ -75,7 +76,8 @@ class PendulumEnv(gym.Env):
         state = np.stack((newth, newthdot))
 
         norm_costs = costs / 8.1368022 - 1.0
-        obs = np.stack((np.array(np.cos(newth)), np.array(np.sin(newth)), newthdot))
+        norm_costs /= 0.6
+        obs = np.stack((np.array(np.cos(newth)), np.array(np.sin(newth)), np.array(newthdot/max_speed), np.array(iter/max_ts)))
 
         return u, norm_costs, state, obs
 
@@ -112,7 +114,7 @@ class PendulumEnv(gym.Env):
 
     def _get_obs(self):
         theta, thetadot = self.state
-        return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=np.float32)
+        return np.array([np.cos(theta), np.sin(theta), thetadot/self.max_speed, self.iter/self.max_ts], dtype=np.float32)
 
     def render(self, mode="human"):
         if self.render_mode is not None:

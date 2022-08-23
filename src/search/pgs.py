@@ -9,6 +9,7 @@ from src.search.node import UCTNode, PUCTNode, DirichletNode
 from src.search.tree import Tree
 from src.search.util import measure_time
 
+
 class PGSTree(Tree):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
@@ -21,7 +22,7 @@ class PGSTree(Tree):
         self.expl_coeff = config["puct_c"]
 
         self.policy = pol_head
-        self.value_fn = val_head
+        self.value = val_head
         self.optim = optim.Adam(self.policy.parameters(), lr=1e-4)
         self.set_root(state)
 
@@ -62,14 +63,15 @@ class PGSTree(Tree):
         env = deepcopy(self.state.env)
         done = self.state.done
         obs = self.state.obs
-        ret = 0
-        player = 0
+
+        ret, player, iter = 0, 0, 0
         while not done:
             player = (player + 1) % num_players
             hidden = self.eval_fn(obs)
             act = Categorical(logits=self.policy(hidden)).sample()
             obs, rew, done, _ = env.step(act)
 
+            # Add return
             if num_players == 2:
                 if player == 0:
                     ret += rew
@@ -77,10 +79,17 @@ class PGSTree(Tree):
                     ret -= rew
             else:
                 ret += rew
+
+            # Truncated rollout
+            iter += 1
+            if iter >= 10:
+                hidden = self.eval_fn(obs)
+                ret += self.value(hidden)
+                break
         return ret
 
     def set_root(self, state):
-        self.root = DirichletNode(state)
+        self.root = PUCTNode(state)
         if state is not None:
             probs, _ = self.eval_fn(self.root.state.obs)
             self.root.priors = probs
@@ -92,9 +101,6 @@ class PGSTree(Tree):
         })
         hidden = self.eval_channel.recv()
         return hidden
-
-    def get_policy_targets(self, temp=1.0):
-        return [child.num_visits ** (1/temp) / self.root.num_visits ** (1/temp) for child in self.root.children]
 
 
 class TreeWorker(Process, Tree):

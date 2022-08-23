@@ -67,10 +67,11 @@ class Tree:
 
         while node is not None:
             node.num_visits += 1
+            curr_ret = node.state.rew + gamma * curr_ret
             node.total_rews += curr_ret
 
             flip = -1.0 if self.num_players == 2 else 1.0
-            curr_ret = flip * (node.state.rew + gamma * curr_ret)
+            curr_ret *= flip
             node = node.parent
 
     def set_root(self, state):
