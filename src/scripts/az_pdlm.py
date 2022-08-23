@@ -11,6 +11,7 @@ from src.env.pendulum import PendulumEnv
 from src.search.state import State
 from tqdm import tqdm
 
+
 def eval(env, get_action, render=False):
     obs = env.reset()
     env.env.state = np.array([np.pi, 0.0])
@@ -29,21 +30,21 @@ def eval(env, get_action, render=False):
         render_env.close()
     return ret
 
+
 if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
     config = create_config({
         "env": env,
-        "puct_c": 3.0,
-        "train_iters": 150,
+        "puct_c": 20.0,
+        "train_iters": 100,
         "az_iters": 200,
-        "az_eval_batch": 15,
+        "az_eval_batch": 1,
         "num_cpus": 3,
-        "num_envs": 30,
-        "num_trees": 15,
+        "num_envs": 15,
+        "num_trees": 1,
         "device": "cpu",
         "pi_lr": 8e-4,
         "vf_lr": 5e-4,
-        "vf_iters": 5,
         "sample_len": 500,
     })
 
@@ -52,14 +53,14 @@ if __name__ == '__main__':
     policy.load()
     az = AlphaZero(policy, config)
 
-    def get_action(env, obs):
+    def get_action_az(env, obs):
         az.update_policy(policy.state_dict())
         qvals = az.search(State(env, obs=obs))
 
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
-    def get_action2(env, obs):
+    def get_action_nn(env, obs):
         obs = torch.as_tensor(obs, dtype=torch.float32)
         with torch.no_grad():
             dist = policy.get_dist(obs)
@@ -68,10 +69,16 @@ if __name__ == '__main__':
 
         return act.cpu().numpy()
 
-    rets = []
-    for _ in tqdm(range(100)):
-        ret = eval(env, get_action, render=False)
-        rets.append(ret)
-    print(f'Undiscounted return: {np.mean(rets)}')
+    # Eval
+    rets_az = []
+    rets_nn = []
+    for _ in tqdm(range(1)):
+        ret_az = eval(env, get_action_az, render=False)
+        rets_az.append(ret_az)
+        #ret_nn = eval(env, get_action_nn, render=False)
+        #rets_nn.append(ret_nn)
+    print(f'AZ return: {np.mean(rets_az):.03f}')
+    # 55.176
+    #print(f'NN return: {np.mean(rets_nn):.03f}')
     env.close()
     az.close()

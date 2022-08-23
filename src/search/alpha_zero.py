@@ -1,4 +1,3 @@
-from os import stat
 import numpy as np
 from copy import deepcopy
 from src.search.evaluator import Evaluator

@@ -63,13 +63,14 @@ class Tree:
 
     def backpropagate(self, node, ret):
         curr_ret = ret
+        gamma = self.config["gamma"]
 
         while node is not None:
             node.num_visits += 1
             node.total_rews += curr_ret
 
             flip = -1.0 if self.num_players == 2 else 1.0
-            curr_ret = flip * (node.state.rew + curr_ret)
+            curr_ret = flip * (node.state.rew + gamma * curr_ret)
             node = node.parent
 
     def set_root(self, state):
@@ -88,24 +89,21 @@ class AZTree(Tree):
         self.set_root(state)
 
     def search(self, iters=1_000):
-        super().search(iters)
-
-        return self.get_policy_targets()
+        return super().search(iters)
+        #return self.get_policy_targets()
 
     def simulate(self, node):
-        probs, val = self.eval_fn(node)
+        probs, val = self.eval_fn(node.state.obs)
         node.priors = probs
-        #return node.state.rollout(self.num_players)
         return val
 
     def set_root(self, state):
         self.root = DirichletNode(state)
         if state is not None:
-            probs, _ = self.eval_fn(self.root)
+            probs, _ = self.eval_fn(self.root.state.obs)
             self.root.priors = probs
 
-    def eval_fn(self, node):
-        obs = node.state.obs
+    def eval_fn(self, obs):
         self.eval_channel.send({
             "obs": obs,
             "ind": self.idx,

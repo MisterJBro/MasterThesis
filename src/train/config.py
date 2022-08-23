@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     "num_envs": 15,
     "num_players": 1,
     "sample_len": 500,
-    "gamma": 0.99,
+    "gamma": 1.0,
     "seed": 0,
     "test_len": 500,
 

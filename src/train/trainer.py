@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
+from copy import deepcopy
 
 import gym
 import time
@@ -66,7 +67,7 @@ class Trainer(ABC):
         sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
-    def get_action(self, obs, use_best=False):
+    def get_action(self, obs, envs=None, use_best=False):
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         with torch.no_grad():
             dist = self.policy.get_dist(obs)
@@ -92,7 +93,7 @@ class Trainer(ABC):
         obs = env.reset()
         for _ in range(self.config["test_len"]):
             env.render()
-            act, _ = self.get_action(obs, use_best=True)
+            act, _ = self.get_action(obs, envs=[deepcopy(env)], use_best=True)
             obs, rew, done, _ = env.step(act)
             rews.append(rew)
 
@@ -100,7 +101,7 @@ class Trainer(ABC):
             if done:
                 obs = env.reset()
                 break
-        print(f'Undiscounted return: {np.mean(rews)}')
+        print(f'Undiscounted return: {np.sum(rews)}')
         env.close()
 
     def save(self):
