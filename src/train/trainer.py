@@ -11,6 +11,7 @@ from src.env.envs import Envs
 from src.networks.model import ValueEquivalenceModel
 from src.search.model_search import plan
 from src.networks.policy import ActorCriticPolicy
+from src.train.log import Logger
 
 from multiprocessing import freeze_support
 from src.train.processer import post_processing
@@ -23,6 +24,7 @@ from torch.distributions.kl import kl_divergence
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+
 
 class Trainer(ABC):
     def __init__(self, config):
@@ -38,7 +40,7 @@ class Trainer(ABC):
         self.envs = Envs(config)
         self.policy = None
         self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
-        self.max_avg_rew = float('-inf')
+        self.log = Logger()
 
         print(tabulate([
             ['Environment', config["env"]],
@@ -48,8 +50,27 @@ class Trainer(ABC):
         ], colalign=("left", "right")))
         print()
 
-    @abstractmethod
     def train(self):
+        for iter in range(self.config["train_iters"]):
+            self.log.clear()
+            self.log("Iter", iter)
+
+            sample_batch = self.get_sample_batch()
+            self.update(sample_batch)
+
+            self.log.update(sample_batch.metrics)
+            print(self.log)
+            self.writer.add_scalar('Average return', self.log["avg ret"], iter)
+            self.checkpoint()
+
+    def checkpoint(self):
+        if self.log["avg ret"] > self.log.best_metric:
+            self.log.best_metric = self.log["avg ret"]
+            self.best_model_path = f'{PROJECT_PATH}/checkpoints/policy_pdlm_ret={self.log.best_metric:.01f}.pt'
+            self.save(path=self.best_model_path)
+
+    @abstractmethod
+    def update(self, sample_batch):
         pass
 
     def get_sample_batch(self):
@@ -77,10 +98,6 @@ class Trainer(ABC):
             act = dist.sample()
 
         return act.cpu().numpy(), dist.logits.cpu().numpy()
-
-    @abstractmethod
-    def update(self, sample_batch):
-        pass
 
     def test(self):
         if isinstance(self.config["env"], str):
@@ -141,7 +158,6 @@ class ModelTrainer:
         self.policy = ActorCriticPolicy(config)
         self.model = ValueEquivalenceModel(config)
         self.writer = SummaryWriter(comment=f'{config["env"]}_{config["num_samples"]}')
-        self.max_avg_rew = float('-inf')
 
         print(tabulate([
             ['Environment', config["env"]],

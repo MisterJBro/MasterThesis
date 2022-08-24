@@ -4,19 +4,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from copy import deepcopy
+from torch.distributions import Categorical
 
 from multiprocessing import Process, Pipe
-from src.search.node import UCTNode, PUCTNode, DirichletNode
+from src.search.node import PUCTNode
 from src.search.tree import Tree
-from src.search.util import measure_time
 from src.search.evaluator import EvaluatorPGS
-
-
-class MCSTree(PGSTree):
-    """ Monte Carlo Search. Using PGS without any update of simulation policy. """
-
-    def update_policy(self, rew, hs):
-        pass
+from src.train.processer import discount_cumsum
 
 
 class PGSTree(Tree):
@@ -42,9 +36,9 @@ class PGSTree(Tree):
         while iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
-            rew, pol_hs, val_hs = self.simulate(new_leaf)
-            self.update_policy(rew, pol_hs, val_hs)
-            self.backpropagate(new_leaf, rew, hs)
+            rew, pol_hs, val_hs, act = self.simulate(new_leaf)
+            ret = self.update_policy(rew, pol_hs, val_hs, act)
+            self.backpropagate(new_leaf, ret)
             iter += 1
 
         return self.root.get_action_values()
@@ -56,37 +50,39 @@ class PGSTree(Tree):
         if node.state.is_terminal():
             return node
         if node == self.root:
-                # Create new child nodes, lazy init
-                actions = node.state.get_possible_actions()
-                for action in actions:
-                    new_node = self.NodeClass(None, action=action, parent=node)
-                    node.children.append(new_node)
+            # Create new child nodes, lazy init
+            actions = node.state.get_possible_actions()
+            for action in actions:
+                new_node = self.NodeClass(None, action=action, parent=node)
+                node.children.append(new_node)
 
-                # Pick child node
-                child = np.random.choice(node.children)
-                child.create_state()
+            # Pick child node
+            child = np.random.choice(node.children)
+            child.create_state()
             return child
         else:
             return node
 
     def simulate(self, node):
-        env = deepcopy(self.state.env)
-        done = self.state.done
-        obs = self.state.obs
+        env = deepcopy(node.state.env)
+        done = node.state.done
+        obs = node.state.obs
 
         player, iter = 0, 0
-        rews, pol_hs, val_hs = [], [], []
+        acts, rews, pol_hs, val_hs = [], [], [], []
         while not done:
-            player = (player + 1) % num_players
+            player = (player + 1) % self.num_players
             pol_h, val_h = self.eval_fn(obs)
             pol_hs.append(pol_h)
             val_hs.append(val_h)
 
-            act = Categorical(logits=self.sim_policy(pol_h)).sample()
+            with torch.no_grad():
+                act = Categorical(logits=self.sim_policy(pol_h)).sample().item()
+            acts.append(act)
             obs, rew, done, _ = env.step(act)
 
             # Add return
-            if num_players == 2:
+            if self.num_players == 2:
                 if player == 0:
                     rews.append(rew)
                 else:
@@ -97,17 +93,29 @@ class PGSTree(Tree):
             # Truncated rollout
             iter += 1
             if iter >= 10:
-                pol_h, val_h = self.eval_fn(obs)
-                pol_hs.append(pol_h)
-                val_hs.append(val_h)
-                rews.append(self.value(pol_h))
                 break
-        return np.array(rews), torch.concat(pol_hs, 0), torch.concat(val_hs, 0)
 
-    def update_policy(self, rew, pol_hs, val_hs):
+        # Bootstrap last value
+        if iter >= 10:
+            _, val_h = self.eval_fn(obs)
+            with torch.no_grad():
+                rews.append(self.value(val_h).item())
+        else:
+            rews.append(0)
+
+        if len(acts) == 0:
+            return rews, pol_hs, val_hs, acts
+
+        return np.array(rews), torch.stack(pol_hs, 0), torch.stack(val_hs, 0), torch.tensor(acts)
+
+    def update_policy(self, rew, pol_hs, val_hs, act):
+        if len(act) == 0:
+            return 0
+
         ret = discount_cumsum(rew, self.config["gamma"])
-        ret = torch.tensor(ret).to(self.device)
-        adv = ret
+        total_ret = ret[0]
+        ret = torch.as_tensor(ret).to(self.device)
+        adv = ret[:-1]
         pol_hs = pol_hs.to(self.device)
         val_hs = val_hs.to(self.device)
 
@@ -123,11 +131,15 @@ class PGSTree(Tree):
         nn.utils.clip_grad_norm_(self.sim_policy.parameters(),  self.config["grad_clip"])
         self.optim.step()
 
+        return total_ret
+
     def set_root(self, state):
         self.root = PUCTNode(state)
         if state is not None:
-            probs, _ = self.eval_fn(self.root.state.obs)
-            self.root.priors = probs
+            pol_h, _ = self.eval_fn(self.root.state.obs)
+            with torch.no_grad():
+                probs = F.softmax(self.sim_policy(pol_h), dim=-1)
+            self.root.priors = probs.cpu().numpy()
 
     def eval_fn(self, obs):
         self.eval_channel.send({

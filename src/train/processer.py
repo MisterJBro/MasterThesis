@@ -33,7 +33,7 @@ def calc_return(done, rew, gamma, last_val):
                 ret[b][start:] = discount_cumsum(np.append(rew[b][start:], lv), gamma)[:-1]
     return ret
 
-def calc_statistics(sample_batch):
+def calc_metrics(sample_batch):
     rew = sample_batch.rew
     done = sample_batch.done
 
@@ -50,17 +50,17 @@ def calc_statistics(sample_batch):
         returns = [np.sum(rew[b]) for b in range(rew.shape[0])]
 
     return {
-        'mean_return': np.mean(returns),
-        'max_return': np.max(returns),
-        'min_return': np.min(returns),
+        'avg ret': np.mean(returns),
+        'max ret': np.max(returns),
+        'min ret': np.min(returns),
     }
 
 def post_processing(policy, sample_batch, config):
     # Value prediction
     buffer_shape = sample_batch.rew.shape
-    obs = torch.tensor(sample_batch.obs)
+    obs = torch.as_tensor(sample_batch.obs)
     obs = obs.reshape(-1, obs.shape[-1]).to(policy.device)
-    last_obs = torch.tensor(sample_batch.last_obs).to(policy.device)
+    last_obs = torch.as_tensor(sample_batch.last_obs).to(policy.device)
 
     with torch.no_grad():
         val = policy.get_value(obs)
@@ -77,7 +77,7 @@ def post_processing(policy, sample_batch, config):
     ret = calc_return(sample_batch.done, sample_batch.rew, config["gamma"], last_val)
     sample_batch.ret = ret
 
-    # Calculate several statistics
-    sample_batch.statistics = calc_statistics(sample_batch)
+    # Calculate several metrics
+    sample_batch.metrics = calc_metrics(sample_batch)
 
     return sample_batch

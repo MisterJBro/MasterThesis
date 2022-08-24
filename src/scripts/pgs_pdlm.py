@@ -30,7 +30,6 @@ if __name__ == '__main__':
     iter = 0
     ret = 0
     while not done:
-        print(iter)
         pgs.update_policy(policy.state_dict())
         qvals = pgs.search(State(env, obs=obs))
 

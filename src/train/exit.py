@@ -17,22 +17,11 @@ class AZExitTrainer(Trainer):
         super().__init__(config)
 
         self.num_acts = config["num_acts"]
+        self.dist_q_scale = config["az_dist_q_scale"]
         self.policy = PendulumPolicy(config)
         self.az = AlphaZero(self.policy, config)
 
-    def train(self):
-        for iter in range(self.config["train_iters"]):
-            sample_batch = self.get_sample_batch()
-            self.update(sample_batch)
-            stats = sample_batch.statistics
-
-            avg_ret = stats["mean_return"]
-            max_ret = stats["max_return"]
-            min_ret = stats["min_return"]
-            print(f'Iteration: {iter}  Avg Ret: {np.round(avg_ret, 3)}  Max Ret: {np.round(max_ret, 3)}  Min Ret: {np.round(min_ret, 3)}')
-            self.writer.add_scalar('Average return', avg_ret, iter)
-
-    def get_action(self, obs, envs, use_best=False):
+    def get_action(self, obs, envs=None, use_best=False):
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         if envs is None:
             envs = self.envs.get_all_env()
@@ -43,7 +32,7 @@ class AZExitTrainer(Trainer):
         logits = dist.logits.cpu()
 
         q = self.az.distributed_search(states)
-        dist = F.softmax(logits + 10.0*q, dim=-1)
+        dist = F.softmax(logits + self.dist_q_scale*q, dim=-1)
         if use_best:
             act = torch.max(dist).numpy()
         else:
@@ -60,9 +49,9 @@ class AZExitTrainer(Trainer):
 
         # Distill planning targets into policy
         trainset = TensorDataset(obs, dist, ret)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["az_dist_minibatches"]), shuffle=True)
 
-        for i in range(1):
+        for _ in range(self.config["az_dist_iters"]):
             for obs_batch, target_batch, ret_batch in trainloader:
                 self.policy.opt_policy.zero_grad()
                 self.policy.opt_value.zero_grad()
@@ -73,6 +62,6 @@ class AZExitTrainer(Trainer):
                 loss = loss_dist + loss_value
                 loss.backward()
 
-                #nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
+                nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
                 self.policy.opt_policy.step()
                 self.policy.opt_value.step()
