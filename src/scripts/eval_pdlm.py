@@ -39,8 +39,11 @@ if __name__ == '__main__':
         "uct_c": 5.0,
         "mcts_iters": 500,
         "az_iters": 500,
+        "pgs_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
+        "pgs_lr": 0e-4,
+        "pgs_trunc_len": 10,
         "num_trees": 1,
         "device": "cpu",
     })

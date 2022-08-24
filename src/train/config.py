@@ -39,6 +39,7 @@ DEFAULT_CONFIG = {
     "num_trees": 4,
     "uct_c": np.sqrt(2),
     "mcts_iters": 1_000,
+
     "puct_c": 5.0,
     "az_iters": 1_000,
     "az_eval_batch": 3,
@@ -48,6 +49,9 @@ DEFAULT_CONFIG = {
     "az_dist_iters": 3,
     "dirichlet_eps": 0.25,
     "dirichlet_noise": 1.0,
+
+    "pgs_lr": 1e-4,
+    "pgs_trunc_len": 10,
     "pgs_iters": 1_000,
     "pgs_eval_batch": 3,
     "pgs_eval_timeout": 0.001,

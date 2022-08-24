@@ -11,18 +11,21 @@ from src.search.state import State
 
 
 if __name__ == '__main__':
-    env = DiscreteActionWrapper(PendulumEnv(), n_bins=11)
+    env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 5.0,
-        "pgs_iters": 20,
-        "pgs_eval_batch": 1,
         "num_trees": 1,
         "device": "cpu",
+        "puct_c": 5.0,
+        "pgs_lr": 0e-4,
+        "pgs_trunc_len": 10,
+        "pgs_iters": 20,
+        "pgs_eval_batch": 1,
     })
 
     freeze_support()
     policy = PendulumPolicy(config)
+    policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
     pgs = PGS(policy, config)
     obs = env.reset()
 

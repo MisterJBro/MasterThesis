@@ -23,7 +23,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.distributions.kl import kl_divergence
 import pathlib
 
-PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 
 class Trainer(ABC):
@@ -54,11 +54,10 @@ class Trainer(ABC):
         for iter in range(self.config["train_iters"]):
             self.log.clear()
             self.log("Iter", iter)
-
             sample_batch = self.get_sample_batch()
-            self.update(sample_batch)
-
             self.log.update(sample_batch.metrics)
+
+            self.update(sample_batch)
             print(self.log)
             self.writer.add_scalar('Average return', self.log["avg ret"], iter)
             self.checkpoint()
@@ -66,7 +65,7 @@ class Trainer(ABC):
     def checkpoint(self):
         if self.log["avg ret"] > self.log.best_metric:
             self.log.best_metric = self.log["avg ret"]
-            self.best_model_path = f'{PROJECT_PATH}/checkpoints/policy_pdlm_ret={self.log.best_metric:.01f}.pt'
+            self.best_model_path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}_{self.log.best_metric:.0f}.pt'
             self.save(path=self.best_model_path)
 
     @abstractmethod
@@ -99,7 +98,7 @@ class Trainer(ABC):
 
         return act.cpu().numpy(), dist.logits.cpu().numpy()
 
-    def test(self):
+    def test(self, render=True):
         if isinstance(self.config["env"], str):
             env = gym.make(self.config["env"])
         else:
@@ -109,12 +108,13 @@ class Trainer(ABC):
 
         obs = env.reset()
         for _ in range(self.config["test_len"]):
-            deepcopy(env).render()
+            if render:
+                deepcopy(env).render()
+                time.sleep(0.1)
             act, _ = self.get_action(obs, envs=[deepcopy(env)], use_best=True)
             obs, rew, done, _ = env.step(act)
             rews.append(rew)
 
-            time.sleep(0.1)
             if done:
                 obs = env.reset()
                 break
@@ -125,13 +125,15 @@ class Trainer(ABC):
         if path is not None:
             self.policy.save(path=path)
         else:
-            self.policy.save()
+            path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}.pt'
+            self.policy.save(path=path)
 
     def load(self, path=None):
         if path is not None:
             self.policy.load(path=path)
         else:
-            self.policy.load()
+            path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}.pt'
+            self.policy.load(path=path)
 
     def __enter__(self):
         freeze_support()

@@ -10,8 +10,8 @@ class Logger(dict):
     def __call__(self, metric, value):
         self[metric] = value
 
-    def __format__(self):
-        return '  '.join(f'{str(k).capitalize()}: {f"{v:.2f}" if isinstance(v, float) else v}' for k, v in self.items())
+    def __str__(self):
+        return '  '.join(f'{str(k).capitalize()}: {f"{v:.02f}" if isinstance(v, float) else v}' for k, v in self.items())
 
     def update(self, dict):
         for k, v in dict.items():

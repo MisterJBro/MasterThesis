@@ -15,5 +15,5 @@ class PGTrainer(Trainer):
         data["adv"] = adv
 
         # Policy and Value loss
-        self.policy.loss_gradient(data)
+        #self.policy.loss_gradient(data)
         self.policy.loss_value(data)

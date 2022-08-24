@@ -24,10 +24,11 @@ class PGSTree(Tree):
         self.NodeClass = PUCTNode
         self.expl_coeff = config["puct_c"]
         self.device = config["device"]
+        self.trunc_len = config["pgs_trunc_len"]
 
         self.sim_policy = pol_head
         self.value = val_head
-        self.optim = optim.Adam(self.sim_policy.parameters(), lr=1e-4)
+        self.optim = optim.Adam(self.sim_policy.parameters(), lr=config["pgs_lr"])
         self.set_root(state)
 
     def search(self, iters=1_000):
@@ -92,11 +93,11 @@ class PGSTree(Tree):
 
             # Truncated rollout
             iter += 1
-            if iter >= 10:
+            if iter >= self.trunc_len:
                 break
 
         # Bootstrap last value
-        if iter >= 10:
+        if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
                 rews.append(self.value(val_h).item())
@@ -128,7 +129,7 @@ class PGSTree(Tree):
 
         self.optim.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(self.sim_policy.parameters(),  self.config["grad_clip"])
+        nn.utils.clip_grad_norm_(self.sim_policy.parameters(), self.config["grad_clip"])
         self.optim.step()
 
         return total_ret

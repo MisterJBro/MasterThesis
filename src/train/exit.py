@@ -41,6 +41,10 @@ class AZExitTrainer(Trainer):
         return act, dist
 
     def update(self, sample_batch):
+        # Check model performance
+        #if self.config["az_force_improvement"] and self.log["avg ret"] < self.log.best_metric:
+        #   self.policy.load(self.log.best_model_path)
+
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         dist = data["dist"]
