@@ -77,6 +77,9 @@ class Tree:
     def set_root(self, state):
         self.root = self.NodeClass(state)
 
+    def get_normalized_visit_counts(self, temp=1.0):
+        return [child.num_visits ** (1/temp) / self.root.num_visits ** (1/temp) for child in self.root.children]
+
 class AZTree(Tree):
     """ Search Tree presentation for Alpha Zero. """
 
@@ -90,8 +93,10 @@ class AZTree(Tree):
         self.set_root(state)
 
     def search(self, iters=1_000):
-        return super().search(iters)
-        #return self.get_policy_targets()
+        qvals = super().search(iters)
+        if self.config["tree_output_qvals"]:
+            return qvals
+        return self.get_normalized_visit_counts()
 
     def simulate(self, node):
         probs, val = self.eval_fn(node.state.obs)
@@ -111,9 +116,6 @@ class AZTree(Tree):
         })
         msg = self.eval_channel.recv()
         return msg["probs"], msg["val"]
-
-    def get_policy_targets(self, temp=1.0):
-        return [child.num_visits ** (1/temp) / self.root.num_visits ** (1/temp) for child in self.root.children]
 
 
 class TreeWorker(Process, Tree):

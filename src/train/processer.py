@@ -18,6 +18,18 @@ def discount_cumsum(rew, gamma):
     return ret
 
 @jit(nopython=True)
+def gen_adv_estimation(rew, val, gamma, lam):
+    len = rew.shape[0]
+
+    adv_buf = np.zeros(len, dtype=np.float32)
+    deltas = rew + gamma*val[1:] - val[:-1]
+
+    for i in range(len):
+        adv_buf[:len - i] += (lam*gamma)**i * deltas[i:]
+
+    return adv_buf
+
+@jit(nopython=True)
 def calc_return(done, rew, gamma, last_val):
     ret = np.zeros((rew.shape))
     for b in range(rew.shape[0]):

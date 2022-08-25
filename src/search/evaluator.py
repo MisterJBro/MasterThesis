@@ -116,3 +116,7 @@ class EvaluatorPGS(Evaluator):
                 "pol_hidden": pol_hidden[i],
                 "val_hidden": val_hidden[i],
             })
+
+    def update_policy(self, state_dict):
+        self.policy.load_state_dict(state_dict)
+        self.master_channel.send((self.policy.policy_head, self.policy.value_head))

@@ -5,12 +5,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 from copy import deepcopy
 from torch.distributions import Categorical
+from torch.distributions.kl import kl_divergence
 
 from multiprocessing import Process, Pipe
 from src.search.node import PUCTNode
 from src.search.tree import Tree
 from src.search.evaluator import EvaluatorPGS
-from src.train.processer import discount_cumsum
+from src.train.processer import discount_cumsum, gen_adv_estimation
 
 
 class PGSTree(Tree):
@@ -26,9 +27,11 @@ class PGSTree(Tree):
         self.device = config["device"]
         self.trunc_len = config["pgs_trunc_len"]
 
+        self.base_policy = deepcopy(pol_head)
         self.sim_policy = pol_head
         self.value = val_head
-        self.optim = optim.Adam(self.sim_policy.parameters(), lr=config["pgs_lr"])
+        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=config["pgs_lr"])
+        self.optim_val = optim.Adam(self.value.parameters(), lr=0e-5)
         self.set_root(state)
 
     def search(self, iters=1_000):
@@ -42,7 +45,10 @@ class PGSTree(Tree):
             self.backpropagate(new_leaf, ret)
             iter += 1
 
-        return self.root.get_action_values()
+        if self.config["tree_output_qvals"]:
+            return self.logits + 1*self.root.get_action_values()
+            #return self.root.get_action_values()
+        return self.get_normalized_visit_counts()
 
     def expand(self, node):
         if node.state is None:
@@ -115,22 +121,37 @@ class PGSTree(Tree):
 
         ret = discount_cumsum(rew, self.config["gamma"])
         total_ret = ret[0]
-        ret = torch.as_tensor(ret).to(self.device)
-        adv = ret[:-1]
+        ret = torch.as_tensor(ret[:-1]).to(self.device)
         pol_hs = pol_hs.to(self.device)
         val_hs = val_hs.to(self.device)
+        with torch.no_grad():
+            val = self.value(val_hs).numpy().reshape(-1)
+        val = np.concatenate((val, [rew[-1]]))
+        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.99)
+        adv = torch.as_tensor(adv).to(self.device)
+        with torch.no_grad():
+            base_dist = Categorical(logits=self.base_policy(pol_hs))
+        #adv = ret[:-1] - val
 
         # REINFORCE
         dist = Categorical(logits=self.sim_policy(pol_hs))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
-        loss_entropy = - dist.entropy().mean()
-        loss = loss_policy + 0.01 * loss_entropy
+        loss_dist = kl_divergence(base_dist, dist).mean()
+        #loss_entropy = -dist.entropy().mean()
+        loss = loss_policy + 0.1 * loss_dist# + 0.01 * loss_entropy
 
-        self.optim.zero_grad()
+        self.optim_pol.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.sim_policy.parameters(), self.config["grad_clip"])
-        self.optim.step()
+        self.optim_pol.step()
+
+        # Value function
+        loss_value = F.huber_loss(self.value(val_hs).reshape(-1), ret)
+        self.optim_val.zero_grad()
+        loss_value.backward()
+        nn.utils.clip_grad_norm_(self.value.parameters(), self.config["grad_clip"])
+        self.optim_val.step()
 
         return total_ret
 
@@ -139,7 +160,9 @@ class PGSTree(Tree):
         if state is not None:
             pol_h, _ = self.eval_fn(self.root.state.obs)
             with torch.no_grad():
-                probs = F.softmax(self.sim_policy(pol_h), dim=-1)
+                logits = self.sim_policy(pol_h)
+                probs = F.softmax(logits, dim=-1)
+            self.logits = logits.numpy().reshape(-1)
             self.root.priors = probs.cpu().numpy()
 
     def eval_fn(self, obs):
@@ -172,6 +195,12 @@ class PGSTreeWorker(Process, PGSTree):
                     iters = self.iters
                 qvals = self.search(iters)
                 self.channel.send(qvals)
+            elif msg["command"] == "update":
+                self.base_policy = deepcopy(msg["pol_head"])
+                self.sim_policy = msg["pol_head"]
+                self.value = msg["val_head"]
+                self.optim = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
+
             msg = self.channel.recv()
 
 
@@ -214,6 +243,13 @@ class PGS:
             "command": "update",
             "state_dict": state_dict,
         })
+        pol_head, val_head = self.eval_channel.recv()
+        for c in self.channels:
+            c.send({
+                "command": "update",
+                "pol_head": deepcopy(pol_head),
+                "val_head": deepcopy(val_head),
+            })
 
     def search(self, state, iters=None):
         for c in self.channels:

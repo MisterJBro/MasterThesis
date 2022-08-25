@@ -104,7 +104,8 @@ class Trainer(ABC):
         else:
             env = self.config["env"]
         rews = []
-        input('Press any key to continue...')
+        if render:
+            input('Press any key to continue...')
 
         obs = env.reset()
         for _ in range(self.config["test_len"]):

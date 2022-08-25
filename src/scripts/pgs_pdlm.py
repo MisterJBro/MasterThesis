@@ -17,10 +17,11 @@ if __name__ == '__main__':
         "num_trees": 1,
         "device": "cpu",
         "puct_c": 5.0,
-        "pgs_lr": 0e-4,
+        "pgs_lr": 1e-4,
         "pgs_trunc_len": 10,
-        "pgs_iters": 20,
+        "pgs_iters": 200,
         "pgs_eval_batch": 1,
+        "tree_output_qvals": False,
     })
 
     freeze_support()

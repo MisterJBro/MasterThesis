@@ -39,8 +39,10 @@ DEFAULT_CONFIG = {
     "num_trees": 4,
     "uct_c": np.sqrt(2),
     "mcts_iters": 1_000,
-
     "puct_c": 5.0,
+    "tree_output_qvals": True,
+    #"use_norm_visit_counts"
+
     "az_iters": 1_000,
     "az_eval_batch": 3,
     "az_eval_timeout": 0.001,
