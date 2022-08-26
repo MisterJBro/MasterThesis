@@ -86,7 +86,7 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [nn]
+    algos = [pgs]
     for iters in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]:
         for algo in algos:
             rets = []
