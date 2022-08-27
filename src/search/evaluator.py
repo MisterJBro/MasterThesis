@@ -18,6 +18,10 @@ class Evaluator(Process):
         self.batch_size = batch_size
         self.timeout = timeout
         self.device = device
+        self.cache = {}
+
+    def clear_cache(self):
+        self.cache.clear()
 
     def run(self):
         done = False
@@ -31,6 +35,8 @@ class Evaluator(Process):
                     done = True
                 elif msg["command"] == "update":
                     self.update_policy(msg["state_dict"])
+                elif msg["command"] == "clear cache":
+                    self.clear_cache()
 
     def eval(self, obs):
         with torch.no_grad():
@@ -85,15 +91,31 @@ class EvaluatorPGS(Evaluator):
             pol_hidden, val_hidden = self.policy.get_hidden(obs)
         return pol_hidden, val_hidden
 
+    def check_cache(self, reqs):
+        msg = []
+        for r in reqs:
+            m = r.recv()
+            key = m["obs"].tobytes()
+            cached = self.cache.get(key, None)
+            if cached is not None:
+                self.worker_channels[m["ind"]].send({
+                    "pol_hidden": cached[0],
+                    "val_hidden": cached[1],
+                })
+            else:
+                msg.append(m)
+        return msg
+
     def serve_requests(self):
         reqs = wait(self.worker_channels, timeout=0.1)
 
-        # Timeout
-        if len(reqs) == 0:
-            return
-
         # Wait to fill full batch
-        msg = [r.recv() for r in reqs]
+        msg = self.check_cache(reqs)
+
+        # Timeout
+        if len(msg) == 0:
+            return
+        
         start = time.time()
         while len(msg) < self.batch_size:
             if time.time() - start >= self.timeout:
@@ -102,7 +124,7 @@ class EvaluatorPGS(Evaluator):
             if len(reqs) == 0:
                 continue
             else:
-                msg += [r.recv() for r in reqs]
+                msg += self.check_cache(reqs)
 
         # Eval
         obs = np.stack([m["obs"] for m in msg])
@@ -112,6 +134,7 @@ class EvaluatorPGS(Evaluator):
 
         # Redistribute res
         for i, ind in enumerate(inds):
+            self.cache[msg[i]["obs"].tobytes()] = (pol_hidden[i], val_hidden[i])
             self.worker_channels[ind].send({
                 "pol_hidden": pol_hidden[i],
                 "val_hidden": val_hidden[i],

@@ -252,6 +252,7 @@ class PGS:
             })
 
     def search(self, state, iters=None):
+        self.eval_channel.send({"command": "clear cache"})
         for c in self.channels:
             c.send({
                 "command": "search",

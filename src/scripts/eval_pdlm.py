@@ -36,14 +36,14 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 20.0,
+        "puct_c": 80.0,
         "uct_c": 5.0,
         "mcts_iters": 500,
         "az_iters": 500,
         "pgs_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "pgs_lr": 2e-5,
+        "pgs_lr": 0e-5,
         "pgs_trunc_len": 5,
         "num_trees": 1,
         "device": "cpu",
@@ -53,8 +53,8 @@ if __name__ == '__main__':
     freeze_support()
     policy = PendulumPolicy(config)
     policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
-    mcts_obj = MCTS(config)
-    az_obj = AlphaZero(policy, config)
+    #mcts_obj = MCTS(config)
+    #az_obj = AlphaZero(policy, config)
     pgs_obj = PGS(policy, config)
 
     def nn(env, obs, iters):
@@ -72,14 +72,14 @@ if __name__ == '__main__':
         return act
 
     def az(env, obs, iters):
-        az_obj.update_policy(policy.state_dict())
+        #az_obj.update_policy(policy.state_dict())
         qvals = az_obj.search(State(env, obs=obs), iters=iters)
 
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
     def pgs(env, obs, iters):
-        pgs_obj.update_policy(policy.state_dict())
+        #pgs_obj.update_policy(policy.state_dict())
         qvals = pgs_obj.search(State(env, obs=obs), iters=iters)
 
         act = env.available_actions()[np.argmax(qvals)]
@@ -87,16 +87,19 @@ if __name__ == '__main__':
 
     # Eval
     algos = [pgs]
-    for iters in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]:
+    ret_iters = []
+    for iters in [10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000]:
         for algo in algos:
             rets = []
             for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):
                 ret = eval(env, algo, iters, render=False)
                 rets.append(ret)
             print(f'Iters: {iters} - Algo: {algo.__name__.upper()} - Return: {np.mean(rets):.03f} - Std dev: {np.std(rets):.03f}')
+            ret_iters.append(np.mean(rets))
+    print(f'Print all returns: {np.round(ret_iters, 2)}')
 
     # Close
     env.close()
-    mcts_obj.close()
-    az_obj.close()
+    #mcts_obj.close()
+    #az_obj.close()
     pgs_obj.close()

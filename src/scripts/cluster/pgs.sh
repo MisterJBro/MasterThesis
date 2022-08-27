@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #SBATCH -A project01854
-#SBATCH -J eval_pdlm
-#SBATCH -a 1-4%4
+#SBATCH -J pgs_pdlm
 #SBATCH --mail-type=NONE
 #SBATCH -n 1
 #SBATCH -c 2
 #SBATCH --mem-per-cpu=3080
 #SBATCH -t 06:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/MCS_PUCT80_%A_%a-out.txt
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/PGS_TIME_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
 ##SBATCH--gres=gpu:v100
@@ -30,5 +29,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.eval_pdlm
-# --id=$SLURM_ARRAY_TASK_ID
+python -m src.scripts.pgs_pdlm
