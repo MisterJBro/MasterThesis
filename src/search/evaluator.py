@@ -58,10 +58,10 @@ class Evaluator(Process):
             dist, val = self.policy(obs)
         probs = dist.probs.cpu().numpy()
         val = val.cpu().numpy()
-        
+
         res = [{
             "prob": p,
-            "val": v, 
+            "val": v,
         } for p, v in zip(probs, val)]
         return res
 
@@ -93,7 +93,7 @@ class Evaluator(Process):
         # Send results, no caching yet -> lower latency
         for i, ind in enumerate(inds):
             self.worker_channels[ind].send(res[i])
-        
+
         # Cache results:
         if self.use_cache:
             for i, m in enumerate(msg):
@@ -111,7 +111,7 @@ class EvaluatorPGS(Evaluator):
             pol_h, val_h = self.policy.get_hidden(obs)
         res = [{
             "pol_h": p,
-            "val_h": v, 
+            "val_h": v,
         } for p, v in zip(pol_h, val_h)]
         return res
 

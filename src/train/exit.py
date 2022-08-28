@@ -22,10 +22,10 @@ class AZExitTrainer(Trainer):
         self.az = AlphaZero(self.policy, config)
 
     def get_action(self, obs, envs=None, use_best=False):
-        obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         if envs is None:
             envs = self.envs.get_all_env()
         states = [State(env, obs=obs[i]) for i, env in enumerate(envs)]
+        obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
 
         with torch.no_grad():
             dist = self.policy.get_dist(obs)
