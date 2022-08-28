@@ -125,6 +125,7 @@ class AZTree(Tree):
         msg = self.eval_channel.recv()
         return msg["prob"], msg["val"]
 
+
 class TreeWorker(Process, Tree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
     def __init__(self, iters, config, channel):

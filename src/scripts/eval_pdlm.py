@@ -40,10 +40,10 @@ if __name__ == '__main__':
         "uct_c": 5.0,
         "mcts_iters": 500,
         "az_iters": 500,
-        "pgs_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
         "pgs_lr": 0e-5,
+        "pgs_iters": 500,
         "pgs_trunc_len": 5,
         "num_trees": 1,
         "device": "cpu",
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     policy = PendulumPolicy(config)
     policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
     #mcts_obj = MCTS(config)
-    #az_obj = AlphaZero(policy, config)
+    az_obj = AlphaZero(policy, config)
     pgs_obj = PGS(policy, config)
 
     def nn(env, obs, iters):
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [pgs]
+    algos = [az]
     ret_iters = []
     for iters in [10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000]:
         for algo in algos:
