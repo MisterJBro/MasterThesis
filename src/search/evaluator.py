@@ -33,6 +33,7 @@ class Evaluator(Process):
                 cached = self.cache.get(key, None)
                 if cached is not None:
                     self.worker_channels[m["ind"]].send(cached)
+                else:
                     msg.append(m)
             else:
                 msg.append(m)

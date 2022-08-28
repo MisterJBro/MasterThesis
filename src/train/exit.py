@@ -69,6 +69,6 @@ class AZExitTrainer(Trainer):
                 nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
                 self.policy.opt_policy.step()
                 self.policy.opt_value.step()
-    
+
         # Update AlphaZero policy
         self.az.update_policy(self.policy.state_dict())
