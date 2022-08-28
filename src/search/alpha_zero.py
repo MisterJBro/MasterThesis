@@ -78,5 +78,5 @@ class AlphaZero:
     def close(self):
         for c in self.channels + [self.eval_channel]:
             c.send({"command": "close"})
-        for w in self.workers:
+        for w in self.workers + [self.eval_worker]:
             w.join()

@@ -171,9 +171,9 @@ class PGSTree(Tree):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
-        pol_hidden = msg["pol_hidden"]
-        val_hidden = msg["val_hidden"]
-        return pol_hidden, val_hidden
+        pol_h = msg["pol_h"]
+        val_h = msg["val_h"]
+        return pol_h, val_h
 
 class PGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
@@ -287,5 +287,5 @@ class PGS:
     def close(self):
         for c in self.channels + [self.eval_channel]:
             c.send({"command": "close"})
-        for w in self.workers:
+        for w in self.workers + [self.eval_worker]:
             w.join()

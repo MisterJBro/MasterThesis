@@ -99,6 +99,14 @@ class AZTree(Tree):
         return self.get_normalized_visit_counts()
 
     def simulate(self, node):
+        # Save value for terminals
+        if node.state.is_terminal():
+            if not hasattr(node, 'val'):
+                probs, val = self.eval_fn(node.state.obs)
+                node.priors = probs
+                node.val = val
+            return node.val
+
         probs, val = self.eval_fn(node.state.obs)
         node.priors = probs
         return val
@@ -115,8 +123,7 @@ class AZTree(Tree):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
-        return msg["probs"], msg["val"]
-
+        return msg["prob"], msg["val"]
 
 class TreeWorker(Process, Tree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""

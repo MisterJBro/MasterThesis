@@ -5,15 +5,18 @@
 #SBATCH --mail-type=NONE
 #SBATCH -n 1
 #SBATCH -c 2
-#SBATCH --mem-per-cpu=3080
-#SBATCH -t 06:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/MCS_PUCT80_%A_%a-out.txt
+#SBATCH --mem-per-cpu=3800
+#SBATCH -t 02:00:00
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/MCS_PUCT0_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
 ##SBATCH--gres=gpu:v100
 
 # Setup modules
 module purge
+
+ulimit -n 16384
+ulimit -n
 
 #module load gcc cuda
 #nvidia-smi

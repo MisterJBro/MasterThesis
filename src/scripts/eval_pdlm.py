@@ -36,7 +36,7 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 80.0,
+        "puct_c": 0.0,
         "uct_c": 5.0,
         "mcts_iters": 500,
         "az_iters": 500,
@@ -96,7 +96,7 @@ if __name__ == '__main__':
                 rets.append(ret)
             print(f'Iters: {iters} - Algo: {algo.__name__.upper()} - Return: {np.mean(rets):.03f} - Std dev: {np.std(rets):.03f}')
             ret_iters.append(np.mean(rets))
-    print(f'Print all returns: {np.round(ret_iters, 2)}')
+    print(f'Print all returns: {np.round(ret_iters, 2).tolist()}')
 
     # Close
     env.close()
