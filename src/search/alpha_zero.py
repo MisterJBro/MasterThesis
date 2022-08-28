@@ -44,6 +44,7 @@ class AlphaZero:
         })
 
     def search(self, state, iters=None):
+        self.eval_channel.send({"command": "clear cache"})
         for c in self.channels:
             c.send({
                 "command": "search",
@@ -56,6 +57,7 @@ class AlphaZero:
         return qvals
 
     def distributed_search(self, states):
+        self.eval_channel.send({"command": "clear cache"})
         i = 0
         dists = []
         len_states = len(states)

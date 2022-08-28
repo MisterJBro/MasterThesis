@@ -175,6 +175,7 @@ class PGSTree(Tree):
         val_h = msg["val_h"]
         return pol_h, val_h
 
+
 class PGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
     def __init__(self, iters, eval_channel,  pol_head, val_head, idx, config, channel):
@@ -265,6 +266,7 @@ class PGS:
         return qvals
 
     def distributed_search(self, states):
+        self.eval_channel.send({"command": "clear cache"})
         i = 0
         dists = []
         len_states = len(states)
