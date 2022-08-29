@@ -58,6 +58,9 @@ DEFAULT_CONFIG = {
     "pgs_eval_batch": 3,
     "pgs_eval_timeout": 0.001,
 
+    # === Others ===
+    "log_name": "log.txt",
+
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate

@@ -4,6 +4,7 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
+import sys
 import gym
 import time
 import random
@@ -40,7 +41,7 @@ class Trainer(ABC):
         self.envs = Envs(config)
         self.policy = None
         self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
-        self.log = Logger()
+        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
 
         print(tabulate([
             ['Environment', config["env"]],
@@ -59,6 +60,7 @@ class Trainer(ABC):
 
             self.update(sample_batch)
             print(self.log)
+            self.log.to_file()
             self.writer.add_scalar('Average return', self.log["avg ret"], iter)
             self.checkpoint()
 
@@ -112,7 +114,7 @@ class Trainer(ABC):
             if render:
                 deepcopy(env).render()
                 time.sleep(0.1)
-            act, _ = self.get_action(obs, envs=[deepcopy(env)], use_best=True)
+            act, _ = self.get_action(obs[np.newaxis], envs=[deepcopy(env)], use_best=True)
             obs, rew, done, _ = env.step(act)
             rews.append(rew)
 

@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import time
 
@@ -11,7 +10,7 @@ class Evaluator(Process):
     """Evaluation Service for Nodes."""
 
     def __init__(self, policy, worker_channels, master_channel, device="cpu", batch_size=2, timeout=0.001, use_cache=True):
-        super().__init__()
+        Process.__init__(self)
         self.policy = policy
         self.worker_channels = worker_channels
         self.master_channel = master_channel

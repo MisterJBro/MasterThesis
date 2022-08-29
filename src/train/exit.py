@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
@@ -34,7 +35,7 @@ class AZExitTrainer(Trainer):
         q = self.az.distributed_search(states)
         dist = F.softmax(logits + self.dist_q_scale*q, dim=-1)
         if use_best:
-            act = torch.max(dist).numpy()
+            act = torch.argmax(dist).numpy()
         else:
             act = Categorical(probs=dist).sample().numpy()
 
@@ -72,3 +73,7 @@ class AZExitTrainer(Trainer):
 
         # Update AlphaZero policy
         self.az.update_policy(self.policy.state_dict())
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        super().__exit__(exc_type, exc_value, traceback)
+        self.az.close()
