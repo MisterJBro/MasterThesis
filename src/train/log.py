@@ -19,7 +19,7 @@ class Logger(dict):
     def __str__(self):
         current_time = time.time() - self.timer
         current_time = str(timedelta(seconds=int(current_time)))
-        return '  '.join([f'{str(k).capitalize()}: ' + (f'{v}' if isinstance(v, int) else f'{v:.02f}') for k, v in self.items()]) + f'  Time: {current_time}'
+        return '  '.join([f'{str(k).capitalize()}: ' + (f'{v:01d}' if isinstance(v, int) else f'{v:.02f}') for k, v in self.items()]) + f'  Time: {current_time}'
 
     def update(self, dict):
         for k, v in dict.items():

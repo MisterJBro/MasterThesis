@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from tkinter import N
 import numpy as np
 from numba import jit
 
@@ -104,3 +105,28 @@ class DirichletNode(PUCTNode):
         uct_values = np.array([child.puct(child.num_visits, self.num_visits, child.total_rews, c, prior) for (child, prior) in zip(self.children, perturbed_priors)])
         return self.children[self.select_child_jit(uct_values)]
 
+
+class PGSNode(PUCTNode):
+    """Changes made for PGS."""
+
+    def __init__(self, state, action=None, parent=None, pol_h=None, val_h=None):
+        super().__init__(state, action, parent)
+
+        self.pol_h = pol_h
+        self.val_h = val_h
+
+    def select_child(self, c):
+        uct_values = np.array([child.puct(child.num_visits, self.num_visits, child.total_rews, c, prior) for (child, prior) in zip(self.children, self.priors)])
+        return self.children[self.select_child_jit(uct_values, self.priors)]
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def select_child_jit(uct_values, priors):
+        max_uct_indices = np.flatnonzero(uct_values == np.max(uct_values))
+
+        if len(max_uct_indices) == 1:
+            return max_uct_indices[0]
+        max_prior_indices = np.flatnonzero(priors[max_uct_indices] == np.max(priors[max_uct_indices]))
+        if len(max_prior_indices) == 1:
+            return max_prior_indices[0]
+        return np.random.choice(max_prior_indices)

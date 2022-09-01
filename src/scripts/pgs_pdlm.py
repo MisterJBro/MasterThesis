@@ -16,10 +16,10 @@ if __name__ == '__main__':
         "env": env,
         "num_trees": 1,
         "device": "cpu",
-        "puct_c": 5.0,
-        "pgs_lr": 1e-4,
-        "pgs_trunc_len": 5,
-        "pgs_iters": 200,
+        "puct_c": 80.0,
+        "pgs_lr": 1e-3,
+        "pgs_trunc_len": 100,
+        "pgs_iters": 500,
         "pgs_eval_batch": 1,
         "tree_output_qvals": False,
     })
@@ -39,6 +39,7 @@ if __name__ == '__main__':
         #pgs.update_policy(policy.state_dict())
         qvals = pgs.search(State(env, obs=obs))
 
+        quit()
         act = env.available_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
         ret += reward

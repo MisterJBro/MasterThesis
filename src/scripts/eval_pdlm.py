@@ -36,18 +36,18 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 0.0,
+        "puct_c": 20.0,
         "uct_c": 5.0,
         "mcts_iters": 500,
         "az_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "pgs_lr": 0e-5,
-        "pgs_iters": 500,
-        "pgs_trunc_len": 5,
+        "pgs_lr": 3e-4,
+        "pgs_iters": 1,
+        "pgs_trunc_len": 20,
         "num_trees": 1,
         "device": "cpu",
-        "tree_output_qvals": True,
+        "tree_output_qvals": False,
     })
 
     freeze_support()
@@ -86,9 +86,9 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [az]
+    algos = [pgs]
     ret_iters = []
-    for iters in [10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000]:
+    for iters in [10, 50, 100, 500, 1000, 5000, 10_000, 50_000, 100_000, 500_000, 1_000_000]:
         for algo in algos:
             rets = []
             for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):

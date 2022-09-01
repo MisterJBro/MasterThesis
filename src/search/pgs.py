@@ -1,4 +1,6 @@
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,7 +10,7 @@ from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 
 from multiprocessing import Process, Pipe
-from src.search.node import PUCTNode
+from src.search.node import PUCTNode, PGSNode
 from src.search.tree import Tree
 from src.search.evaluator import EvaluatorPGS
 from src.train.processer import discount_cumsum, gen_adv_estimation
@@ -22,37 +24,59 @@ class PGSTree(Tree):
         self.eval_channel = eval_channel
         self.idx = idx
         self.num_players = config["num_players"]
-        self.NodeClass = PUCTNode
+        self.NodeClass = PGSNode
         self.expl_coeff = config["puct_c"]
         self.device = config["device"]
         self.trunc_len = config["pgs_trunc_len"]
 
-        self.base_policy = deepcopy(pol_head)
-        self.sim_policy = pol_head
-        self.value = val_head
-        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=config["pgs_lr"])
-        self.optim_val = optim.Adam(self.value.parameters(), lr=0e-5)
+        self.reset_policy(base_policy=pol_head, base_value=val_head)
         self.set_root(state)
 
-    def search(self, iters=1_000):
-        iter = 0
+    def reset_policy(self, base_policy=None, base_value=None):
+        if base_policy is not None:
+            self.base_policy = base_policy
+        if base_value is not None:
+            self.base_value = base_value
+        self.sim_policy = deepcopy(self.base_policy)
+        self.value = deepcopy(self.base_value)
+        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
+        self.optim_val = optim.Adam(self.value.parameters(), lr=self.config["pgs_lr"])
 
-        while iter < iters:
+    def search(self, iters=1_000):
+        rets = []
+        while self.iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
             rew, pol_hs, val_hs, act = self.simulate(new_leaf)
             ret = self.update_policy(rew, pol_hs, val_hs, act)
             self.backpropagate(new_leaf, ret)
-            iter += 1
+            rets.append(ret)
+            self.iter += 1
 
+        def plot():
+            import os
+            os.environ['KMP_DUPLICATE_LIB_OK']='True'
+            print([float('{:.2f}'.format(x)) for x in rets])
+            sns.set_theme()
+            x = np.arange(len(rets))
+            poly = np.polyfit(x, rets, 1)
+            poly_y = np.poly1d(poly)(x)
+            plt.plot(x, rets, alpha=0.5)
+            plt.plot(x, poly_y)
+            plt.show()
+        #plot()
         if self.config["tree_output_qvals"]:
-            return self.logits + 1*self.root.get_action_values()
+            #print(self.logits, self.root.get_action_values())
+            return self.logits + self.root.get_action_values()
             #return self.root.get_action_values()
         return self.get_normalized_visit_counts()
 
     def expand(self, node):
         if node.state is None:
             node.create_state()
+            pol_h, val_h = self.eval_fn(node.state.obs)
+            node.pol_h = pol_h
+            node.val_h = val_h
             return node
         if node.state.is_terminal():
             return node
@@ -63,9 +87,17 @@ class PGSTree(Tree):
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
 
-            # Pick child node
-            child = np.random.choice(node.children)
+            # Create child with highest prior
+            max_prior_indices = np.flatnonzero(node.priors == np.max(node.priors))
+            if len(max_prior_indices) > 1:
+                child = node.children[np.random.choice(max_prior_indices)]
+            else:
+                child = node.children[max_prior_indices[0]]
+
             child.create_state()
+            pol_h, val_h = self.eval_fn(child.state.obs)
+            child.pol_h = pol_h
+            child.val_h = val_h
             return child
         else:
             return node
@@ -74,12 +106,13 @@ class PGSTree(Tree):
         env = deepcopy(node.state.env)
         done = node.state.done
         obs = node.state.obs
+        pol_h = node.pol_h
+        val_h = node.val_h
 
         player, iter = 0, 0
         acts, rews, pol_hs, val_hs = [], [], [], []
         while not done:
             player = (player + 1) % self.num_players
-            pol_h, val_h = self.eval_fn(obs)
             pol_hs.append(pol_h)
             val_hs.append(val_h)
 
@@ -102,11 +135,14 @@ class PGSTree(Tree):
             if iter >= self.trunc_len:
                 break
 
+            # Get next hidden states
+            pol_h, val_h = self.eval_fn(obs)
+
         # Bootstrap last value
         if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
-                rews.append(self.value(val_h).item())
+                rews.append(self.base_value(val_h).item())
         else:
             rews.append(0)
 
@@ -119,36 +155,37 @@ class PGSTree(Tree):
         if len(act) == 0:
             return 0
 
-        ret = discount_cumsum(rew, self.config["gamma"])
+        ret = discount_cumsum(rew, self.config["gamma"])[:-1]
         total_ret = ret[0]
-        ret = torch.as_tensor(ret[:-1]).to(self.device)
+        ret = torch.as_tensor(ret).to(self.device)
         pol_hs = pol_hs.to(self.device)
         val_hs = val_hs.to(self.device)
         with torch.no_grad():
             val = self.value(val_hs).numpy().reshape(-1)
-        val = np.concatenate((val, [rew[-1]]))
-        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.99)
+        adv = gen_adv_estimation(rew[:-1], np.concatenate((val, [rew[-1]])), self.config["gamma"], 0.97)
         adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_hs))
-        #adv = ret[:-1] - val
+        #adv = ret - val
+        #print(adv-adv2)
+        #quit()
 
         # REINFORCE
+        self.optim_pol.zero_grad()
         dist = Categorical(logits=self.sim_policy(pol_hs))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
         loss_dist = kl_divergence(base_dist, dist).mean()
-        #loss_entropy = -dist.entropy().mean()
-        loss = loss_policy + 0.1 * loss_dist# + 0.01 * loss_entropy
+        loss_entropy = -dist.entropy().mean()
+        loss = loss_policy #+ 0.1 * loss_dist #+ 0.1 * loss_entropy
 
-        self.optim_pol.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.sim_policy.parameters(), self.config["grad_clip"])
         self.optim_pol.step()
 
         # Value function
-        loss_value = F.huber_loss(self.value(val_hs).reshape(-1), ret)
         self.optim_val.zero_grad()
+        loss_value = F.huber_loss(self.value(val_hs).reshape(-1), ret)
         loss_value.backward()
         nn.utils.clip_grad_norm_(self.value.parameters(), self.config["grad_clip"])
         self.optim_val.step()
@@ -156,7 +193,9 @@ class PGSTree(Tree):
         return total_ret
 
     def set_root(self, state):
-        self.root = PUCTNode(state)
+        self.reset_policy()
+        self.iter = 0
+        self.root = PGSNode(state)
         if state is not None:
             pol_h, _ = self.eval_fn(self.root.state.obs)
             with torch.no_grad():
@@ -179,13 +218,15 @@ class PGSTree(Tree):
 class PGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
     def __init__(self, iters, eval_channel,  pol_head, val_head, idx, config, channel):
-        PGSTree.__init__(self, None, eval_channel, pol_head, val_head, config, idx=idx)
         Process.__init__(self)
+        PGSTree.__init__(self, None, eval_channel, pol_head, val_head, config, idx=idx)
 
         self.iters = iters
         self.channel = channel
 
     def run(self):
+        self.reset_policy()
+
         msg = self.channel.recv()
         while msg["command"] != "close":
             if msg["command"] == "search":
@@ -197,10 +238,7 @@ class PGSTreeWorker(Process, PGSTree):
                 qvals = self.search(iters)
                 self.channel.send(qvals)
             elif msg["command"] == "update":
-                self.base_policy = deepcopy(msg["pol_head"])
-                self.sim_policy = msg["pol_head"]
-                self.value = msg["val_head"]
-                self.optim = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
+                self.reset_policy(base_policy=msg["pol_head"], base_value=msg["val_head"])
 
             msg = self.channel.recv()
 

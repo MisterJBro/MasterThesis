@@ -99,16 +99,13 @@ class AZTree(Tree):
         return self.get_normalized_visit_counts()
 
     def simulate(self, node):
-        # Save value for terminals
+        # Terminals have zero value
         if node.state.is_terminal():
-            if not hasattr(node, 'val'):
-                probs, val = self.eval_fn(node.state.obs)
-                node.priors = probs
-                node.val = val
-            return node.val
+            return np.array(0)
 
         probs, val = self.eval_fn(node.state.obs)
         node.priors = probs
+        return node.state.rollout(self.num_players, self.config["gamma"])
         return val
 
     def set_root(self, state):
