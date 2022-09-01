@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from datetime import timedelta
 
 class Logger(dict):
     """Basic logger for metrics"""
@@ -17,7 +18,8 @@ class Logger(dict):
 
     def __str__(self):
         current_time = time.time() - self.timer
-        return 'Time: {current_time:.02f}  ' + '  '.join([f'{str(k).capitalize()}:' + f'{v:.02f}' for k, v in self.items()])
+        current_time = str(timedelta(seconds=int(current_time)))
+        return '  '.join([f'{str(k).capitalize()}: ' + (f'{v}' if isinstance(v, int) else f'{v:.02f}') for k, v in self.items()]) + f'  Time: {current_time}'
 
     def update(self, dict):
         for k, v in dict.items():

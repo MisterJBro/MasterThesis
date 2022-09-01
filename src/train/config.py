@@ -60,6 +60,7 @@ DEFAULT_CONFIG = {
 
     # === Others ===
     "log_name": "log.txt",
+    "log_to_file": False,
 
 }
 

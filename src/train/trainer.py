@@ -60,7 +60,8 @@ class Trainer(ABC):
 
             self.update(sample_batch)
             print(self.log)
-            self.log.to_file()
+            if self.config["log_to_file"]:
+                self.log.to_file()
             self.writer.add_scalar('Average return', self.log["avg ret"], iter)
             self.checkpoint()
 
