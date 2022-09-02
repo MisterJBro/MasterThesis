@@ -42,20 +42,23 @@ if __name__ == '__main__':
         "az_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "pgs_lr": 3e-4,
+        "pgs_lr": 2e-4,
         "pgs_iters": 1,
-        "pgs_trunc_len": 20,
+        "pgs_trunc_len": 10,
         "num_trees": 1,
         "device": "cpu",
-        "tree_output_qvals": False,
+        "tree_output_qvals": True,
     })
 
     freeze_support()
     policy = PendulumPolicy(config)
-    policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
+    #policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
     #mcts_obj = MCTS(config)
     az_obj = AlphaZero(policy, config)
     pgs_obj = PGS(policy, config)
+    mcs_config = deepcopy(config)
+    mcs_config.update({"pgs_lr": 0})
+    mcs_obj = PGS(policy, mcs_config)
 
     def nn(env, obs, iters):
         obs = torch.as_tensor(obs, dtype=torch.float32)
@@ -85,10 +88,17 @@ if __name__ == '__main__':
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
+    def mcs(env, obs, iters):
+        #mcs_obj.update_policy(policy.state_dict())
+        qvals = mcs_obj.search(State(env, obs=obs), iters=iters)
+
+        act = env.available_actions()[np.argmax(qvals)]
+        return act
+
     # Eval
-    algos = [pgs]
+    algos = [pgs, mcs]
     ret_iters = []
-    for iters in [10, 50, 100, 500, 1000, 5000, 10_000, 50_000, 100_000, 500_000, 1_000_000]:
+    for iters in [40, 60, 100, 500, 1000, 5000, 10_000, 50_000, 100_000, 500_000, 1_000_000]:
         for algo in algos:
             rets = []
             for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):

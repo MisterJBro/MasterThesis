@@ -64,11 +64,18 @@ class PGSTree(Tree):
             plt.plot(x, rets, alpha=0.5)
             plt.plot(x, poly_y)
             plt.show()
-        #plot()
+        plot()
         if self.config["tree_output_qvals"]:
-            #print(self.logits, self.root.get_action_values())
-            return self.logits + self.root.get_action_values()
-            #return self.root.get_action_values()
+            qvals = self.root.get_action_values()
+            val = self.root.val
+            max_visits = np.max([child.num_visits for child in self.root.children])
+            adv = qvals - val
+            adv = (adv - np.min(adv)) / (np.max(adv) - np.min(adv))
+            adv = 2*adv - 1
+            return adv
+            qvals = (100 + max_visits) * 0.1 * adv
+            #print(self.logits, qvals)
+            return self.logits + qvals
         return self.get_normalized_visit_counts()
 
     def expand(self, node):
@@ -83,6 +90,7 @@ class PGSTree(Tree):
         if node == self.root:
             # Create new child nodes, lazy init
             actions = node.state.get_possible_actions()
+            self.num_acts = len(actions)
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
@@ -138,16 +146,17 @@ class PGSTree(Tree):
             # Get next hidden states
             pol_h, val_h = self.eval_fn(obs)
 
+        if len(acts) == 0:
+            return rews, pol_hs, val_hs, acts
+
         # Bootstrap last value
         if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
-                rews.append(self.base_value(val_h).item())
+                last_val = self.base_value(val_h).item()
         else:
-            rews.append(0)
-
-        if len(acts) == 0:
-            return rews, pol_hs, val_hs, acts
+             last_val = 0
+        rews[-1] += self.config["gamma"] * last_val
 
         return np.array(rews), torch.stack(pol_hs, 0), torch.stack(val_hs, 0), torch.tensor(acts)
 
@@ -155,14 +164,15 @@ class PGSTree(Tree):
         if len(act) == 0:
             return 0
 
-        ret = discount_cumsum(rew, self.config["gamma"])[:-1]
+        ret = discount_cumsum(rew, self.config["gamma"])
         total_ret = ret[0]
         ret = torch.as_tensor(ret).to(self.device)
         pol_hs = pol_hs.to(self.device)
         val_hs = val_hs.to(self.device)
         with torch.no_grad():
             val = self.value(val_hs).numpy().reshape(-1)
-        adv = gen_adv_estimation(rew[:-1], np.concatenate((val, [rew[-1]])), self.config["gamma"], 0.97)
+            val = np.concatenate((val, [0]))
+        adv = gen_adv_estimation(rew, val, self.config["gamma"], 1.0)
         adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_hs))
@@ -171,24 +181,28 @@ class PGSTree(Tree):
         #quit()
 
         # REINFORCE
-        self.optim_pol.zero_grad()
         dist = Categorical(logits=self.sim_policy(pol_hs))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
         loss_dist = kl_divergence(base_dist, dist).mean()
         loss_entropy = -dist.entropy().mean()
-        loss = loss_policy #+ 0.1 * loss_dist #+ 0.1 * loss_entropy
+        loss = loss_policy + 0.01 * loss_entropy
 
         loss.backward()
         nn.utils.clip_grad_norm_(self.sim_policy.parameters(), self.config["grad_clip"])
-        self.optim_pol.step()
 
         # Value function
-        self.optim_val.zero_grad()
+        #for _ in range(1):
         loss_value = F.huber_loss(self.value(val_hs).reshape(-1), ret)
         loss_value.backward()
         nn.utils.clip_grad_norm_(self.value.parameters(), self.config["grad_clip"])
-        self.optim_val.step()
+
+        # Update
+        if self.iter > self.num_acts:
+            self.optim_pol.step()
+            self.optim_pol.zero_grad()
+            self.optim_val.step()
+            self.optim_val.zero_grad()
 
         return total_ret
 
@@ -197,12 +211,14 @@ class PGSTree(Tree):
         self.iter = 0
         self.root = PGSNode(state)
         if state is not None:
-            pol_h, _ = self.eval_fn(self.root.state.obs)
+            pol_h, val_h = self.eval_fn(self.root.state.obs)
             with torch.no_grad():
-                logits = self.sim_policy(pol_h)
+                logits = self.base_policy(pol_h)
                 probs = F.softmax(logits, dim=-1)
+                val = self.base_value(val_h)
             self.logits = logits.numpy().reshape(-1)
             self.root.priors = probs.cpu().numpy()
+            self.root.val = val.cpu().item()
 
     def eval_fn(self, obs):
         self.eval_channel.send({

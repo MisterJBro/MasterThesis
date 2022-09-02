@@ -128,5 +128,5 @@ class PGSNode(PUCTNode):
             return max_uct_indices[0]
         max_prior_indices = np.flatnonzero(priors[max_uct_indices] == np.max(priors[max_uct_indices]))
         if len(max_prior_indices) == 1:
-            return max_prior_indices[0]
-        return np.random.choice(max_prior_indices)
+            return max_uct_indices[max_prior_indices[0]]
+        return max_uct_indices[np.random.choice(max_prior_indices)]
