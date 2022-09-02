@@ -1,3 +1,4 @@
+import argparse
 from copy import deepcopy
 import time
 import torch
@@ -31,8 +32,15 @@ def eval(env, get_action, iters, render=False):
         render_env.close()
     return ret
 
+parser = argparse.ArgumentParser(description='File to evaluate methods')
+
+# Parser arguments
+parser.add_argument('--job_id', type=int, default=0)
 
 if __name__ == '__main__':
+    args = parser.parse_args()
+    job_id = args.job_id
+
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
@@ -98,7 +106,9 @@ if __name__ == '__main__':
     # Eval
     algos = [pgs, mcs]
     ret_iters = []
-    for iters in [40, 60, 100, 500, 1000, 5000, 10_000, 50_000, 100_000, 500_000, 1_000_000]:
+    all_iters = [10, 20, 40, 60, 80, 100]
+    curr_iters = all_iters[job_id]
+    for iters in [all_iters]:
         for algo in algos:
             rets = []
             for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):
