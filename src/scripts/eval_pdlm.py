@@ -50,9 +50,9 @@ if __name__ == '__main__':
         "az_iters": 500,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "pgs_lr": 2e-4,
+        "pgs_lr": 8e-3,
         "pgs_iters": 1,
-        "pgs_trunc_len": 10,
+        "pgs_trunc_len": 30,
         "num_trees": 1,
         "device": "cpu",
         "tree_output_qvals": True,
@@ -61,12 +61,12 @@ if __name__ == '__main__':
     freeze_support()
     policy = PendulumPolicy(config)
     #policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
-    #mcts_obj = MCTS(config)
+    mcts_obj = MCTS(config)
     az_obj = AlphaZero(policy, config)
     pgs_obj = PGS(policy, config)
-    mcs_config = deepcopy(config)
-    mcs_config.update({"pgs_lr": 0})
-    mcs_obj = PGS(policy, mcs_config)
+    #mcs_config = deepcopy(config)
+    #mcs_config.update({"pgs_lr": 0})
+    #mcs_obj = PGS(policy, mcs_config)
 
     def nn(env, obs, iters):
         obs = torch.as_tensor(obs, dtype=torch.float32)
@@ -104,11 +104,11 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [pgs, mcs]
+    algos = [pgs]
     ret_iters = []
-    all_iters = [10, 20, 40, 60, 80, 100]
+    all_iters = [400]
     curr_iters = all_iters[job_id]
-    for iters in [all_iters]:
+    for iters in [curr_iters]:
         for algo in algos:
             rets = []
             for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):
@@ -120,6 +120,6 @@ if __name__ == '__main__':
 
     # Close
     env.close()
-    #mcts_obj.close()
-    #az_obj.close()
+    mcts_obj.close()
+    az_obj.close()
     pgs_obj.close()

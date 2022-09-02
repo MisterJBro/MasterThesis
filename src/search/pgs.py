@@ -10,7 +10,7 @@ from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 
 from multiprocessing import Process, Pipe
-from src.search.node import PUCTNode, PGSNode
+from src.search.node import PGSNode
 from src.search.tree import Tree
 from src.search.evaluator import EvaluatorPGS
 from src.train.processer import discount_cumsum, gen_adv_estimation
@@ -38,17 +38,17 @@ class PGSTree(Tree):
         if base_value is not None:
             self.base_value = base_value
         self.sim_policy = deepcopy(self.base_policy)
-        self.value = deepcopy(self.base_value)
+        self.sim_value = deepcopy(self.base_value)
         self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
-        self.optim_val = optim.Adam(self.value.parameters(), lr=self.config["pgs_lr"])
+        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=self.config["pgs_lr"])
 
     def search(self, iters=1_000):
         rets = []
         while self.iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
-            rew, pol_hs, val_hs, act = self.simulate(new_leaf)
-            ret = self.update_policy(rew, pol_hs, val_hs, act)
+            traj = self.simulate(new_leaf)
+            ret = self.update_policy(traj)
             self.backpropagate(new_leaf, ret)
             rets.append(ret)
             self.iter += 1
@@ -97,10 +97,10 @@ class PGSTree(Tree):
 
             # Create child with highest prior
             max_prior_indices = np.flatnonzero(node.priors == np.max(node.priors))
-            if len(max_prior_indices) > 1:
-                child = node.children[np.random.choice(max_prior_indices)]
-            else:
+            if len(max_prior_indices) == 1:
                 child = node.children[max_prior_indices[0]]
+            else:
+                child = node.children[np.random.choice(max_prior_indices)]
 
             child.create_state()
             pol_h, val_h = self.eval_fn(child.state.obs)
@@ -129,7 +129,7 @@ class PGSTree(Tree):
             acts.append(act)
             obs, rew, done, _ = env.step(act)
 
-            # Add return
+            # Add reward
             if self.num_players == 2:
                 if player == 0:
                     rews.append(rew)
@@ -147,62 +147,66 @@ class PGSTree(Tree):
             pol_h, val_h = self.eval_fn(obs)
 
         if len(acts) == 0:
-            return rews, pol_hs, val_hs, acts
+            return {}
 
         # Bootstrap last value
         if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
-                last_val = self.base_value(val_h).item()
+                last_val = self.sim_value(val_h).item()
         else:
              last_val = 0
-        rews[-1] += self.config["gamma"] * last_val
+        rews.append(last_val)
 
-        return np.array(rews), torch.stack(pol_hs, 0), torch.stack(val_hs, 0), torch.tensor(acts)
+        return {
+            "rew": np.array(rews),
+            "act": torch.tensor(acts),
+            "pol_h": torch.concat(pol_hs, 0),
+            "val_h":  torch.concat(val_hs, 0),
+        }
 
-    def update_policy(self, rew, pol_hs, val_hs, act):
-        if len(act) == 0:
+    def update_policy(self, traj):
+        if len(traj) == 0:
             return 0
 
-        ret = discount_cumsum(rew, self.config["gamma"])
+        # Get traj values
+        rew = traj["rew"]
+        act = traj["act"]
+        pol_h = traj["pol_h"].to(self.device)
+        val_h = traj["val_h"].to(self.device)
+
+        # Get ret, vals and adv
+        ret = discount_cumsum(rew, self.config["gamma"])[:-1]
         total_ret = ret[0]
         ret = torch.as_tensor(ret).to(self.device)
-        pol_hs = pol_hs.to(self.device)
-        val_hs = val_hs.to(self.device)
+
         with torch.no_grad():
-            val = self.value(val_hs).numpy().reshape(-1)
-            val = np.concatenate((val, [0]))
-        adv = gen_adv_estimation(rew, val, self.config["gamma"], 1.0)
-        adv = torch.as_tensor(adv).to(self.device)
+            val = self.sim_value(val_h).reshape(-1)
+            #val = np.concatenate((val.numpy(), [rew[-1]]))
+        #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.97)
+        #adv = torch.as_tensor(adv).to(self.device)
+
+        adv = ret - val
         with torch.no_grad():
-            base_dist = Categorical(logits=self.base_policy(pol_hs))
-        #adv = ret - val
-        #print(adv-adv2)
-        #quit()
+            base_dist = Categorical(logits=self.base_policy(pol_h))
 
         # REINFORCE
-        dist = Categorical(logits=self.sim_policy(pol_hs))
+        self.optim_pol.zero_grad()
+        dist = Categorical(logits=self.sim_policy(pol_h))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
-        loss_dist = kl_divergence(base_dist, dist).mean()
-        loss_entropy = -dist.entropy().mean()
-        loss = loss_policy + 0.01 * loss_entropy
+        #loss_dist = kl_divergence(base_dist, dist).mean()
+        #loss_entropy = -dist.entropy().mean()
+        loss = loss_policy# + 0.01 * loss_entropy
 
         loss.backward()
-        nn.utils.clip_grad_norm_(self.sim_policy.parameters(), self.config["grad_clip"])
+        self.optim_pol.step()
 
         # Value function
-        #for _ in range(1):
-        loss_value = F.huber_loss(self.value(val_hs).reshape(-1), ret)
+        self.optim_val.step()
+        loss_value = F.huber_loss(self.sim_value(val_h).reshape(-1), ret)
         loss_value.backward()
-        nn.utils.clip_grad_norm_(self.value.parameters(), self.config["grad_clip"])
-
-        # Update
-        if self.iter > self.num_acts:
-            self.optim_pol.step()
-            self.optim_pol.zero_grad()
-            self.optim_val.step()
-            self.optim_val.zero_grad()
+        self.optim_val.zero_grad()
 
         return total_ret
 
@@ -217,8 +221,11 @@ class PGSTree(Tree):
                 probs = F.softmax(logits, dim=-1)
                 val = self.base_value(val_h)
             self.logits = logits.numpy().reshape(-1)
-            self.root.priors = probs.cpu().numpy()
+
+            self.root.priors = probs.cpu().numpy().reshape(-1)
             self.root.val = val.cpu().item()
+            self.root.pol_h = pol_h
+            self.root.val_h = val_h
 
     def eval_fn(self, obs):
         self.eval_channel.send({

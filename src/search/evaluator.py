@@ -110,8 +110,8 @@ class EvaluatorPGS(Evaluator):
         with torch.no_grad():
             pol_h, val_h = self.policy.get_hidden(obs)
         res = [{
-            "pol_h": p,
-            "val_h": v,
+            "pol_h": p.unsqueeze(0),
+            "val_h": v.unsqueeze(0),
         } for p, v in zip(pol_h, val_h)]
         return res
 
