@@ -11,7 +11,7 @@ class Evaluator(Process):
 
     def __init__(self, policy, worker_channels, master_channel, device="cpu", batch_size=2, timeout=0.001, use_cache=True):
         Process.__init__(self)
-        self.policy = policy
+        self.network = policy
         self.worker_channels = worker_channels
         self.master_channel = master_channel
         self.batch_size = batch_size
@@ -49,13 +49,13 @@ class Evaluator(Process):
                 if msg["command"] == "close":
                     done = True
                 elif msg["command"] == "update":
-                    self.update_policy(msg["state_dict"])
+                    self.update(msg["state_dict"])
                 elif msg["command"] == "clear cache":
                     self.clear_cache()
 
     def eval(self, obs):
         with torch.no_grad():
-            dist, val = self.policy(obs)
+            dist, val = self.network(obs)
         probs = dist.probs.cpu().numpy()
         val = val.cpu().numpy()
 
@@ -64,6 +64,17 @@ class Evaluator(Process):
             "val": v,
         } for p, v in zip(probs, val)]
         return res
+
+    def process(self, msg):
+        obs = np.stack([m["obs"] for m in msg])
+        obs = torch.as_tensor(obs).to(self.device)
+        wids = [m["ind"] for m in msg]
+        reply = self.eval(obs)
+
+        return {
+            "wids": wids,
+            "reply": reply,
+        }
 
     def serve_requests(self):
         reqs = wait(self.worker_channels, timeout=0.1)
@@ -84,37 +95,70 @@ class Evaluator(Process):
             else:
                 msg += self.check_cache(reqs)
 
-        # Eval
-        obs = np.stack([m["obs"] for m in msg])
-        obs = torch.as_tensor(obs).to(self.device)
-        inds = [m["ind"] for m in msg]
-        res = self.eval(obs)
+        # Process the messages
+        result = self.process(msg)
+        wids = result["wids"]
+        reply = result["reply"]
 
         # Send results, no caching yet -> lower latency
-        for i, ind in enumerate(inds):
-            self.worker_channels[ind].send(res[i])
+        for i, wid in enumerate(wids):
+            self.worker_channels[wid].send(reply[i])
 
         # Cache results:
         if self.use_cache:
             for i, m in enumerate(msg):
-                self.cache[m["obs"].tobytes()] = res[i]
+                self.cache[m["obs"].tobytes()] = reply[i]
 
-    def update_policy(self, state_dict):
-        self.policy.load_state_dict(state_dict)
+    def update(self, state_dict):
+        self.network.load_state_dict(state_dict)
 
 
 class EvaluatorPGS(Evaluator):
-    """Special evaluation Service for Policy Gradient Search, which returns the hidden states."""
+    """Special evaluation Service for network Gradient Search, which returns the hidden states."""
 
     def eval(self, obs):
         with torch.no_grad():
-            pol_h, val_h = self.policy.get_hidden(obs)
+            pol_h, val_h = self.network.get_hidden(obs)
         res = [{
             "pol_h": p.unsqueeze(0),
             "val_h": v.unsqueeze(0),
         } for p, v in zip(pol_h, val_h)]
         return res
 
-    def update_policy(self, state_dict):
-        self.policy.load_state_dict(state_dict)
-        self.master_channel.send((self.policy.policy_head, self.policy.value_head))
+    def update(self, state_dict):
+        self.network.load_state_dict(state_dict)
+        self.master_channel.send((self.network.network_head, self.network.value_head))
+
+
+class EvaluatorVE(Evaluator):
+    """Evaluator for Value Equivalence Models. Does env step and evaluation together on learned model."""
+
+    def __init__(self, model, worker_channels, master_channel, device="cpu", batch_size=2, timeout=0.001, use_cache=True):
+        # Disable cache
+        super().__init__(model, worker_channels, master_channel, device, batch_size, timeout, False)
+
+    def process(self, msg):
+        # Convert all obs into abstract states (abs)
+        reply, obs_list, abs_list = [], [], []
+
+        for m in msg:
+            ind = m["ind"]
+            obs = m["obs"]
+            abs = m["abs"]
+
+            if m["obs"] is not None:
+                obs_list.append(obs)
+            if m["abs"] is not None:
+                abs_list.append(abs)
+
+        if len(obs_list) > 0:
+            obs = torch.as_tensor(np.stack(obs_list)).to(self.device)
+            with torch.no_grad():
+                new_abs = self.network.representation(obs)
+            reply.extend([{"abs": a} for a in new_abs])
+
+        obs = np.stack([m["obs"] for m in msg])
+        obs = torch.as_tensor(obs).to(self.device)
+        wids = [m["ind"] for m in msg]
+
+        return wids, reply

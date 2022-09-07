@@ -4,7 +4,7 @@ import numpy as np
 from multiprocessing import freeze_support
 from src.networks.policy_pend import PendulumPolicy
 from src.train.config import create_config
-from src.search.alpha_zero import AlphaZero
+from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.env.discretize_env import DiscreteActionWrapper
 from src.env.pendulum import PendulumEnv
 from src.search.state import State

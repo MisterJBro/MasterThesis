@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy
-from src.search.tree import TreeWorker
+from src.search.mcts.worker import TreeWorker
 from src.search.state import State
 from multiprocessing import Pipe, freeze_support
 

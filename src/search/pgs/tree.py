@@ -1,19 +1,15 @@
+from copy import deepcopy
+import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-import matplotlib.pyplot as plt
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from copy import deepcopy
+from src.search.mcts.tree import Tree
+from src.search.node import PGSNode
+from src.train.processer import discount_cumsum, gen_adv_estimation
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
-
-from multiprocessing import Process, Pipe
-from src.search.node import PGSNode
-from src.search.tree import Tree
-from src.search.evaluator import EvaluatorPGS
-from src.train.processer import discount_cumsum, gen_adv_estimation
 
 
 class PGSTree(Tree):
@@ -29,10 +25,19 @@ class PGSTree(Tree):
         self.device = config["device"]
         self.trunc_len = config["pgs_trunc_len"]
 
+        self.sim_policy = None
+        self.sim_value = None
+        self.optim_pol = None
+        self.optim_val = None
         self.reset_policy(base_policy=pol_head, base_value=val_head)
         self.set_root(state)
 
     def reset_policy(self, base_policy=None, base_value=None):
+        del self.sim_policy
+        del self.sim_value
+        del self.optim_pol
+        del self.optim_val
+
         if base_policy is not None:
             self.base_policy = base_policy
         if base_value is not None:
@@ -40,7 +45,7 @@ class PGSTree(Tree):
         self.sim_policy = deepcopy(self.base_policy)
         self.sim_value = deepcopy(self.base_value)
         self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
-        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=self.config["pgs_lr"])
+        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-4)
 
     def search(self, iters=1_000):
         rets = []
@@ -56,7 +61,7 @@ class PGSTree(Tree):
         def plot():
             import os
             os.environ['KMP_DUPLICATE_LIB_OK']='True'
-            print([float('{:.2f}'.format(x)) for x in rets])
+            #print([float('{:.2f}'.format(x)) for x in rets])
             sns.set_theme()
             x = np.arange(len(rets))
             poly = np.polyfit(x, rets, 1)
@@ -64,9 +69,12 @@ class PGSTree(Tree):
             plt.plot(x, rets, alpha=0.5)
             plt.plot(x, poly_y)
             plt.show()
-        plot()
+        #plot()
+
         if self.config["tree_output_qvals"]:
             qvals = self.root.get_action_values()
+            #print(np.round(qvals, 2))
+            return qvals
             val = self.root.val
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - val
@@ -153,13 +161,14 @@ class PGSTree(Tree):
         if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
-                last_val = self.sim_value(val_h).item()
+                last_val = self.base_value(val_h).item()
         else:
              last_val = 0
         rews.append(last_val)
+        rews = np.array(rews)
 
         return {
-            "rew": np.array(rews),
+            "rew": rews,
             "act": torch.tensor(acts),
             "pol_h": torch.concat(pol_hs, 0),
             "val_h":  torch.concat(val_hs, 0),
@@ -182,23 +191,21 @@ class PGSTree(Tree):
 
         with torch.no_grad():
             val = self.sim_value(val_h).reshape(-1)
-            #val = np.concatenate((val.numpy(), [rew[-1]]))
-        #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.97)
-        #adv = torch.as_tensor(adv).to(self.device)
-
-        adv = ret - val
+            val = np.concatenate((val.numpy(), [rew[-1]]))
+        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.97)
+        adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_h))
 
         # REINFORCE
+        #if self.iter < 20:
         self.optim_pol.zero_grad()
         dist = Categorical(logits=self.sim_policy(pol_h))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
-        #loss_dist = kl_divergence(base_dist, dist).mean()
+        loss_dist = kl_divergence(base_dist, dist).mean()
         #loss_entropy = -dist.entropy().mean()
-        loss = loss_policy# + 0.01 * loss_entropy
-
+        loss = loss_policy# + 0.1 * loss_dist
         loss.backward()
         self.optim_pol.step()
 
@@ -236,119 +243,3 @@ class PGSTree(Tree):
         pol_h = msg["pol_h"]
         val_h = msg["val_h"]
         return pol_h, val_h
-
-
-class PGSTreeWorker(Process, PGSTree):
-    """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, iters, eval_channel,  pol_head, val_head, idx, config, channel):
-        Process.__init__(self)
-        PGSTree.__init__(self, None, eval_channel, pol_head, val_head, config, idx=idx)
-
-        self.iters = iters
-        self.channel = channel
-
-    def run(self):
-        self.reset_policy()
-
-        msg = self.channel.recv()
-        while msg["command"] != "close":
-            if msg["command"] == "search":
-                self.set_root(msg["state"])
-                if msg["iters"] is not None:
-                    iters = msg["iters"]
-                else:
-                    iters = self.iters
-                qvals = self.search(iters)
-                self.channel.send(qvals)
-            elif msg["command"] == "update":
-                self.reset_policy(base_policy=msg["pol_head"], base_value=msg["val_head"])
-
-            msg = self.channel.recv()
-
-
-class PGS:
-    """ Policy Gradient Search with PUCT."""
-
-    def __init__(self, policy, config):
-        self.config = config
-        self.num_workers = config["num_trees"]
-        self.num_iters = config["pgs_iters"]
-
-        # Create parallel tree workers
-        pipes = [Pipe() for _ in range(self.num_workers)]
-        eval_pipes = [Pipe() for _ in range(self.num_workers)]
-        eval_master_pipe = Pipe()
-        self.channels = [p[0] for p in pipes]
-        self.eval_channel = eval_master_pipe[0]
-        self.num_iters_worker = int(self.num_iters/self.num_workers)
-        self.rest_iters = (self.num_iters % self.num_workers) + self.num_iters_worker
-
-        self.workers = []
-        for i in range(self.num_workers):
-            iters = self.rest_iters if i == self.num_workers-1 else self.num_iters_worker
-            eval_pipe = eval_pipes[i][1]
-
-            pol_head = deepcopy(policy.policy_head)
-            val_head = deepcopy(policy.value_head)
-            worker = PGSTreeWorker(iters, eval_pipe, pol_head, val_head, i, config, pipes[i][1])
-            worker.start()
-            self.workers.append(worker)
-
-        # Create evaluation worker
-        eval_channels = [p[0] for p in eval_pipes]
-        eval_master_channel = eval_master_pipe[1]
-        self.eval_worker = EvaluatorPGS(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["pgs_eval_batch"], timeout=config["pgs_eval_timeout"])
-        self.eval_worker.start()
-
-    def update_policy(self, state_dict):
-        self.eval_channel.send({
-            "command": "update",
-            "state_dict": state_dict,
-        })
-        pol_head, val_head = self.eval_channel.recv()
-        for c in self.channels:
-            c.send({
-                "command": "update",
-                "pol_head": deepcopy(pol_head),
-                "val_head": deepcopy(val_head),
-            })
-
-    def search(self, state, iters=None):
-        self.eval_channel.send({"command": "clear cache"})
-        for c in self.channels:
-            c.send({
-                "command": "search",
-                "state": deepcopy(state),
-                "iters": iters,
-            })
-        msg = np.stack([c.recv() for c in self.channels])
-
-        qvals = np.mean(msg, axis=0)
-        return qvals
-
-    def distributed_search(self, states):
-        self.eval_channel.send({"command": "clear cache"})
-        i = 0
-        dists = []
-        len_states = len(states)
-        while i < len_states:
-            max_c_idx = self.num_workers
-            for c_idx, c in enumerate(self.channels):
-                c.send({
-                    "command": "search",
-                    "state": states[i],
-                    "iters": self.num_iters,
-                })
-                i += 1
-                if i >= len_states:
-                    max_c_idx = c_idx+1
-                    break
-            msg = [c.recv() for c in self.channels[:max_c_idx]]
-            dists.extend(msg)
-        return np.array(dists)
-
-    def close(self):
-        for c in self.channels + [self.eval_channel]:
-            c.send({"command": "close"})
-        for w in self.workers + [self.eval_worker]:
-            w.join()

@@ -1,11 +1,11 @@
 import numpy as np
 from copy import deepcopy
 from src.search.evaluator import Evaluator
-from src.search.tree import AZTreeWorker
+from src.search.mu_zero.worker import MuZeroTreeWorker
 from multiprocessing import Pipe
 
 
-class AlphaZero:
+class MuZero:
     """ Monte Carlo Tree Search, with root parallelization."""
 
     def __init__(self, policy, config):
