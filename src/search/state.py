@@ -47,3 +47,15 @@ class State:
 
     def __str__(self):
         return str(self.env)
+
+
+class ModelState:
+
+    """ State representation of the environment. """
+    def __init__(self, abs, rew=0.0, obs=None):
+        self.abs = abs
+        self.rew = rew
+        self.obs = obs
+
+    def __str__(self):
+        return str(self.abs)

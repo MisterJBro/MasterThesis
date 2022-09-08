@@ -38,9 +38,11 @@ parser = argparse.ArgumentParser(description='File to evaluate methods')
 parser.add_argument('--job_id', type=int, default=0)
 
 if __name__ == '__main__':
+    freeze_support()
     args = parser.parse_args()
     job_id = args.job_id
 
+    # Init for algos
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
@@ -57,10 +59,10 @@ if __name__ == '__main__':
         "device": "cpu",
         "tree_output_qvals": True,
     })
-
-    freeze_support()
     policy = PendulumPolicy(config)
     policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
+
+    # Algorithms
     mcts_obj = MCTS(config)
     az_obj = AlphaZero(policy, config)
     pgs_obj = PGS(policy, config)
@@ -73,45 +75,37 @@ if __name__ == '__main__':
         with torch.no_grad():
             dist = policy.get_dist(obs)
         act = dist.logits.argmax(-1)
-
         return act.cpu().numpy()
 
     def mcts(env, obs, iters):
         qvals = mcts_obj.search(State(env, obs=obs), iters=iters)
-
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
     def az(env, obs, iters):
-        #az_obj.update_policy(policy.state_dict())
         qvals = az_obj.search(State(env, obs=obs), iters=iters)
-
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
     def pgs(env, obs, iters):
-        #pgs_obj.update_policy(policy.state_dict())
         qvals = pgs_obj.search(State(env, obs=obs), iters=iters)
-
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
     def mcs(env, obs, iters):
-        #mcs_obj.update_policy(policy.state_dict())
         qvals = mcs_obj.search(State(env, obs=obs), iters=iters)
-
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
     # Eval
-    algos = [pgs, mcs]
+    algos = [mcs, pgs]
     ret_iters = []
     all_iters = [60]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:
             rets = []
-            for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):
+            for _ in tqdm(range(20), ncols=100, desc=f'{iters}'):
                 ret = eval(env, algo, iters, render=False)
                 rets.append(ret)
             print(f'Iters: {iters} - Algo: {algo.__name__.upper()} - Return: {np.mean(rets):.03f} - Std dev: {np.std(rets):.03f}')

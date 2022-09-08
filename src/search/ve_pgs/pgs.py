@@ -1,18 +1,18 @@
 import numpy as np
 from copy import deepcopy
-from src.search.evaluator import VEEvaluator
-from src.search.mu_zero.worker import MZTreeWorker
 from multiprocessing import Pipe
+from src.search.evaluator import EvaluatorPGS
+from src.search.pgs.worker import PGSTreeWorker
 
 
-class MuZero:
-    """ Monte Carlo Tree Search, with root parallelization."""
 
-    def __init__(self, model, policy, config):
+class PGS:
+    """ Policy Gradient Search with PUCT."""
+
+    def __init__(self, policy, config):
         self.config = config
         self.num_workers = config["num_trees"]
-        self.num_iters = config["az_iters"]
-        self.num_acts = config["num_acts"]
+        self.num_iters = config["pgs_iters"]
 
         # Create parallel tree workers
         pipes = [Pipe() for _ in range(self.num_workers)]
@@ -28,22 +28,30 @@ class MuZero:
             iters = self.rest_iters if i == self.num_workers-1 else self.num_iters_worker
             eval_pipe = eval_pipes[i][1]
 
-            worker = MZTreeWorker(self.num_acts, iters, eval_pipe, i, config, pipes[i][1])
+            pol_head = deepcopy(policy.policy_head)
+            val_head = deepcopy(policy.value_head)
+            worker = PGSTreeWorker(iters, eval_pipe, pol_head, val_head, i, config, pipes[i][1])
             worker.start()
             self.workers.append(worker)
 
         # Create evaluation worker
         eval_channels = [p[0] for p in eval_pipes]
         eval_master_channel = eval_master_pipe[1]
-        self.eval_worker = VEEvaluator(policy, model, eval_channels, eval_master_channel, device=config["device"], batch_size=config["az_eval_batch"], timeout=config["az_eval_timeout"])
+        self.eval_worker = EvaluatorPGS(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["pgs_eval_batch"], timeout=config["pgs_eval_timeout"])
         self.eval_worker.start()
 
-    def update(self, policy_dict, model_dict):
+    def update_policy(self, state_dict):
         self.eval_channel.send({
             "command": "update",
-            "policy_dict": policy_dict,
-            "model_dict": model_dict,
+            "state_dict": state_dict,
         })
+        pol_head, val_head = self.eval_channel.recv()
+        for c in self.channels:
+            c.send({
+                "command": "update",
+                "pol_head": deepcopy(pol_head),
+                "val_head": deepcopy(val_head),
+            })
 
     def search(self, state, iters=None):
         self.eval_channel.send({"command": "clear cache"})
