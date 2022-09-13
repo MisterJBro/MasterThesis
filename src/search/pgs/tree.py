@@ -45,7 +45,7 @@ class PGSTree(Tree):
         self.sim_policy = deepcopy(self.base_policy)
         self.sim_value = deepcopy(self.base_value)
         self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
-        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-4)
+        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
     def search(self, iters=1_000):
         rets = []

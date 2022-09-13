@@ -11,7 +11,7 @@ class MuZero:
     def __init__(self, model, policy, config):
         self.config = config
         self.num_workers = config["num_trees"]
-        self.num_iters = config["az_iters"]
+        self.num_iters = config["mz_iters"]
         self.num_acts = config["num_acts"]
 
         # Create parallel tree workers
@@ -35,7 +35,7 @@ class MuZero:
         # Create evaluation worker
         eval_channels = [p[0] for p in eval_pipes]
         eval_master_channel = eval_master_pipe[1]
-        self.eval_worker = VEEvaluator(policy, model, eval_channels, eval_master_channel, device=config["device"], batch_size=config["az_eval_batch"], timeout=config["az_eval_timeout"])
+        self.eval_worker = VEEvaluator(policy, model, eval_channels, eval_master_channel, device=config["device"], batch_size=config["mz_eval_batch"], timeout=config["mz_eval_timeout"])
         self.eval_worker.start()
 
     def update(self, policy_dict, model_dict):

@@ -18,16 +18,17 @@ if __name__ == '__main__':
         "env": env,
         "num_trees": 1,
         "device": "cpu",
-        "puct_c": 5.0,
-        "mz_iters": 200,
+        "puct_c": 20.0,
+        "mz_iters": 500,
         "mz_eval_batch": 1,
         "dirichlet_eps": 0.0,
         "tree_output_qvals": False,
     })
 
     policy = PendulumPolicy(config)
-    policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
+    policy.load("checkpoints/policy_pdlm_modeltrainer_53.pt")
     model = ValueEquivalenceModel(config)
+    model.load("checkpoints/ve_model.pt")
     mz = MuZero(model, policy, config)
     obs = env.reset()
     import time

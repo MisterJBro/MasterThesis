@@ -8,7 +8,7 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 import numpy as np
 import pathlib
 
-PROJECT_PATH = pathlib.Path(__file__).parent.absolute().as_posix()
+PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 
 class ValueEquivalenceModel(nn.Module):

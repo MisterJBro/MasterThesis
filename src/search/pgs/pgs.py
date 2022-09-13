@@ -1,9 +1,8 @@
 import numpy as np
 from copy import deepcopy
 from multiprocessing import Pipe
-from src.search.evaluator import EvaluatorPGS
+from src.search.evaluator import PGSEvaluator
 from src.search.pgs.worker import PGSTreeWorker
-
 
 
 class PGS:
@@ -37,7 +36,7 @@ class PGS:
         # Create evaluation worker
         eval_channels = [p[0] for p in eval_pipes]
         eval_master_channel = eval_master_pipe[1]
-        self.eval_worker = EvaluatorPGS(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["pgs_eval_batch"], timeout=config["pgs_eval_timeout"])
+        self.eval_worker = PGSEvaluator(policy, eval_channels, eval_master_channel, device=config["device"], batch_size=config["pgs_eval_batch"], timeout=config["pgs_eval_timeout"])
         self.eval_worker.start()
 
     def update_policy(self, state_dict):

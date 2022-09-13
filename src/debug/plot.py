@@ -7,50 +7,38 @@ if __name__ == '__main__':
 
     # Values over several seeds
     y0 = np.array([
-        [62.12, 87.48, 59.34, 60.91, 62.44, 89.63, 90.2, 92.65, 92.94, 94.2, 93.34],
-        [57.05, 61.96, 87.46, 74.47, 61.45, 63.51, 92.14, 93.06, 94.17, 67.51, 68.69],
-        [58.7, 59.68, 61.74, 87.8, 89.75, 89.26, 93.24, 93.62, 94.04, 92.69, 94.82],
-        [62.64, 88.08, 62.73, 63.5, 88.88, 90.73, 92.27, 93.47, 94.06, 68.63, 94.85],
+        [66.6, 66.88, 69.51, 71.57, 68.1, 68.55],
     ])
     y1 = np.array([
-        [60.98, 85.91, 88.55, 62.94, 63.38, 88.68, 90.89, 93.98, 94.49, 92.68, 94.34],
-        [63.77, 91.28, 91.63, 93.47, 91.56, 92.62, 92.26, 67.43, 94.77, 94.48, 93.54],
-        [61.23, 77.07, 88.97, 88.19, 84.7, 59.48, 60.01, 61.85, 61.89, 89.38, 89.97],
-        [57.13, 61.37, 61.38, 82.14, 88.25, 88.85, 90.05, 93.02, 93.84, 93.33, 94.49],
+        [66.46, 67.52, 63.24, 68.22, 67.99, 67.12],
     ])
     y2 = np.array([
-        [61.08, 87.83, 87.74, 87.7, 87.84, 88.49, 89.9, 93.17, 93.02, 94.6, 94.07],
-        [65.15, 64.67, 61.13, 88.44, 88.83, 90.03, 89.5, 94.3, 67.19, 92.84, 67.48],
-        [59.01, 83.56, 86.96, 86.63, 88.72, 89.45, 88.97, 93.17, 92.44, 95.66, 68.73],
-        [61.72, 59.86, 61.05, 62.01, 89.06, 89.97, 65.98, 67.76, 93.14, 92.01, 94.38],
+        [66.57, 67.9, 69.5, 68.06, 67.88, 68.43],
     ])
     y3 = np.array([
-        [64.44, 88.65, 89.01, 90.8, 89.8, 87.8, 86.72, 86.03, 87.36, 86.98, 85.95],
-        [66.74, 88.63, 89.09, 61.32, 90.57, 88.33, 86.68, 86.6, 86.6, 85.47, 86.58],
-        [65.32, 87.74, 90.75, 89.7, 88.6, 89.02, 87.48, 86.9, 86.59, 86.58, 85.47],
-        [63.77, 90.14, 88.21, 89.93, 90.46, 88.5, 87.59, 85.87, 86.55, 85.49, 86.57],
+        [45.529, 25.494, 39.361, 66.441, 48.360, 55],
     ])
 
     # Statistics
-    x = np.array([10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000]).astype(str)
+    x = np.array([10, 20, 40, 60, 80, 100]).astype(str)
     mean0 = np.mean(y0, 0)
-    sigma0 = np.std(y0, 0)/3
+    #sigma0 = np.std(y0, 0)/3
     mean1 = np.mean(y1, 0)
-    sigma1 = np.std(y1, 0)/3
+    #sigma1 = np.std(y1, 0)/3
     mean2 = np.mean(y2, 0)
-    sigma2 = np.std(y2, 0)/3
+    #sigma2 = np.std(y2, 0)/3
     mean3 = np.mean(y3, 0)
-    sigma3 = np.std(y3, 0)/3
+    #sigma3 = np.std(y3, 0)/3
 
     # Plot
-    plt.plot(x, mean0, label="PGS lr=1e-3")
-    plt.fill_between(x, mean0+sigma0, mean0-sigma0, alpha=0.4)
-    plt.plot(x, mean1, label="PGS lr=1e-4")
-    plt.fill_between(x, mean1+sigma1, mean1-sigma1, alpha=0.4)
-    plt.plot(x, mean2, label="PGS lr=1e-5")
-    plt.fill_between(x, mean2+sigma2, mean2-sigma2, alpha=0.4)
-    plt.plot(x, mean3, label="PGS lr=0")
-    plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
+    #plt.plot(x, mean0, label="PGS long horizon")
+    #plt.fill_between(x, mean0+sigma0, mean0-sigma0, alpha=0.4)
+    plt.plot(x, mean1, label="MCS")
+    #plt.fill_between(x, mean1+sigma1, mean1-sigma1, alpha=0.4)
+    #plt.plot(x, mean2, label="PGS short horizon")
+    #plt.fill_between(x, mean2+sigma2, mean2-sigma2, alpha=0.4)
+    plt.plot(x, mean3, label="PGS long horizon")
+    #plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
 
     plt.title('PGS Pdlm')
     plt.xlabel('Number of Iterations per Action')
