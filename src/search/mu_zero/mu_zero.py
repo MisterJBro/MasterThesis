@@ -6,7 +6,7 @@ from multiprocessing import Pipe
 
 
 class MuZero:
-    """ Monte Carlo Tree Search, with root parallelization."""
+    """ Alpha Zero with Value Equivalent Model."""
 
     def __init__(self, model, policy, config):
         self.config = config

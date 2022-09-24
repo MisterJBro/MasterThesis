@@ -1,5 +1,5 @@
 import numpy as np
-from src.search.mcts.tree import Tree
+from src.search.mcts.core import Tree
 from src.search.node import PUCTNode, DirichletNode
 from src.search.state import ModelState
 

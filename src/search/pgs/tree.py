@@ -5,7 +5,7 @@ import seaborn as sns
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from src.search.mcts.tree import Tree
+from src.search.mcts.core import Tree
 from src.search.node import PGSNode
 from src.train.processer import discount_cumsum, gen_adv_estimation
 from torch.distributions import Categorical

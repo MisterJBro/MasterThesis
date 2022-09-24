@@ -1,14 +1,13 @@
 from multiprocessing import Process
-from src.search.mcts.tree import Tree
+from src.search.mcts.core import MCTSCore
 
 
-class TreeWorker(Process, Tree):
-    """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, iters, config, channel):
-        Tree.__init__(self, None, config)
+class MCTSWorker(Process, MCTSCore):
+    """ Sinlge MCTS Worker for parallelization of MCTS."""
+    def __init__(self, config, channel):
+        MCTSCore.__init__(self, None, config)
         Process.__init__(self)
 
-        self.iters = iters
         self.channel = channel
 
     def run(self):

@@ -53,16 +53,11 @@ if __name__ == '__main__':
         "env": env,
         "puct_c": 20.0,
         "uct_c": 20.0,
-        "mcts_iters": 500,
-        "az_iters": 500,
-        "az_eval_batch": 1,
+        "search_num_workers": 1,
+        "search_evaluator_batch_size": 1,
         "dirichlet_eps": 0.0,
-        "mz_iters": 500,
-        "mz_eval_batch": 1,
         "pgs_lr": 1e-1,
-        "pgs_iters": 1,
         "pgs_trunc_len": 5,
-        "num_trees": 1,
         "device": "cpu",
         "tree_output_qvals": True,
     })
@@ -75,12 +70,12 @@ if __name__ == '__main__':
 
     # Algorithms
     mcts_obj = MCTS(config)
-    az_obj = AlphaZero(policy, config)
-    mz_obj = MuZero(model, policy, config)
-    pgs_obj = PGS(policy, config)
-    mcs_config = deepcopy(config)
-    mcs_config.update({"pgs_lr": 0})
-    mcs_obj = PGS(policy, mcs_config)
+    #az_obj = AlphaZero(policy, config)
+    #mz_obj = MuZero(model, policy, config)
+    #pgs_obj = PGS(policy, config)
+    #mcs_config = deepcopy(config)
+    #mcs_config.update({"pgs_lr": 0})
+    #mcs_obj = PGS(policy, mcs_config)
 
     def nn(env, obs, iters):
         obs = torch.as_tensor(obs, dtype=torch.float32)
@@ -115,9 +110,9 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [mcts, nn, az, mz, mcs, pgs]
+    algos = [mcts]#, nn, az, mz, mcs, pgs]
     ret_iters = []
-    all_iters = [10, 20, 40, 60, 80, 100, 200]#, , 400, 600, 800, 1000]
+    all_iters = [20]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:
@@ -131,23 +126,23 @@ if __name__ == '__main__':
     #print(f'Print all returns: {np.round(ret_iters, 2).tolist()}')
 
     # Plot
-    sns.set_theme()
-    os.environ['KMP_DUPLICATE_LIB_OK']='True'
-    x = np.arange(len(all_iters))
-    width = 0.6
-    pos = np.linspace(0.0, width, num=len(algos))
-    algo_names = [a.__name__.upper() for a in algos]
+    #sns.set_theme()
+    #os.environ['KMP_DUPLICATE_LIB_OK']='True'
+    #x = np.arange(len(all_iters))
+    #width = 0.6
+    #pos = np.linspace(0.0, width, num=len(algos))
+    #algo_names = [a.__name__.upper() for a in algos]
 
-    for i in range(len(algos)):
-        plt.bar(x - width/2 + pos[i], ret_iters[i], width/len(algos), label=algo_names[i])
+    #for i in range(len(algos)):
+    #    plt.bar(x - width/2 + pos[i], ret_iters[i], width/len(algos), label=algo_names[i])
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
-    plt.xlabel('Iters per Action')
-    plt.ylabel('Return')
-    plt.title('Pendulum Task - Algorithm comparison')
-    plt.xticks(x, all_iters)
-    plt.legend()
-    plt.show()
+    #plt.xlabel('Iters per Action')
+    #plt.ylabel('Return')
+    #plt.title('Pendulum Task - Algorithm comparison')
+    #plt.xticks(x, all_iters)
+    #plt.legend()
+    #plt.show()
 
     # Close
     env.close()

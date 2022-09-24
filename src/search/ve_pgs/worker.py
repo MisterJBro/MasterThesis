@@ -2,7 +2,7 @@ from multiprocessing import Process
 from src.search.pgs.tree import PGSTree
 
 
-class PGSTreeWorker(Process, PGSTree):
+class VEPGSTreeWorker(Process, PGSTree):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
     def __init__(self, iters, eval_channel,  pol_head, val_head, idx, config, channel):
         Process.__init__(self)

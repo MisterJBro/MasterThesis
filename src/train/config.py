@@ -21,7 +21,7 @@ DEFAULT_CONFIG = {
     "act_dtype": np.float32,
     "rew_dtype": np.float32,
 
-    # === Models settings ===
+    # === Networks settings ===
     "train_iters": 100,
     "pi_lr": 1e-3,
     "pi_entropy": 0.1,
@@ -35,32 +35,23 @@ DEFAULT_CONFIG = {
     "model_unroll_len": 5,
     "grad_clip": 100.0,
 
-    # === MCTS/AlphaZero/MuZero/PGS ===
-    "num_trees": 4,
-    "uct_c": np.sqrt(2),
-    "mcts_iters": 1_000,
-    "puct_c": 5.0,
+    # === Search algorithms ===
+    "search_num_workers": 4,
+    "search_iters": 1_000,
+    "search_evaluator_batch_size": 3,
+    "search_evaluator_timeout": 0.001,
     "tree_output_qvals": True,
     #"use_norm_visit_counts"
 
-    "az_iters": 1_000,
-    "az_eval_batch": 3,
-    "az_eval_timeout": 0.001,
+    "uct_c": np.sqrt(2),
+    "puct_c": 5.0,
     "az_dist_q_scale": 10.0,
     "az_dist_minibatches": 10,
     "az_dist_iters": 3,
     "dirichlet_eps": 0.25,
     "dirichlet_noise": 1.0,
-
-    "mz_iters": 1_000,
-    "mz_eval_batch": 3,
-    "mz_eval_timeout": 0.001,
-
     "pgs_lr": 1e-4,
     "pgs_trunc_len": 10,
-    "pgs_iters": 1_000,
-    "pgs_eval_batch": 3,
-    "pgs_eval_timeout": 0.001,
 
     # === Others ===
     "log_name": "log.txt",
