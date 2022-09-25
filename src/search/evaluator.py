@@ -104,22 +104,3 @@ class Evaluator(Process):
 
     def update(self, msg):
         self.policy.load_state_dict(msg["policy_params"])
-
-
-class PGSEvaluator(Evaluator):
-    """Special evaluation Service for network Gradient Search, which returns the hidden states."""
-
-    def eval(self, obs):
-        with torch.no_grad():
-            pol_h, val_h = self.policy.get_hidden(obs)
-        res = [{
-            "pol_h": p.unsqueeze(0),
-            "val_h": v.unsqueeze(0),
-        } for p, v in zip(pol_h, val_h)]
-        return res
-
-    def update(self, msg):
-        state_dict = msg["state_dict"]
-        self.policy.load_state_dict(state_dict)
-        self.master_channel.send((self.policy.network_head, self.policy.value_head))
-

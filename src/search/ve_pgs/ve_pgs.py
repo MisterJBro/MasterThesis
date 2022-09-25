@@ -1,10 +1,9 @@
-import numpy as np
 from copy import deepcopy
 from multiprocessing import Pipe
-from src.search.ve_pgs.evaluator import VEPGSEvaluator
-from src.search.ve_pgs.worker import VEPGSWorker
-from src.search.search import ParallelSearchAlgorithm
 from src.search.pgs.pgs import PGS
+from src.search.ve_pgs.worker import VEPGSWorker
+from src.search.ve_pgs.evaluator import VEPGSEvaluator
+from src.search.search import ParallelSearchAlgorithm
 
 
 class VEPGS(PGS):
@@ -35,3 +34,10 @@ class VEPGS(PGS):
             "policy_params": policy_params,
             "model_params": model_params,
         })
+        pol_head, val_head = self.eval_channel.recv()
+        for c in self.channels:
+            c.send({
+                "command": "update",
+                "pol_head": deepcopy(pol_head),
+                "val_head": deepcopy(val_head),
+            })

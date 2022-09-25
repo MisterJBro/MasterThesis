@@ -5,14 +5,14 @@ import seaborn as sns
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from src.search.mcts.core import Tree
 from src.search.node import PGSNode
+from src.search.pgs.core import PGSCore
 from src.train.processer import discount_cumsum, gen_adv_estimation
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 
 
-class VEPGSTree(Tree):
+class VEPGSCore(PGSCore):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
     def __init__(self, state, eval_channel, pol_head, val_head, config, idx=0):

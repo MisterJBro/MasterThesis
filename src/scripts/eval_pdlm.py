@@ -9,11 +9,12 @@ import matplotlib.pyplot as plt
 from multiprocessing import freeze_support
 from src.networks.policy_pend import PendulumPolicy
 from src.networks.model import ValueEquivalenceModel
+from src.search.pgs.mcs import MCS
 from src.search.pgs.pgs import PGS
 from src.train.config import create_config
-from src.search.alpha_zero.alpha_zero import AlphaZero
-from src.search.mu_zero.mu_zero import MuZero
 from src.search.mcts.mcts import MCTS
+from src.search.mu_zero.mu_zero import MuZero
+from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.env.discretize_env import DiscreteActionWrapper
 from src.env.pendulum import PendulumEnv
 from src.search.state import State
@@ -72,11 +73,9 @@ if __name__ == '__main__':
     mcts_obj = MCTS(config)
     az_obj = AlphaZero(config, policy)
     mz_obj = MuZero(config, policy, model)
-    #pgs_obj = PGS(config, policy)
+    pgs_obj = PGS(config, policy)
+    mcs_obj = MCS(config, policy)
     #vepgs_obj = VEPGS(config, policy, model)
-    #mcs_config = deepcopy(config)
-    #mcs_config.update({"pgs_lr": 0})
-    #mcs_obj = PGS(policy, mcs_config)
 
     def nn(env, obs, iters):
         obs = torch.as_tensor(obs, dtype=torch.float32)
@@ -113,7 +112,7 @@ if __name__ == '__main__':
     # Eval
     algos = [mz]#, mcts, nn, az, mz, mcs, pgs]
     ret_iters = []
-    all_iters = [100]# 400, 600, 800, 1000]
+    all_iters = [80]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:

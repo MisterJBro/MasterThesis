@@ -12,10 +12,10 @@ from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 
 
-class PGSTree(MCTSCore):
+class PGSCore(MCTSCore):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
-    def __init__(self, state, eval_channel, pol_head, val_head, config, idx=0):
+    def __init__(self, config, state, eval_channel, pol_head, val_head, idx=0):
         self.config = config
         self.eval_channel = eval_channel
         self.idx = idx
@@ -29,10 +29,11 @@ class PGSTree(MCTSCore):
         self.sim_value = None
         self.optim_pol = None
         self.optim_val = None
-        self.reset_policy(base_policy=pol_head, base_value=val_head)
+        self.reset(base_policy=pol_head, base_value=val_head)
         self.set_root(state)
 
-    def reset_policy(self, base_policy=None, base_value=None):
+    def reset(self, base_policy=None, base_value=None):
+        # Reset simulation policy e.g. after each search
         del self.sim_policy
         del self.sim_value
         del self.optim_pol
@@ -47,13 +48,13 @@ class PGSTree(MCTSCore):
         self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
         self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
-    def search(self, iters=1_000):
+    def search(self, iters):
         rets = []
         while self.iter < iters:
             leaf = self.select()
             new_leaf = self.expand(leaf)
             traj = self.simulate(new_leaf)
-            ret = self.update_policy(traj)
+            ret = self.train(traj)
             self.backpropagate(new_leaf, ret)
             rets.append(ret)
             self.iter += 1
@@ -174,7 +175,7 @@ class PGSTree(MCTSCore):
             "val_h":  torch.concat(val_hs, 0),
         }
 
-    def update_policy(self, traj):
+    def train(self, traj):
         if len(traj) == 0:
             return 0
 
@@ -218,18 +219,17 @@ class PGSTree(MCTSCore):
         return total_ret
 
     def set_root(self, state):
-        self.reset_policy()
         self.iter = 0
         self.root = PGSNode(state)
         if state is not None:
             pol_h, val_h = self.eval_fn(self.root.state.obs)
             with torch.no_grad():
                 logits = self.base_policy(pol_h)
-                probs = F.softmax(logits, dim=-1)
+                prob = F.softmax(logits, dim=-1)
                 val = self.base_value(val_h)
             self.logits = logits.numpy().reshape(-1)
 
-            self.root.priors = probs.cpu().numpy().reshape(-1)
+            self.root.priors = prob.cpu().numpy().reshape(-1)
             self.root.val = val.cpu().item()
             self.root.pol_h = pol_h
             self.root.val_h = val_h

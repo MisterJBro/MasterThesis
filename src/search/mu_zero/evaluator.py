@@ -43,13 +43,18 @@ class MZEvaluator(Evaluator):
 
     def eval_obs(self, obs):
         # Representation network
+        dist, val = self.policy(obs)
         new_abs = self.model.representation(obs)
         new_abs0 = new_abs[0].permute(1, 0, 2)
         new_abs1 = new_abs[1].permute(1, 0, 2)
-        dist = self.policy.get_dist(obs)
         prob = dist.probs.cpu().numpy()
+        val = val.cpu().numpy()
 
-        return [{"abs": (a0.unsqueeze(1), a1.unsqueeze(1)), "prob": p} for a0, a1, p in zip(new_abs0, new_abs1, prob)]
+        return [{
+            "abs": (a0.unsqueeze(1), a1.unsqueeze(1)),
+            "val": v,
+            "prob": p,
+            } for a0, a1, v, p in zip(new_abs0, new_abs1, val, prob)]
 
     def eval_abs(self, abs, act):
         act = self.model.dyn_linear(act).unsqueeze(1)
@@ -57,9 +62,12 @@ class MZEvaluator(Evaluator):
         abs_next0 = abs_next[0].permute(1, 0, 2)
         abs_next1 = abs_next[1].permute(1, 0, 2)
 
-        rew = self.model.get_reward(hidden).cpu().numpy()
-        val = self.model.get_value(hidden).cpu().numpy()
+        # Inference all and then transfer to cpu
+        rew = self.model.get_reward(hidden)
+        val = self.model.get_value(hidden)
         dist = self.model.get_policy(hidden)
+        rew = rew.cpu().numpy()
+        val = val.cpu().numpy()
         prob = dist.probs.cpu().numpy()
 
         return [{
