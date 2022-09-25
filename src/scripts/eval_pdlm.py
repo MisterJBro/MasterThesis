@@ -118,7 +118,7 @@ if __name__ == '__main__':
     # Eval
     algos = [vepgs]#, mcts, nn, az, mz, mcs, pgs, vepgs]
     ret_iters = []
-    all_iters = [60]# 400, 600, 800, 1000]
+    all_iters = [100]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:
@@ -155,5 +155,6 @@ if __name__ == '__main__':
     mcts_obj.close()
     az_obj.close()
     mz_obj.close()
-    pgs_obj.close()
     mcs_obj.close()
+    pgs_obj.close()
+    vepgs_obj.close()

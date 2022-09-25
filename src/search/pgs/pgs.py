@@ -23,8 +23,8 @@ class PGS(ParallelSearchAlgorithm):
         eval_master_pipe = Pipe()
         eval_channels = [p[0] for p in eval_pipes]
         self.eval_channel = eval_master_pipe[0]
-        self.eval_worker = PGSEvaluator(config, policy, eval_channels, eval_master_pipe[1])
-        self.eval_worker.start()
+        self.evaluator = PGSEvaluator(config, policy, eval_channels, eval_master_pipe[1])
+        self.evaluator.start()
 
     def update(self, policy_params):
         self.eval_channel.send({
@@ -46,5 +46,5 @@ class PGS(ParallelSearchAlgorithm):
     def close(self):
         for c in self.channels + [self.eval_channel]:
             c.send({"command": "close"})
-        for w in self.workers + [self.eval_worker]:
+        for w in self.workers + [self.evaluator]:
             w.join()

@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from src.search.node import PGSNode
 from src.search.pgs.core import PGSCore
+from src.search.state import ModelState
 from src.train.processer import discount_cumsum, gen_adv_estimation
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
@@ -21,18 +22,13 @@ class VEPGSCore(PGSCore):
 
     def expand(self, node):
         if node.state is None:
-            node.create_state()
-            abs, rew, hidden = self.eval_abs(node.parent.state.abs, node.action)
-            node.abs = abs
-            node.state.rew = rew
+            next_abs, rew, hidden = self.eval_abs(node.parent.state.abs, node.action)
+            node.state = ModelState(next_abs, rew=rew)
             node.hidden = hidden
-            return node
-        if node.state.is_terminal():
             return node
         if node == self.root:
             # Create new child nodes, lazy init
-            actions = node.state.get_possible_actions()
-            self.num_acts = len(actions)
+            actions = np.eye(self.num_acts)
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
@@ -44,10 +40,8 @@ class VEPGSCore(PGSCore):
             else:
                 child = node.children[np.random.choice(max_prior_indices)]
 
-            child.create_state()
-            abs, rew, hidden = self.eval_abs(child.parent.state.abs, child.action)
-            child.abs = abs
-            child.state.rew = rew
+            next_abs, rew, hidden = self.eval_abs(child.parent.state.abs, child.action)
+            child.state = ModelState(next_abs, rew=rew)
             child.hidden = hidden
             return child
         else:
@@ -58,7 +52,7 @@ class VEPGSCore(PGSCore):
         hidden = node.hidden
 
         player = 0
-        acts, rews, hs = [], [], [], []
+        acts, rews, hs = [], [], []
         for _ in range(self.trunc_len):
             player = (player + 1) % self.num_players
             hs.append(hidden)
@@ -66,7 +60,7 @@ class VEPGSCore(PGSCore):
             with torch.no_grad():
                 act = Categorical(logits=self.sim_policy(hidden)).sample().item()
             acts.append(act)
-            abs, rew, hidden = self.eval_abs(abs, act)
+            abs, rew, hidden = self.eval_abs(abs, np.eye(self.num_acts)[act])
 
             # Add reward
             if self.num_players == 2:
@@ -85,10 +79,11 @@ class VEPGSCore(PGSCore):
             last_val = self.base_value(hidden).item()
         rews.append(last_val)
         rews = np.array(rews)
+        acts = np.array(acts)
 
         return {
             "rew": rews,
-            "act": torch.tensor(acts),
+            "act": torch.as_tensor(acts),
             "hidden": torch.concat(hs, 0),
         }
 
@@ -152,7 +147,6 @@ class VEPGSCore(PGSCore):
         return msg["prob"], msg["abs"], msg["val"]
 
     def eval_abs(self, abs, act):
-        print(act)
         self.eval_channel.send({
             "abs": abs,
             "act": act,

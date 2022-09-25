@@ -99,7 +99,6 @@ class PGSCore(MCTSCore):
         if node == self.root:
             # Create new child nodes, lazy init
             actions = node.state.get_possible_actions()
-            self.num_acts = len(actions)
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
