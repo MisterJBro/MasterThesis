@@ -70,9 +70,10 @@ if __name__ == '__main__':
 
     # Algorithms
     mcts_obj = MCTS(config)
-    #az_obj = AlphaZero(policy, config)
-    #mz_obj = MuZero(model, policy, config)
-    #pgs_obj = PGS(policy, config)
+    az_obj = AlphaZero(config, policy)
+    mz_obj = MuZero(config, policy, model)
+    #pgs_obj = PGS(config, policy)
+    #vepgs_obj = VEPGS(config, policy, model)
     #mcs_config = deepcopy(config)
     #mcs_config.update({"pgs_lr": 0})
     #mcs_obj = PGS(policy, mcs_config)
@@ -110,14 +111,14 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [mcts]#, nn, az, mz, mcs, pgs]
+    algos = [mz]#, mcts, nn, az, mz, mcs, pgs]
     ret_iters = []
-    all_iters = [20]# 400, 600, 800, 1000]
+    all_iters = [100]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:
             rets = []
-            for _ in tqdm(range(3), ncols=100, desc=f'{iters}'):
+            for _ in tqdm(range(1), ncols=100, desc=f'{iters}'):
                 ret = eval(env, algo, iters, render=False)
                 rets.append(ret)
             print(f'Iters: {iters} - Algo: {algo.__name__.upper()} - Return: {np.mean(rets):.03f} - Std dev: {np.std(rets):.03f}')

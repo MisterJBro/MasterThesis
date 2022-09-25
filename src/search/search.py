@@ -3,7 +3,7 @@ from abc import ABC
 
 
 class ParallelSearchAlgorithm(ABC):
-    """ Interface for search algorithms."""
+    """ Interface for search algorithms with several worker threads."""
 
     def __init__(self, config):
         self.config = config
@@ -17,6 +17,8 @@ class ParallelSearchAlgorithm(ABC):
 
     def search(self, states, iters=None):
         iters = iters if iters is not None else self.num_iters
+        if not isinstance(states, list):
+            states = [states]
         i = 0
         dists = []
         num_states = len(states)
@@ -26,7 +28,7 @@ class ParallelSearchAlgorithm(ABC):
                 c.send({
                     "command": "search",
                     "state": states[i],
-                    "iters": self.num_iters,
+                    "iters": iters,
                 })
                 i += 1
                 if i >= num_states:

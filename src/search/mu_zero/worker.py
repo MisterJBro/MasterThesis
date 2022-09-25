@@ -1,14 +1,13 @@
 from multiprocessing import Process
-from src.search.mu_zero.tree import MZTree
+from src.search.mu_zero.core import MZCore
 
 
-class MZTreeWorker(Process, MZTree):
+class MZWorker(Process, MZCore):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, act_num, iters, eval_channel, idx, config, channel):
-        MZTree.__init__(self, None, act_num, eval_channel, config, idx=idx)
+    def __init__(self, config, act_num, eval_channel, idx, channel):
+        MZCore.__init__(self, config, None, act_num, eval_channel, idx=idx)
         Process.__init__(self)
 
-        self.iters = iters
         self.channel = channel
 
     def run(self):
@@ -16,10 +15,6 @@ class MZTreeWorker(Process, MZTree):
         while msg["command"] != "close":
             if msg["command"] == "search":
                 self.set_root(msg["state"])
-                if msg["iters"] is not None:
-                    iters = msg["iters"]
-                else:
-                    iters = self.iters
-                qvals = self.search(iters)
+                qvals = self.search(msg["iters"])
                 self.channel.send(qvals)
             msg = self.channel.recv()

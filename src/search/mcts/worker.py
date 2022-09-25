@@ -15,10 +15,6 @@ class MCTSWorker(Process, MCTSCore):
         while msg["command"] != "close":
             if msg["command"] == "search":
                 self.set_root(msg["state"])
-                if msg["iters"] is not None:
-                    iters = msg["iters"]
-                else:
-                    iters = self.iters
-                qvals = self.search(iters)
+                qvals = self.search(msg["iters"])
                 self.channel.send(qvals)
             msg = self.channel.recv()

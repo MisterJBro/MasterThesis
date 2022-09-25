@@ -1,12 +1,12 @@
 import numpy as np
-from src.search.mcts.core import Tree
+from src.search.mcts.core import MCTSCore
 from src.search.node import PUCTNode, DirichletNode
 
 
-class AZTree(Tree):
-    """ Search Tree presentation for Alpha Zero. """
+class AZCore(MCTSCore):
+    """ Core Algorithm for AlphaZero worker. """
 
-    def __init__(self, state, eval_channel, config, idx=0):
+    def __init__(self, config, state, eval_channel, idx=0):
         self.config = config
         self.eval_channel = eval_channel
         self.idx = idx
@@ -15,7 +15,7 @@ class AZTree(Tree):
         self.expl_coeff = config["puct_c"]
         self.set_root(state)
 
-    def search(self, iters=1_000):
+    def search(self, iters):
         qvals = super().search(iters)
         if self.config["tree_output_qvals"]:
             return qvals
@@ -26,19 +26,20 @@ class AZTree(Tree):
         if node.state.is_terminal():
             return np.array(0)
 
-        probs, val = self.eval_fn(node.state.obs)
-        node.priors = probs
+        prob, val = self.eval_fn(node)
+        node.priors = prob
         return val
 
     def set_root(self, state):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if state is not None:
-            probs, _ = self.eval_fn(self.root.state.obs)
-            self.root.priors = probs
+            prob, val = self.eval_fn(self.root)
+            self.root.priors = prob
+            self.root.val = val
 
-    def eval_fn(self, obs):
+    def eval_fn(self, node):
         self.eval_channel.send({
-            "obs": obs,
+            "obs": node.state.obs,
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()

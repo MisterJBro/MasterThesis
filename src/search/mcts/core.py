@@ -12,7 +12,7 @@ class MCTSCore:
         self.expl_coeff = config["uct_c"]
         self.set_root(state)
 
-    def search(self, iters=1_000):
+    def search(self, iters):
         iter = 0
 
         while iter < iters:

@@ -1,14 +1,13 @@
 from multiprocessing import Process
-from src.search.alpha_zero.tree import AZTree
+from src.search.alpha_zero.core import AZCore
 
 
-class AZTreeWorker(Process, AZTree):
+class AZWorker(Process, AZCore):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, iters, eval_channel, idx, config, channel):
-        AZTree.__init__(self, None, eval_channel, config, idx=idx)
+    def __init__(self, config, eval_channel, idx, channel):
+        AZCore.__init__(self, config, None, eval_channel, idx=idx)
         Process.__init__(self)
 
-        self.iters = iters
         self.channel = channel
 
     def run(self):
@@ -16,10 +15,6 @@ class AZTreeWorker(Process, AZTree):
         while msg["command"] != "close":
             if msg["command"] == "search":
                 self.set_root(msg["state"])
-                if msg["iters"] is not None:
-                    iters = msg["iters"]
-                else:
-                    iters = self.iters
-                qvals = self.search(iters)
+                qvals = self.search(msg["iters"])
                 self.channel.send(qvals)
             msg = self.channel.recv()

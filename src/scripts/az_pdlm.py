@@ -26,7 +26,7 @@ if __name__ == '__main__':
     freeze_support()
     policy = PendulumPolicy(config)
     policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
-    az = AlphaZero(policy, config)
+    az = AlphaZero(config, policy)
     obs = env.reset()
     import time
     start = time.time()
