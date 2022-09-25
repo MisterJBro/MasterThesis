@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "num_players": 1,
     "sample_len": 500,
     "gamma": 1.0,
+    "lam": 0.97,
     "seed": 0,
     "test_len": 500,
 

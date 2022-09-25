@@ -12,7 +12,7 @@ class PGSWorker(Process, PGSCore):
         self.channel = channel
 
     def run(self):
-        self.reset_policy()
+        self.reset()
         msg = self.channel.recv()
         while msg["command"] != "close":
             if msg["command"] == "search":

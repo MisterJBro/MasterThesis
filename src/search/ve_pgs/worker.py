@@ -1,24 +1,25 @@
 from multiprocessing import Process
-from src.search.pgs.core import PGSCore
+from src.search.ve_pgs.core import VEPGSCore
 
 
-class VEPGSWorker(Process, PGSCore):
+class VEPGSWorker(Process, VEPGSCore):
     """ Multiprocessing Tree Worker, for parallelization of MCTS."""
-    def __init__(self, config, eval_channel, pol_head, val_head, idx, channel):
+    def __init__(self, config, num_acts, eval_channel, pol_head, val_head, idx, channel):
         Process.__init__(self)
-        PGSCore.__init__(self, config, None, eval_channel, pol_head, val_head, idx=idx)
+        VEPGSCore.__init__(self, config, None, num_acts, eval_channel, pol_head, val_head, idx=idx)
 
         self.channel = channel
 
     def run(self):
-        self.reset_policy()
+        self.reset()
         msg = self.channel.recv()
         while msg["command"] != "close":
             if msg["command"] == "search":
+                self.reset()
                 self.set_root(msg["state"])
                 qvals = self.search(msg["iters"])
                 self.channel.send(qvals)
             elif msg["command"] == "update":
-                self.reset_policy(base_policy=msg["pol_head"], base_value=msg["val_head"])
+                self.reset(base_policy=msg["pol_head"], base_value=msg["val_head"])
 
             msg = self.channel.recv()

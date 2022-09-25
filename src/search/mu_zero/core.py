@@ -34,8 +34,9 @@ class MZCore(AZCore):
     def set_root(self, state):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if self.root.state is not None:
-            prob, abs = self.eval_obs(self.root)
+            prob, abs, val = self.eval_obs(self.root)
             self.root.priors = prob
+            self.root.val = val
             self.root.state.abs = abs
 
     def eval_obs(self, node):
@@ -44,7 +45,7 @@ class MZCore(AZCore):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
-        return msg["prob"], msg["abs"]
+        return msg["prob"], msg["abs"], msg["val"]
 
     def eval_abs(self, node):
         self.eval_channel.send({

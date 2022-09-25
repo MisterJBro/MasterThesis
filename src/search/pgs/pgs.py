@@ -1,6 +1,6 @@
 from copy import deepcopy
 from multiprocessing import Pipe
-from src.search.evaluator import PGSEvaluator
+from src.search.pgs.evaluator import PGSEvaluator
 from src.search.pgs.worker import PGSWorker
 from src.search.search import ParallelSearchAlgorithm
 
@@ -15,7 +15,7 @@ class PGS(ParallelSearchAlgorithm):
         pipes = [Pipe() for _ in range(self.num_workers)]
         eval_pipes = [Pipe() for _ in range(self.num_workers)]
         self.channels = [p[0] for p in pipes]
-        self.workers = [PGSWorker(config, self.num_acts, eval_pipes[i][1], deepcopy(policy.policy_head), deepcopy(policy.value_head), i, pipes[i][1]) for i in range(self.num_workers)]
+        self.workers = [PGSWorker(config, eval_pipes[i][1], deepcopy(policy.policy_head), deepcopy(policy.value_head), i, pipes[i][1]) for i in range(self.num_workers)]
         for w in self.workers:
             w.start()
 

@@ -1,5 +1,3 @@
-import torch
-import numpy as np
 from src.search.evaluator import Evaluator
 from src.search.mu_zero.evaluator import MZEvaluator
 
@@ -9,7 +7,7 @@ class VEPGSEvaluator(MZEvaluator):
 
     def __init__(self, config, policy, model, worker_channels, master_channel, use_cache=False):
         # Disable cache
-        Evaluator.__init__(config, policy, worker_channels, master_channel, False)
+        Evaluator.__init__(self, config, policy, worker_channels, master_channel, False)
         self.model = model
 
     def eval_abs(self, abs, act):

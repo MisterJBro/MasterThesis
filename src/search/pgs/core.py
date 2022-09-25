@@ -193,7 +193,7 @@ class PGSCore(MCTSCore):
         with torch.no_grad():
             val = self.sim_value(val_h).reshape(-1)
             val = np.concatenate((val.numpy(), [rew[-1]]))
-        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], 0.97)
+        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
         adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_h))
@@ -240,6 +240,4 @@ class PGSCore(MCTSCore):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
-        pol_h = msg["pol_h"]
-        val_h = msg["val_h"]
-        return pol_h, val_h
+        return msg["pol_h"], msg["val_h"]

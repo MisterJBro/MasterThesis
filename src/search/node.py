@@ -109,11 +109,8 @@ class DirichletNode(PUCTNode):
 class PGSNode(PUCTNode):
     """Changes made for PGS."""
 
-    def __init__(self, state, action=None, parent=None, pol_h=None, val_h=None):
+    def __init__(self, state, action=None, parent=None):
         super().__init__(state, action, parent)
-
-        self.pol_h = pol_h
-        self.val_h = val_h
 
     def select_child(self, c):
         uct_values = np.array([child.puct(child.num_visits, self.num_visits, child.total_rews, c, prior) for (child, prior) in zip(self.children, self.priors)])

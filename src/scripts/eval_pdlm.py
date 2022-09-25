@@ -11,6 +11,7 @@ from src.networks.policy_pend import PendulumPolicy
 from src.networks.model import ValueEquivalenceModel
 from src.search.pgs.mcs import MCS
 from src.search.pgs.pgs import PGS
+from src.search.ve_pgs.ve_pgs import VEPGS
 from src.train.config import create_config
 from src.search.mcts.mcts import MCTS
 from src.search.mu_zero.mu_zero import MuZero
@@ -73,9 +74,9 @@ if __name__ == '__main__':
     mcts_obj = MCTS(config)
     az_obj = AlphaZero(config, policy)
     mz_obj = MuZero(config, policy, model)
-    pgs_obj = PGS(config, policy)
     mcs_obj = MCS(config, policy)
-    #vepgs_obj = VEPGS(config, policy, model)
+    pgs_obj = PGS(config, policy)
+    vepgs_obj = VEPGS(config, policy, model)
 
     def nn(env, obs, iters):
         obs = torch.as_tensor(obs, dtype=torch.float32)
@@ -109,10 +110,15 @@ if __name__ == '__main__':
         act = env.available_actions()[np.argmax(qvals)]
         return act
 
+    def vepgs(env, obs, iters):
+        qvals = vepgs_obj.search(State(env, obs=obs), iters=iters)
+        act = env.available_actions()[np.argmax(qvals)]
+        return act
+
     # Eval
-    algos = [mz]#, mcts, nn, az, mz, mcs, pgs]
+    algos = [vepgs]#, mcts, nn, az, mz, mcs, pgs, vepgs]
     ret_iters = []
-    all_iters = [80]# 400, 600, 800, 1000]
+    all_iters = [60]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:
