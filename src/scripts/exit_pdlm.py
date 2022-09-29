@@ -9,38 +9,57 @@ from src.train.config import create_config
 from src.env.discretize_env import DiscreteActionWrapper
 from src.env.pendulum import PendulumEnv
 from src.train.exit import ExitTrainer
+import argparse
 
+
+parser = argparse.ArgumentParser(description='File to train a model using Expert Iteration')
+
+# Parser arguments
+parser.add_argument('--search_algo', type=str, default="az", choices=['az', 'mz', 'pgs', 'vepgs'])
 
 if __name__ == '__main__':
+    args = parser.parse_args()
+    search_algo = args.search_algo
+
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
         "puct_c": 20.0,
-        "train_iters": 100,
+        "train_iters": 50,
         "search_iters": 300,
         "search_num_workers": 15,
         "search_evaluator_batch_size": 15,
         "num_cpus": 15,
         "num_envs": 15,
-        "device": "cuda:0",
+        "device": "cpu",
         "pi_lr": 1e-3,
         "vf_lr": 5e-4,
         "sample_len": 500,
-        "log_name": "log_az_exit_cuda.txt",
         "tree_output_qvals": True,
+        "log_name": f"{search_algo}_exit_log.txt",
+        "log_to_file": True,
     })
 
     # Import policy and model
     policy = PendulumPolicy(config)
-    model = ValueEquivalenceModel(config)
+    model = None
 
     # Algorithms
-    az = AlphaZero(config, policy)
-    #mz = MuZero(config, policy, model)
-    #pgs = PGS(config, policy)
-    #vepgs = VEPGS(config, policy, model)
+    if search_algo == "az":
+        search_algo = AlphaZero(config, policy)
+    elif search_algo == "mz":
+        model = ValueEquivalenceModel(config)
+        mz = MuZero(config, policy, model)
+    elif search_algo == "pgs":
+        pgs = PGS(config, policy)
+    elif search_algo == "vepgs":
+        model = ValueEquivalenceModel(config)
+        vepgs = VEPGS(config, policy, model)
+    else:
+        raise ValueError('Unknown search algorithm: ', search_algo)
 
-    with ExitTrainer(config, az, policy) as tr:
+    # Train
+    with ExitTrainer(config, search_algo, policy, model=model) as tr:
         tr.train()
         tr.save()
         tr.test(render=False)
