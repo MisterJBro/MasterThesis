@@ -3,6 +3,7 @@ import time
 import numpy as np
 import torch.multiprocessing as mp
 from torch.multiprocessing import Process
+from multiprocessing.connection import wait
 
 
 class Evaluator(Process):
@@ -52,7 +53,7 @@ class Evaluator(Process):
                     self.cache.clear()
 
     def serve_requests(self):
-        reqs = mp.connection.wait(self.worker_channels, timeout=0.1)
+        reqs = wait(self.worker_channels, timeout=0.1)
 
          # Timeout
         if len(reqs) == 0:
@@ -64,7 +65,7 @@ class Evaluator(Process):
         while len(msg) < self.batch_size:
             if time.time() - start >= self.timeout:
                 break
-            reqs = mp.connection.wait(self.worker_channels, timeout=self.timeout/10)
+            reqs = wait(self.worker_channels, timeout=self.timeout/10)
             if len(reqs) == 0:
                 continue
             else:

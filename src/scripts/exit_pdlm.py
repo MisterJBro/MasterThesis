@@ -24,7 +24,7 @@ if __name__ == '__main__':
     env = DiscreteActionWrapper(PendulumEnv())
     config = create_config({
         "env": env,
-        "puct_c": 20.0,
+        "puct_c": 80.0,
         "train_iters": 50,
         "search_iters": 300,
         "search_num_workers": 15,
@@ -33,7 +33,7 @@ if __name__ == '__main__':
         "num_envs": 15,
         "device": "cpu",
         "pi_lr": 1e-3,
-        "vf_lr": 5e-4,
+        "vf_lr": 1e-3,
         "sample_len": 500,
         "tree_output_qvals": True,
         "log_name": f"{search_algo}_exit_log.txt",
@@ -49,12 +49,12 @@ if __name__ == '__main__':
         search_algo = AlphaZero(config, policy)
     elif search_algo == "mz":
         model = ValueEquivalenceModel(config)
-        mz = MuZero(config, policy, model)
+        search_algo = MuZero(config, policy, model)
     elif search_algo == "pgs":
-        pgs = PGS(config, policy)
+        search_algo = PGS(config, policy)
     elif search_algo == "vepgs":
         model = ValueEquivalenceModel(config)
-        vepgs = VEPGS(config, policy, model)
+        search_algo = VEPGS(config, policy, model)
     else:
         raise ValueError('Unknown search algorithm: ', search_algo)
 
