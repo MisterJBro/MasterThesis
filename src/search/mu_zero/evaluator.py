@@ -15,13 +15,16 @@ class MZEvaluator(Evaluator):
         # Filter out all obs and abs from the messages
         reply, obs, act = [], [], []
         abs0, abs1 = [], []
+        wids0, wids1 = [], []
 
         for m in msg:
             if "obs" in m:
                 obs.append(m["obs"])
+                wids0.append(m["ind"])
             if "abs" in m:
                 abs0.append(m["abs"][0])
                 abs1.append(m["abs"][1])
+                wids1.append(m["ind"])
             if "act" in m:
                 act.append(m["act"])
 
@@ -38,7 +41,7 @@ class MZEvaluator(Evaluator):
                 act = torch.as_tensor(np.stack(act)).float().to(self.device)
                 reply.extend(self.eval_abs(abs, act))
 
-        wids = [m["ind"] for m in msg]
+        wids = wids0 + wids1
         return wids, reply
 
     def eval_obs(self, obs):
