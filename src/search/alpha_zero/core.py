@@ -16,9 +16,13 @@ class AZCore(MCTSCore):
         self.set_root(state)
 
     def search(self, iters):
-        qvals = super().search(iters)
+        qvals = super().search(iters, default=self.root.val)
         if self.config["tree_output_qvals"]:
-            return qvals
+            max_visits = np.max([child.num_visits for child in self.root.children])
+            adv = qvals - self.root.val
+            adv = (adv - np.min(adv)) / (np.max(adv) - np.min(adv))
+            adv = 2*adv - 1
+            return (100 + max_visits) * 0.1 * adv
         return self.get_normalized_visit_counts()
 
     def simulate(self, node):

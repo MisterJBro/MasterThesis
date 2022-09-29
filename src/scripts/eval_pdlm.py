@@ -116,9 +116,9 @@ if __name__ == '__main__':
         return act
 
     # Eval
-    algos = [vepgs]#, mcts, nn, az, mz, mcs, pgs, vepgs]
+    algos = [nn, pgs]#, mcts, nn, az, mz, mcs, pgs, vepgs]
     ret_iters = []
-    all_iters = [100]# 400, 600, 800, 1000]
+    all_iters = [200]# 400, 600, 800, 1000]
     curr_iters = all_iters[job_id]
     for iters in all_iters:#[curr_iters]:
         for algo in algos:

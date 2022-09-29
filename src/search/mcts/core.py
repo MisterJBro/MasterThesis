@@ -12,7 +12,7 @@ class MCTSCore:
         self.expl_coeff = config["uct_c"]
         self.set_root(state)
 
-    def search(self, iters):
+    def search(self, iters, default=0):
         iter = 0
 
         while iter < iters:
@@ -22,7 +22,7 @@ class MCTSCore:
             self.backpropagate(new_leaf, ret)
             iter += 1
 
-        return self.root.get_action_values()
+        return self.root.get_action_values(default=default)
 
     def select(self):
         node = self.root

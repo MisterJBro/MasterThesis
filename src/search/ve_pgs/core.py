@@ -20,6 +20,22 @@ class VEPGSCore(PGSCore):
         super().__init__(config, state, eval_channel, pol_head, val_head, idx=idx)
         self.num_acts = num_acts
 
+    def reset(self, base_policy=None, base_value=None):
+        # Reset simulation policy e.g. after each search
+        del self.sim_policy
+        del self.sim_value
+        del self.optim_pol
+        del self.optim_val
+
+        if base_policy is not None:
+            self.base_policy = base_policy
+        if base_value is not None:
+            self.base_value = base_value
+        self.sim_policy = deepcopy(self.base_policy)
+        self.sim_value = deepcopy(self.base_value)
+        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=1e-4)
+        self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
+
     def expand(self, node):
         if node.state is None:
             next_abs, rew, hidden = self.eval_abs(node.parent.state.abs, node.action)
@@ -117,6 +133,7 @@ class VEPGSCore(PGSCore):
         loss_policy = -(logp * adv).mean()
         loss_dist = kl_divergence(base_dist, dist).mean()
         #loss_entropy = -dist.entropy().mean()
+        #print(dist.entropy().mean())
         loss = loss_policy# + 0.1 * loss_dist
         loss.backward()
         self.optim_pol.step()

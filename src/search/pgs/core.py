@@ -93,6 +93,8 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(node.state.obs)
             node.pol_h = pol_h
             node.val_h = val_h
+            with torch.no_grad():
+                node.qval = node.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return node
         if node.state.is_terminal():
             return node
@@ -114,6 +116,8 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(child.state.obs)
             child.pol_h = pol_h
             child.val_h = val_h
+            with torch.no_grad():
+                child.qval = child.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return child
         else:
             return node
@@ -203,6 +207,7 @@ class PGSCore(MCTSCore):
         dist = Categorical(logits=self.sim_policy(pol_h))
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
+        #print(dist.entropy().mean())
         loss_dist = kl_divergence(base_dist, dist).mean()
         #loss_entropy = -dist.entropy().mean()
         loss = loss_policy# + 0.1 * loss_dist
@@ -216,6 +221,12 @@ class PGSCore(MCTSCore):
         self.optim_val.zero_grad()
 
         return total_ret
+
+    def backpropagate(self, node, ret):
+        q_new = node.state.rew + self.config["gamma"] * ret
+        node.num_visits += 1
+        node.total_rews += q_new
+        #node.qval = node.qval + 0.2 * (q_new - node.qval)
 
     def set_root(self, state):
         self.iter = 0

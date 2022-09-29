@@ -27,8 +27,8 @@ class Node(ABC):
     def create_state(self):
         self.state = self.parent.state.transition(self.action)
 
-    def get_action_values(self):
-        return np.array([child.total_rews/(child.num_visits+1e-12) for child in self.children])
+    def get_action_values(self, default=0):
+        return np.array([child.total_rews/(child.num_visits+1e-12) if child.num_visits > 0 else default for child in self.children])
 
 
 class UCTNode(Node):
@@ -111,9 +111,10 @@ class PGSNode(PUCTNode):
 
     def __init__(self, state, action=None, parent=None):
         super().__init__(state, action, parent)
+        self.qval = 0
 
     def select_child(self, c):
-        uct_values = np.array([child.puct(child.num_visits, self.num_visits, child.total_rews, c, prior) for (child, prior) in zip(self.children, self.priors)])
+        uct_values = np.array([child.puct(child.qvalue(), child.num_visits, self.num_visits, c, prior) for (child, prior) in zip(self.children, self.priors)])
         return self.children[self.select_child_jit(uct_values, self.priors)]
 
     @staticmethod
@@ -127,3 +128,16 @@ class PGSNode(PUCTNode):
         if len(max_prior_indices) == 1:
             return max_uct_indices[max_prior_indices[0]]
         return max_uct_indices[np.random.choice(max_prior_indices)]
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def puct(qval, num_visits, parent_visits, c, prior):
+        if num_visits == 0:
+            return np.inf
+        return qval + c * prior * np.sqrt(parent_visits) / (1 + num_visits)
+
+    def qvalue(self):
+        return self.total_rews/(self.num_visits+1e-12) # self.qval #
+
+    def get_action_values(self, default=0):
+        return np.array([child.qvalue() if child.num_visits > 0 else default for child in self.children])
