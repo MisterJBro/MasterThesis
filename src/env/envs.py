@@ -1,6 +1,6 @@
 from tkinter import E
 import numpy as np
-from multiprocessing import Pipe
+from torch.multiprocessing import Pipe
 from src.env.worker import Worker
 
 

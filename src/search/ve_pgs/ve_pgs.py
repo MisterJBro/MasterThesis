@@ -1,5 +1,5 @@
 from copy import deepcopy
-from multiprocessing import Pipe
+from torch.multiprocessing import Pipe
 from src.search.pgs.pgs import PGS
 from src.search.ve_pgs.worker import VEPGSWorker
 from src.search.ve_pgs.evaluator import VEPGSEvaluator

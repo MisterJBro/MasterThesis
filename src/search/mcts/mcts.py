@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy
 from src.search.mcts.worker import MCTSWorker
 from src.search.search import ParallelSearchAlgorithm
-from multiprocessing import Pipe
+from torch.multiprocessing import Pipe
 
 
 class MCTS(ParallelSearchAlgorithm):

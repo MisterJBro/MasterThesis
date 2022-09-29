@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from multiprocessing import freeze_support
+from torch.multiprocessing import freeze_support
 from src.networks.policy_pend import PendulumPolicy
 from src.networks.model import ValueEquivalenceModel
 from src.search.pgs.mcs import MCS

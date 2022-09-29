@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from torch.multiprocessing import Process
 from src.search.mcts.core import MCTSCore
 
 

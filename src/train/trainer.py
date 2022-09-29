@@ -9,7 +9,7 @@ import random
 from src.env.envs import Envs
 from src.train.log import Logger
 
-from multiprocessing import freeze_support
+from torch.multiprocessing import freeze_support
 from src.train.processer import post_processing
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate

@@ -1,7 +1,7 @@
 from copy import deepcopy
 import time
 import numpy as np
-from multiprocessing import freeze_support
+from torch.multiprocessing import freeze_support
 from src.networks.policy_pend import PendulumPolicy
 from src.train.config import create_config
 from src.search.alpha_zero.alpha_zero import AlphaZero

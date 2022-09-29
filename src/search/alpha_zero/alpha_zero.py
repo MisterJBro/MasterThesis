@@ -1,4 +1,4 @@
-from multiprocessing import Pipe
+from torch.multiprocessing import Pipe
 from src.search.evaluator import Evaluator
 from src.search.alpha_zero.worker import AZWorker
 from src.search.search import ParallelSearchAlgorithm

@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 from copy import deepcopy
-from multiprocessing import Process
+from torch.multiprocessing import Process
 
 
 class Worker(Process):
