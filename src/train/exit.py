@@ -35,12 +35,19 @@ class ExitTrainer(Trainer):
         states = [State(env, obs=obs[i]) for i, env in enumerate(envs)]
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
 
+        # Policy inference
         with torch.no_grad():
             dist = self.policy.get_dist(obs)
         logits = dist.logits.cpu()
 
-        scaled_adv = self.search_algo.search(states)
-        dist = F.softmax(logits + scaled_adv, dim=-1)
+        # Search best action distribution
+        result = self.search_algo.search(states)
+        if self.config["search_return_adv"]:
+            dist = F.softmax(logits + result, dim=-1)
+        else:
+            dist = result
+
+        # Sample or argmax action
         if use_best:
             act = torch.argmax(dist).numpy()
         else:

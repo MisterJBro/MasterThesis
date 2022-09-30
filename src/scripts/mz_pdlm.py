@@ -22,7 +22,7 @@ if __name__ == '__main__':
         "mz_iters": 500,
         "mz_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "tree_output_qvals": False,
+        "search_return_adv": False,
     })
 
     policy = PendulumPolicy(config)

@@ -7,7 +7,7 @@
 #SBATCH --mem-per-cpu=3800
 ##SBATCH --gres=gpu:a100
 #SBATCH -t 23:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/AZ_PUCT80_ADV_DIRECT_EXIT_%A_%a-out.txt
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/AZ_EXIT_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
 

@@ -61,7 +61,7 @@ if __name__ == '__main__':
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
         "device": "cpu",
-        "tree_output_qvals": True,
+        "search_return_adv": True,
     })
 
     # Import policy and model

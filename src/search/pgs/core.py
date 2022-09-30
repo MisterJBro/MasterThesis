@@ -72,7 +72,7 @@ class PGSCore(MCTSCore):
             plt.show()
         #plot()
 
-        if self.config["tree_output_qvals"]:
+        if self.config["search_return_adv"]:
             qvals = self.root.get_action_values()
             #print(np.round(qvals, 2))
             return qvals

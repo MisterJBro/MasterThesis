@@ -35,7 +35,7 @@ if __name__ == '__main__':
         "pi_lr": 1e-3,
         "vf_lr": 1e-3,
         "sample_len": 500,
-        "tree_output_qvals": True,
+        "search_return_adv": True,
         "log_name": f"{search_algo}_exit_log.txt",
         "log_to_file": True,
     })

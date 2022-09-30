@@ -20,7 +20,7 @@ if __name__ == '__main__':
         "az_iters": 200,
         "az_eval_batch": 1,
         "dirichlet_eps": 0.0,
-        "tree_output_qvals": False,
+        "search_return_adv": False,
     })
 
     freeze_support()

@@ -21,7 +21,7 @@ if __name__ == '__main__':
         "pgs_trunc_len": 100,
         "pgs_iters": 500,
         "pgs_eval_batch": 1,
-        "tree_output_qvals": False,
+        "search_return_adv": False,
     })
 
     freeze_support()
