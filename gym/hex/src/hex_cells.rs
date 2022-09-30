@@ -4,6 +4,7 @@ use crate::color::Color;
 use crate::coords::{CoordValue, Coords};
 use crate::edges::{CoordsOrEdge, Edge};
 use crate::union_find::UnionFind;
+use serde::{Deserialize, Serialize};
 
 /// This type is used internally to index into `HexCells`.
 /// It can refer to a cell (like `Coords`) or to an edge (like `Edge`).
@@ -11,7 +12,7 @@ use crate::union_find::UnionFind;
 /// Typically, we convert to one of `Coords`, `Edge`, or `CoordsOrEdge` instead of exposing an index.
 pub type Index = u16;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 struct HexCell {
     color: Option<Color>,
     parent: Cell<Option<Index>>,
@@ -19,7 +20,7 @@ struct HexCell {
 
 const EDGES: [Edge; 4] = [Edge::Left, Edge::Top, Edge::Right, Edge::Bottom];
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct HexCells {
     pub size: CoordValue,
     // layout is a vector with format [normal cells using index=row*size + column; left, top, right, bottom]

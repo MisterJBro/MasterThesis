@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from copy import deepcopy
 
@@ -32,7 +33,7 @@ class State:
         player = 0
         while not done:
             player = (player + 1) % num_players
-            act = np.random.choice(env.available_actions())
+            act = random.choice(env.available_actions())
             _, rew, done, _ = env.step(act)
 
             # Return

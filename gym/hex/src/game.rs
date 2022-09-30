@@ -3,9 +3,10 @@ use crate::color::Color;
 use crate::coords::{CoordValue, Coords};
 use crate::edges::get_edges_of_color;
 use crate::errors::{InvalidBoard, InvalidMove};
+use serde::{Deserialize, Serialize};
 
 /// Status of a game.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Status {
     /// Game has not yet ended. The `Color` indicates which player is to make the next turn.
     Ongoing(Color),
@@ -17,7 +18,7 @@ pub enum Status {
 /// `Game` holds the full state of a game of Hex and allows to manipulate this state by playing valid moves.
 ///
 /// The game state consists of a board (`get_board`) and the current player (`get_current_player`).
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
     board: Board,
     status: Status,

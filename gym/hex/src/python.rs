@@ -3,9 +3,13 @@ use crate::{Game, Status};
 use numpy::ToPyArray;
 use numpy::{PyArray3};
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyBytes, PyTuple};
+use bincode::{deserialize, serialize};
+use serde::{Deserialize, Serialize};
 
 /// Game Interface for use in Python
 #[pyclass(name = "HexGame")]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct HexGame {
     pub size: u8,
     pub game: Game,
@@ -62,11 +66,34 @@ impl HexGame {
         matrix.to_pyarray(py)
     }
 
-    /// Create a copy of the current object
-    fn copy(&self) -> HexGame {
-        return HexGame {
-            size: self.size,
-            game: self.game.clone(),
-        };
+    // Get all still possible actions, where the cell is empty, Returns PyList
+    fn available_actions(&self) -> Vec<u32> {
+        let mut actions = Vec::new();
+        for x in 0..self.size {
+            for y in 0..self.size {
+                let color = self.game.get_board().get_color(Coords::new(x as u8, y as u8));
+
+                if color.is_none() {
+                    actions.push(y as u32 + self.size as u32 * x as u32);
+                }
+            }
+        }
+        return actions
+    }
+
+
+
+    /// Generic functions, just to copy/deepcopy objects within python
+    fn copy(&self) -> Self {self.clone()}
+    fn __copy__(&self) -> Self {self.clone()}
+    fn __deepcopy__(&self, _memo: &PyDict) -> Self {self.clone()}
+    fn to_pickle(&self) -> Vec<u8> {
+        let serialized = serde_pickle::to_vec(&self, Default::default()).unwrap();
+        return serialized
+    }
+
+    fn from_pickle(&mut self, serialized: Vec<u8>) {
+        let deserialized: Self = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+        self.game = deserialized.game;
     }
 }

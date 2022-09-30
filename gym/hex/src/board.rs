@@ -8,6 +8,8 @@ use crate::neighbors::get_neighbors;
 use crate::union_find::UnionFind;
 use std::iter::Iterator;
 use numpy::ndarray::{Array, Ix3};
+use serde::{Deserialize, Serialize};
+
 
 /// Minimal supported board size
 /// # (Some neighbor calculations assume that the size is at least 2.)
@@ -53,7 +55,7 @@ pub type StoneMatrix = Vec<Vec<Option<Color>>>;
 ///     5\.  .  .  .  .\5
 ///        a  b  c  d  e
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Board {
     cells: HexCells,
 }
