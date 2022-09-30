@@ -74,17 +74,10 @@ class PGSCore(MCTSCore):
 
         if self.config["search_return_adv"]:
             qvals = self.root.get_action_values()
-            #print(np.round(qvals, 2))
-            return qvals
-            val = self.root.val
             max_visits = np.max([child.num_visits for child in self.root.children])
-            adv = qvals - val
-            adv = (adv - np.min(adv)) / (np.max(adv) - np.min(adv))
-            adv = 2*adv - 1
-            return adv
-            qvals = (100 + max_visits) * 0.1 * adv
-            #print(self.logits, qvals)
-            return self.logits + qvals
+            adv = qvals - self.root.val
+            adv = adv / np.abs(np.max(adv))
+            return (100 + max_visits) * 0.005 * adv
         return self.get_normalized_visit_counts()
 
     def expand(self, node):

@@ -21,10 +21,7 @@ class AZCore(MCTSCore):
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
             adv = adv / np.abs(np.max(adv))
-            #adv = (adv - np.min(adv)) / (np.max(adv) - np.min(adv))
-            #adv = 2*adv - 1
-            #return adv
-            return (100 + max_visits) * 0.01 * adv
+            return (100 + max_visits) * 0.005 * adv
         return self.get_normalized_visit_counts()
 
     def simulate(self, node):

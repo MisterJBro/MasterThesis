@@ -16,5 +16,5 @@ class PGSEvaluator(Evaluator):
 
     def update(self, msg):
         self.policy.load_state_dict(msg["policy_params"])
-        self.master_channel.send((self.policy.network_head, self.policy.value_head))
+        self.master_channel.send((self.policy.policy_head, self.policy.value_head))
 
