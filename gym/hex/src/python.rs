@@ -22,8 +22,9 @@ impl HexGame {
     }
 
     /// Reset the environment
-    fn reset(&mut self) {
+    fn reset<'py>(&mut self, py: Python<'py>) -> &'py PyArray3<f32> {
         self.game = Game::new(self.size);
+        return self.get_obs(py)
     }
 
     /// Execute the current actions and update the board
@@ -59,5 +60,13 @@ impl HexGame {
     fn get_obs<'py>(&self, py: Python<'py>) -> &'py PyArray3<f32> {
         let matrix = self.game.get_board().to_ndarray();
         matrix.to_pyarray(py)
+    }
+
+    /// Create a copy of the current object
+    fn copy(&self) -> HexGame {
+        return HexGame {
+            size: self.size,
+            game: self.game.clone(),
+        };
     }
 }

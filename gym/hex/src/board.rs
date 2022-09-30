@@ -114,9 +114,6 @@ impl Board {
                         Color::White => array[[1, row, column]] = 1.0,
                     }
                 }
-                //else {
-                //    array[[0, row, column]] = 1.0;
-                //}
             }
         }
         array
