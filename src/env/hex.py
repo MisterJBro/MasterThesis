@@ -12,6 +12,7 @@ class HexEnv:
         self.env = HexGame(size)
         self.action_space = gym.spaces.Discrete(size)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(2, size, size), dtype=np.float32)
+        self.num_players = 2
 
     def reset(self):
         self.is_black = True

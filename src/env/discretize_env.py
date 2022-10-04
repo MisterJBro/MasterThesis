@@ -11,6 +11,7 @@ class DiscreteActionWrapper(gym.ActionWrapper):
         self.n_bins = n_bins
         self.converter = np.linspace(-2, 2, num=n_bins)
         self.action_space = gym.spaces.Discrete(n_bins)
+        self.num_players = 1
 
     def action(self, action):
         """ Discrete to continuous action."""

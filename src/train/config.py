@@ -11,7 +11,6 @@ DEFAULT_CONFIG = {
     # === Environments settings ===
     "env": "CartPole-v1",
     "num_envs": 15,
-    "num_players": 1,
     "sample_len": 500,
     "gamma": 1.0,
     "lam": 0.97,
@@ -74,6 +73,7 @@ def compute_config(config):
     config["obs_dim"] = env.observation_space.shape
     config["num_acts"] = env.action_space.n
     config["flat_obs_dim"] = int(np.product(config["obs_dim"]))
+    config["num_players"] = env.num_players
 
     return config
 
