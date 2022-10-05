@@ -1,5 +1,5 @@
 import torch
-from src.networks.policy_pend import PendulumPolicy
+from src.networks.residual import PendulumPolicy
 from src.train.trainer import Trainer
 from src.networks.model import ValueEquivalenceModel
 from src.search.model_search import plan

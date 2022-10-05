@@ -2,7 +2,7 @@ from copy import deepcopy
 import time
 import numpy as np
 from torch.multiprocessing import freeze_support
-from src.networks.policy_pend import PendulumPolicy
+from src.networks.residual import PendulumPolicy
 from src.train.config import create_config
 from src.search.pgs import PGS
 from src.env.discretize_env import DiscreteActionWrapper

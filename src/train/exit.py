@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.networks.policy_pend import PendulumPolicy
+from src.networks.residual import PendulumPolicy
 from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.search.state import State
 

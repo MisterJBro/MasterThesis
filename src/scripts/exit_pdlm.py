@@ -1,5 +1,5 @@
 from src.networks.model import ValueEquivalenceModel
-from src.networks.policy_pend import PendulumPolicy
+from src.networks.residual import PendulumPolicy
 from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.search.mcts.mcts import MCTS
 from src.search.mu_zero.mu_zero import MuZero

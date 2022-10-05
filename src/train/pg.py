@@ -1,5 +1,5 @@
 import numpy as np
-from src.networks.policy_pend import PendulumPolicy
+from src.networks.residual import PendulumPolicy
 from src.train.trainer import Trainer
 
 class PGTrainer(Trainer):
