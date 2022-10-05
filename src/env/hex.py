@@ -10,7 +10,7 @@ class HexEnv:
         self.size = size
         self.is_black = True
         self.env = HexGame(size)
-        self.action_space = gym.spaces.Discrete(size)
+        self.action_space = gym.spaces.Discrete(size*size)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(2, size, size), dtype=np.float32)
         self.num_players = 2
 
@@ -30,9 +30,10 @@ class HexEnv:
     def render(self):
         print(self)
 
-    def available_actions(self):
+    def available_actions(self, use_indices=False):
         actions = self.env.available_actions()
-        actions = [np.eye(self.size*self.size)[a] for a in actions]
+        if not use_indices:
+            actions = [np.eye(self.size*self.size)[a] for a in actions]
         return actions
 
     def __str__(self):

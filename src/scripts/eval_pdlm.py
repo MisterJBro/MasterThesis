@@ -7,7 +7,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from torch.multiprocessing import freeze_support
-from src.networks.residual import PendulumPolicy
+from src.networks.fnn import PendulumPolicy
 from src.networks.model import ValueEquivalenceModel
 from src.search.pgs.mcs import MCS
 from src.search.pgs.pgs import PGS
@@ -82,6 +82,7 @@ if __name__ == '__main__':
         obs = torch.as_tensor(obs, dtype=torch.float32)
         with torch.no_grad():
             dist = policy.get_dist(obs)
+            print(dist)
         act = dist.logits.argmax(-1)
         return act.cpu().numpy()
 

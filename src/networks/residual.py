@@ -1,3 +1,4 @@
+from cmath import log
 from re import M
 import torch
 import torch.nn as nn
@@ -9,19 +10,20 @@ import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
+
 class ResBlock(nn.Module):
     """ Residual Block with Skip Connection, just like ResNet. """
     def __init__(self, config):
         super(ResBlock, self).__init__()
-        self.config
+        self.config = config
         self.num_filters = 128
         self.kernel_size = 3
 
         self.layers = nn.Sequential(
-            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size),
+            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size, padding=1),
             nn.BatchNorm2d(self.num_filters),
             nn.ReLU(),
-            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size),
+            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size, padding=1),
             nn.BatchNorm2d(self.num_filters),
         )
 
@@ -38,58 +40,65 @@ class HexPolicy(nn.Module):
         self.num_filters = 128
         self.kernel_size = 3
         self.num_res_blocks = 19
+        self.size = config["obs_dim"][-1]
 
         # Layers
         self.input_layer = nn.Sequential(
-            nn.Conv2d(2, self.num_filters, self.kernel_size),
+            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1),
             nn.BatchNorm2d(self.num_filters),
         )
-        self.res_blocks = nn.Sequential([ResBlock(config) for _ in range(10)])
+        self.res_blocks = nn.Sequential(*[ResBlock(config) for _ in range(10)])
 
         # Heads
         self.policy = nn.Sequential(
-            nn.Conv2d(self.num_filters, 32, 1),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(self.num_filters, 16, 1),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Flatten(1, -1),
         )
-        self.policy_head = nn.Linear(32, config["num_acts"])
+        self.policy_head = nn.Linear(self.size*self.size*16, config["num_acts"])
 
         self.value = nn.Sequential(
-            nn.Conv2d(self.num_filters, 32, 1),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(self.num_filters, 16, 1),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Flatten(1, -1),
-            nn.Linear(1000, 32),
+            nn.Linear(self.size*self.size*16, 256),
             nn.ReLU(),
         )
-        self.value_head = nn.Linear(32, 1)
+        self.value_head = nn.Linear(256, 1)
 
         #self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
-        self.opt_policy = optim.Adam(list(self.hidden.parameters()) + list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
+        self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
         self.opt_value = optim.Adam(list(self.value.parameters()) + list(self.value_head.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
         self.to(self.device)
 
-    def forward(self, x):
+    def forward(self, x, legal_actions=None):
         x = self.input_layer(x)
         x = self.res_blocks(x)
-        dist = Categorical(logits=self.policy_head(self.policy(x)))
+
+        logits = self.policy_head(self.policy(x))
+        logits = self.filter_actions(logits, legal_actions)
+        dist = Categorical(logits=logits)
         val = self.value_head(self.value(x)).reshape(-1)
         return dist, val
 
-    def get_action(self, x_numpy):
+    def get_action(self, x_numpy, legal_actions=None):
         with torch.no_grad():
             x = torch.as_tensor(x_numpy, dtype=torch.float32).to(self.device)
-            dist = self.get_dist(x)
+            dist = self.get_dist(x, legal_actions=legal_actions)
             act = dist.sample()
 
         return act.cpu().numpy()
 
-    def get_dist(self, x):
+    def get_dist(self, x, legal_actions=None):
         x = self.input_layer(x)
         x = self.res_blocks(x)
-        dist = Categorical(logits=self.policy_head(self.policy(x)))
+
+        logits = self.policy_head(self.policy(x))
+        logits = self.filter_actions(logits, legal_actions)
+        dist = Categorical(logits=logits)
         return dist
 
     def get_value(self, x):
@@ -102,6 +111,16 @@ class HexPolicy(nn.Module):
         x = self.input_layer(x)
         x = self.res_blocks(x)
         return self.policy(x), self.value(x)
+
+    def filter_actions(self, logits, legal_actions=None):
+        if legal_actions is None:
+            return logits
+
+        # Mask out invalid actions
+        new_logits = torch.full(logits.shape, -10e8, dtype=torch.float32).to(self.device)
+        for i, row in enumerate(legal_actions):
+            new_logits[i, row] = logits[i, row]
+        return new_logits
 
     def loss_gradient(self, data):
         obs = data["obs"]
