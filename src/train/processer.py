@@ -60,7 +60,7 @@ def calc_return_multi(done, pid, rew, gamma, val):
                         ret[b][i] = -rew[b][t]
                 start = end
             elif t == rew.shape[1] - 1:
-                ret[b][start:] = val[b][start:]
+                ret[b][start:] = val[b][start:] 
     return ret
 
 def calc_metrics(sample_batch):
