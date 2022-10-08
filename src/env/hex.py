@@ -25,7 +25,7 @@ class HexEnv:
 
         if not self.is_black:
             obs[[0, 1]] = obs[[1, 0]]
-        return obs, rew, done, {}
+        return obs, rew, done, {"pid": int(not self.is_black)}
 
     def render(self):
         print(self)

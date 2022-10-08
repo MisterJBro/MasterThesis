@@ -73,9 +73,9 @@ class Trainer(ABC):
 
         for _ in range(self.config["sample_len"]):
             act, dist = self.get_action(obs)
-            obs_next, rew, done = self.envs.step(act)
+            obs_next, rew, done, pid = self.envs.step(act)
 
-            sample_batch.append(obs, act, rew, done, dist)
+            sample_batch.append(obs, act, rew, done, dist, pid)
             obs = obs_next
 
         sample_batch.set_last_obs(obs)

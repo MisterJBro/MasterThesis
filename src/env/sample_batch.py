@@ -20,6 +20,7 @@ class SampleBatch:
         self.done = np.empty((self.num_envs, config["sample_len"]), dtype=np.bool8)
         self.last_obs = np.empty((self.num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
         self.dist = np.empty((self.num_envs, config["sample_len"], self.num_acts), dtype=np.float32)
+        self.pid = np.empty((self.num_envs, config["sample_len"]), dtype=np.int8)
         self.ret = None
         self.val = None
 
@@ -29,12 +30,13 @@ class SampleBatch:
     def set_last_obs(self, obs):
         self.last_obs = obs.astype(self.obs_dtype, copy=False)
 
-    def append(self, obs, act, rew, done, dist):
+    def append(self, obs, act, rew, done, dist, pid):
         self.obs[:, self.idx] = obs.astype(self.obs_dtype, copy=False)
         self.act[:, self.idx] = act.astype(self.act_dtype, copy=False)
         self.rew[:, self.idx] = rew.astype(self.rew_dtype, copy=False)
         self.done[:, self.idx] = done
         self.dist[:, self.idx] = dist
+        self.pid[:, self.idx] = pid
 
         self.idx += 1
 
@@ -62,7 +64,8 @@ class SampleBatch:
         val = torch.from_numpy(self.val).float().reshape(-1).to(self.device)
         last_val = torch.from_numpy(self.last_val).float().reshape(-1).to(self.device)
         dist = torch.from_numpy(self.dist).float().reshape(-1, self.num_acts).to(self.device)
-        done = torch.from_numpy(self.done).reshape(-1)
+        done = torch.from_numpy(self.done).reshape(-1).to(self.device)
+        pid = torch.from_numpy(self.pid).reshape(-1).to(self.device)
         sections = self.get_sections()
 
         return {
@@ -74,5 +77,6 @@ class SampleBatch:
             "last_val": last_val,
             "dist": dist,
             "done": done,
+            "pid": pid,
             "sections": sections,
         }

@@ -47,17 +47,19 @@ class Envs:
                     "act": act[i*self.num_envs_worker:(i+1)*self.num_envs_worker],
                 })
 
-        obs_next, rew, done = [], [], []
+        obs_next, rew, done, pid = [], [], [], []
         msg = [c.recv() for c in self.channels]
-        for on, r, d in msg:
+        for on, r, d, p in msg:
             obs_next.append(on)
             rew.append(r)
             done.append(d)
+            pid.append(p)
         obs_next = np.concatenate(obs_next)
         rew = np.concatenate(rew)
         done = np.concatenate(done)
+        pid = np.concatenate(pid)
 
-        return obs_next, rew, done
+        return obs_next, rew, done, pid
 
     def get_all_env(self):
         for c in self.channels:

@@ -1,7 +1,5 @@
-import statistics
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from numba import jit
 import scipy.signal
 
@@ -30,7 +28,7 @@ def gen_adv_estimation(rew, val, gamma, lam):
     return adv_buf
 
 @jit(nopython=True)
-def calc_return(done, rew, gamma, last_val):
+def calc_return_single(done, rew, gamma, last_val):
     ret = np.zeros((rew.shape))
     for b in range(rew.shape[0]):
         start = 0
@@ -43,6 +41,26 @@ def calc_return(done, rew, gamma, last_val):
                 lv = last_val[b]
                 # Episode was cut --> bootstrap
                 ret[b][start:] = discount_cumsum(np.append(rew[b][start:], lv), gamma)[:-1]
+    return ret
+
+@jit(nopython=True)
+def calc_return_multi(done, pid, rew, gamma, val):
+    ret = np.zeros((rew.shape))
+    for b in range(rew.shape[0]):
+        start = 0
+        for t in range(rew.shape[1]):
+            end = t + 1
+            if done[b][t]:
+                for i in range(start, end):
+                    # Win
+                    if pid[b][i] == pid[b][t]:
+                        ret[b][i] = rew[b][t]
+                    # Defeat
+                    else:
+                        ret[b][i] = -rew[b][t]
+                start = end
+            elif t == rew.shape[1] - 1:
+                ret[b][start:] = val[b][start:]
     return ret
 
 def calc_metrics(sample_batch):
@@ -85,8 +103,12 @@ def post_processing(policy, sample_batch, config):
     sample_batch.val = val
     sample_batch.last_val = last_val
 
-    # Return calculation
-    ret = calc_return(sample_batch.done, sample_batch.rew, config["gamma"], last_val)
+    # Return calculation based only player number
+    if config["num_players"] == 1:
+        ret = calc_return_single(sample_batch.done, sample_batch.rew, config["gamma"], last_val)
+    if config["num_players"] == 2:
+        ret = calc_return_multi(sample_batch.done, sample_batch.pid, sample_batch.rew, config["gamma"], val)
+
     sample_batch.ret = ret
 
     # Calculate several metrics
