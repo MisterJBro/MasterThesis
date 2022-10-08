@@ -70,7 +70,6 @@ if __name__ == '__main__':
         while True:
             act = int(input("Please type in your action: "))
             if act in [np.argmax(a) for a in available_actions]:
-                act = np.eye(size*size)[act]
                 break
         return act
 
@@ -81,14 +80,13 @@ if __name__ == '__main__':
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
-            dist, val = policy(obs, legal_actions=[env.available_actions(use_indices=True)])
+            dist, val = policy(obs, legal_actions=[env.available_actions()])
         act = dist.logits.argmax(-1).cpu().numpy()[0]
-        act = np.eye(size*size)[act]
         return act
 
     # Simulate
     players = [az, nn]
-    num_games = 100
+    num_games = 1
     render = False
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")

@@ -13,6 +13,7 @@ class HexEnv:
         self.action_space = gym.spaces.Discrete(size*size)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(2, size, size), dtype=np.float32)
         self.num_players = 2
+        self.converter = np.eye(size*size)
 
     def reset(self):
         self.is_black = True
@@ -20,7 +21,7 @@ class HexEnv:
 
     def step(self, action):
         self.is_black = not self.is_black
-        action = np.argwhere(action)[0][0]
+        #action = np.argwhere(action)[0][0]
         obs, rew, done = self.env.step(action)
 
         if not self.is_black:
@@ -30,14 +31,17 @@ class HexEnv:
     def render(self):
         print(self)
 
-    def available_actions(self, use_indices=False):
-        actions = self.env.available_actions()
-        if not use_indices:
-            actions = [np.eye(self.size*self.size)[a] for a in actions]
-        return actions
+    def available_actions(self):
+        return self.env.available_actions()
+
+    def seed(self, value):
+        pass
+
+    def close(self):
+        pass
 
     def __str__(self):
-        return str(self.env)
+        return "Hex Game"
 
     def __getstate__(self):
         return (self.size, self.is_black, self.action_space, self.observation_space, self.env.to_pickle())

@@ -1,5 +1,3 @@
-from sample_batch import SampleBatch
-from src.train.processer import post_processing
 from src.train.trainer import Trainer
 
 class PGTrainer(Trainer):

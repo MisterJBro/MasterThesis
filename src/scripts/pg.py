@@ -1,5 +1,5 @@
 from multiprocessing import freeze_support
-from hex import HexEnv
+from src.env.hex import HexEnv
 from src.networks.residual import HexPolicy
 from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.train.config import create_config
@@ -20,8 +20,8 @@ if __name__ == '__main__':
         "search_evaluator_batch_size": 1,
         "search_return_adv": True,
         "num_cpus": 4,
-        "num_envs": 20,
-        "device": "cpu",
+        "num_envs": 16,
+        "device": "cuda:0",
         "pi_lr": 1e-3,
         "vf_lr": 1e-3,
         "vf_iters": 2,

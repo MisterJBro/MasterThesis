@@ -40,17 +40,21 @@ class Worker(Process):
 
     def reset(self):
         obs = np.array([env.reset() for env in self.envs])
-        return obs
+        legal_act = [env.available_actions() for env in self.envs]
+        return obs, legal_act
 
     def step(self, acts):
-        obs_next_list, rew_list, done_list, pid_list = [], [], [], []
+        obs_next_list, rew_list, done_list, pid_list, legal_act_list = [], [], [], [], []
 
         for i in range(self.num_envs):
+            # Env step
             obs_next, rew, done, info = self.envs[i].step(acts[i])
 
             if done:
                 obs_next = self.envs[i].reset()
+            legal_act = self.envs[i].available_actions()
 
+            # Append
             obs_next_list.append(obs_next)
             rew_list.append(rew)
             done_list.append(done)
@@ -58,12 +62,16 @@ class Worker(Process):
                 pid_list.append(info["pid"])
             else:
                 pid_list.append(0)
+            legal_act_list.append(legal_act)
         obs_next = np.stack(obs_next_list, axis=0)
         rew = np.stack(rew_list, axis=0)
         done = np.stack(done_list, axis=0)
-        pid = np.stack(pid_list, axis=0)
 
-        return obs_next, rew, done, pid
+        pid = np.stack(pid_list, axis=0)
+        legal_act = legal_act_list
+        info = [pid, legal_act]
+
+        return obs_next, rew, done, info
 
     def close(self):
         for env in self.envs:

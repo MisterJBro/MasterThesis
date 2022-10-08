@@ -57,7 +57,7 @@ class SampleBatch:
 
     def to_tensor_dict(self):
         obs = torch.from_numpy(self.obs).float()
-        obs = obs.reshape(-1, obs.shape[-1]).to(self.device)
+        obs = obs.flatten(start_dim=0, end_dim=1).to(self.device)
         act = torch.from_numpy(self.act).long().reshape(-1).to(self.device)
         rew = torch.from_numpy(self.rew).float().reshape(-1).to(self.device)
         ret = torch.from_numpy(self.ret).float().reshape(-1).to(self.device)

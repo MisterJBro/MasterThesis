@@ -60,7 +60,7 @@ def calc_return_multi(done, pid, rew, gamma, val):
                         ret[b][i] = -rew[b][t]
                 start = end
             elif t == rew.shape[1] - 1:
-                ret[b][start:] = val[b][start:] 
+                ret[b][start:] = val[b][start:]
     return ret
 
 def calc_metrics(sample_batch):
@@ -88,8 +88,7 @@ def calc_metrics(sample_batch):
 def post_processing(policy, sample_batch, config):
     # Value prediction
     buffer_shape = sample_batch.rew.shape
-    obs = torch.as_tensor(sample_batch.obs)
-    obs = obs.reshape(-1, obs.shape[-1]).to(policy.device)
+    obs = torch.as_tensor(sample_batch.obs).flatten(start_dim=0, end_dim=1).to(policy.device)
     last_obs = torch.as_tensor(sample_batch.last_obs).to(policy.device)
 
     with torch.no_grad():

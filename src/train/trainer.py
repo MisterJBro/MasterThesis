@@ -69,12 +69,13 @@ class Trainer(ABC):
 
     def get_sample_batch(self):
         sample_batch = SampleBatch(self.config)
-        obs = self.envs.reset()
+        obs, legal_act = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, dist = self.get_action(obs)
-            obs_next, rew, done, pid = self.envs.step(act)
+            act, dist = self.get_action(obs, envs=self.envs, legal_actions=legal_act)
+            obs_next, rew, done, info = self.envs.step(act)
 
+            pid, legal_act = info
             sample_batch.append(obs, act, rew, done, dist, pid)
             obs = obs_next
 
@@ -82,10 +83,10 @@ class Trainer(ABC):
         sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
-    def get_action(self, obs, envs=None, use_best=False):
+    def get_action(self, obs, envs=None, use_best=False, legal_actions=None):
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         with torch.no_grad():
-            dist = self.policy.get_dist(obs)
+            dist = self.policy.get_dist(obs, legal_actions=legal_actions)
         if use_best:
             act = dist.logits.argmax(-1)
         else:
