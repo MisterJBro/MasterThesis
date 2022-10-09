@@ -15,9 +15,8 @@ class PGTrainer(Trainer):
         adv = ret - val
         data["adv"] = adv
 
-        # Policy and Value loss
-        self.policy.loss_gradient(data)
-        self.policy.loss_value(data)
+        # Policy loss
+        self.policy.loss(data)
 
 
 class PPOTrainer(PGTrainer):
@@ -31,5 +30,4 @@ class PPOTrainer(PGTrainer):
         data["adv"] = adv
 
         # Policy and Value loss
-        self.policy.loss_gradient(data)
-        self.policy.loss_value(data)
+        self.policy.loss(data)

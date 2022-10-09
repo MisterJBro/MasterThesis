@@ -75,6 +75,10 @@ class PendulumPolicy(nn.Module):
         x = self.hidden(x)
         return self.policy(x), self.value(x)
 
+    def loss(self, data):
+        self.loss_gradient(data)
+        self.loss_value(data)
+
     def loss_gradient(self, data):
         obs = data["obs"]
         act = data["act"]

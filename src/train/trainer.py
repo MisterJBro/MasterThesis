@@ -60,7 +60,6 @@ class Trainer(ABC):
             if self.config["num_players"] > 1:
                 if iter > 0:
                     win_rate, elo = self.evaluate()
-                    print(win_rate, elo)
                     self.log("win_rate", win_rate)
                 else:
                     elo = 0
@@ -141,9 +140,10 @@ class Trainer(ABC):
         old_policy.load(self.log.save_paths[-1])
 
         # Parameters
-        num_games = 100
         p = self.eval_pool
         num_worker = self.config["num_cpus"]
+        num_games = 100
+        num_games -= num_games % num_worker
         env = self.config["env"]
         sample_len = self.config["sample_len"]
 
@@ -183,7 +183,7 @@ def nn(env, obs, policy):
     obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
     with torch.no_grad():
         dist = policy.get_dist(obs, legal_actions=[env.available_actions()])
-    act = dist.logits.argmax(-1).cpu().numpy()[0]
+    act = dist.sample().cpu().numpy()[0]
     return act
 
 # Self play evaluation

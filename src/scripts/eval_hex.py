@@ -1,4 +1,4 @@
-import random
+import random as rand
 import torch
 import numpy as np
 from torch.multiprocessing import freeze_support
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    #policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
+    policy.load("checkpoints/policy_hexgame_pg_iter=38_metric=309.pt")
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
         return act
 
     def random(env, obs):
-        return random.choice(env.available_actions())
+        return rand.choice(env.available_actions())
 
     def nn(env, obs):
         # obs (2, 9, 9, 1)
@@ -85,8 +85,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [az, nn]
-    num_games = 1
+    players = [nn, random]
+    num_games = 100
     render = False
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")

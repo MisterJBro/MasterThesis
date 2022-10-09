@@ -39,6 +39,7 @@ class HexPolicy(nn.Module):
         self.kernel_size = 3
         self.num_res_blocks = 19
         self.size = config["obs_dim"][-1]
+        self.scalar_loss = nn.HuberLoss()
 
         # Layers
         self.input_layer = nn.Sequential(
@@ -66,7 +67,7 @@ class HexPolicy(nn.Module):
         )
         self.value_head = nn.Linear(256, 1)
 
-        #self.opt = optim.Adam(self.parameters(), lr=config["pi_lr"])
+        self.opt_hidden = optim.Adam(list(self.input_layer.parameters()) + list(self.res_blocks.parameters()), lr=config["pi_lr"])
         self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
         self.opt_value = optim.Adam(list(self.value.parameters()) + list(self.value_head.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
@@ -119,6 +120,36 @@ class HexPolicy(nn.Module):
         for i, row in enumerate(legal_actions):
             new_logits[i, row] = logits[i, row]
         return new_logits
+
+    def loss(self, data):
+        obs = data["obs"]
+        act = data["act"]
+        adv = data["adv"]
+        ret = data["ret"]
+
+        # Policy loss
+        trainset = TensorDataset(obs, act, adv, ret)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
+
+        # Minibatch training to fit on GPU memory
+        for _ in range(1):
+            for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
+                self.opt_hidden.zero_grad()
+                self.opt_policy.zero_grad()
+                self.opt_value.zero_grad()
+
+                dist, val_batch = self(obs_batch)
+                loss_value = self.scalar_loss(val_batch, ret_batch)
+                logp = dist.log_prob(act_batch)
+                loss_policy = -(logp * adv_batch).mean()
+                loss_entropy = - dist.entropy().mean()
+                loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
+                loss.backward()
+
+                nn.utils.clip_grad_norm_(self.parameters(),  self.config["grad_clip"])
+                self.opt_hidden.step()
+                self.opt_policy.step()
+                self.opt_value.step()
 
     def loss_gradient(self, data):
         obs = data["obs"]
