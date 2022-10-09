@@ -50,8 +50,10 @@ DEFAULT_CONFIG = {
     "pgs_trunc_len": 10,
 
     # === Others ===
+    "log_main_metric": "elo",
     "log_name": "log.txt",
     "log_to_file": False,
+    "log_to_writer": True,
 
 }
 

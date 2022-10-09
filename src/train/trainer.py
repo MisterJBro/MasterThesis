@@ -6,6 +6,7 @@ from copy import deepcopy
 import gym
 import time
 import random
+from src.debug.elo import update_ratings
 from src.env.envs import Envs
 from src.train.log import Logger
 
@@ -14,6 +15,7 @@ from src.train.processer import post_processing
 from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 from src.env.sample_batch import SampleBatch
+from multiprocessing import Pool
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
@@ -33,7 +35,9 @@ class Trainer(ABC):
         self.envs = Envs(config)
         self.policy = None
         self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
-        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
+        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/', writer=self.writer)
+        self.eval_pool = Pool(self.config["num_cpus"])
+        self.elos = [0]
 
         print(tabulate([
             ['Environment', config["env"]],
@@ -46,22 +50,35 @@ class Trainer(ABC):
     def train(self):
         for iter in range(self.config["train_iters"]):
             self.log.clear()
-            self.log("Iter", iter)
-            sample_batch = self.get_sample_batch()
-            self.log.update(sample_batch.metrics)
+            self.log("iter", iter)
 
+            # Main
+            sample_batch = self.get_sample_batch()
             self.update(sample_batch)
+
+            # Self play test
+            if self.config["num_players"] > 1:
+                if iter > 0:
+                    win_rate, elo = self.evaluate()
+                    print(win_rate, elo)
+                    self.log("win_rate", win_rate)
+                else:
+                    elo = 0
+                self.log("elo", elo)
+
+            # Logging
+            self.log.update(sample_batch.metrics)
             print(self.log)
             if self.config["log_to_file"]:
                 self.log.to_file()
-            self.writer.add_scalar('Average return', self.log["avg ret"], iter)
-            self.checkpoint()
+            if self.config["log_to_writer"]:
+                self.log.to_writer(iter)
+            self.checkpoint(iter)
 
-    def checkpoint(self):
-        if self.log["avg ret"] > self.log.best_metric:
-            self.log.best_metric = self.log["avg ret"]
-            self.best_model_path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}_{self.log.best_metric:.0f}.pt'
-            self.save(path=self.best_model_path)
+    def checkpoint(self, iter):
+        last_path = f'{PROJECT_PATH}/checkpoints/policy_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_metric={self.log[self.config["log_main_metric"]]:.0f}.pt'
+        self.log.save_paths.append(last_path)
+        self.save(path=last_path)
 
     @abstractmethod
     def update(self, sample_batch):
@@ -118,6 +135,26 @@ class Trainer(ABC):
         print(f'Undiscounted return: {np.sum(rews)}')
         env.close()
 
+    def evaluate(self):
+        # Get last policy
+        old_policy = deepcopy(self.policy)
+        old_policy.load(self.log.save_paths[-1])
+
+        # Parameters
+        num_games = 100
+        p = self.eval_pool
+        num_worker = self.config["num_cpus"]
+        env = self.config["env"]
+        sample_len = self.config["sample_len"]
+
+        # Evaluate in parallel
+        win_count = sum(p.starmap(evaluate, [(int(num_games / num_worker), env, self.policy, old_policy, sample_len) for _ in range(num_worker)]))
+        win_rate = win_count/num_games * 100.0
+        last_elo = self.elos[-1]
+        elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=30)
+        self.elos.append(elo)
+        return win_rate, elo
+
     def save(self, path=None):
         if path is not None:
             self.policy.save(path=path)
@@ -140,3 +177,46 @@ class Trainer(ABC):
         self.envs.close()
         self.writer.flush()
         self.writer.close()
+        self.eval_pool.close()
+
+def nn(env, obs, policy):
+    obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
+    with torch.no_grad():
+        dist = policy.get_dist(obs, legal_actions=[env.available_actions()])
+    act = dist.logits.argmax(-1).cpu().numpy()[0]
+    return act
+
+# Self play evaluation
+def evaluate(num_games_per_worker, env, agent1, agent2, sample_len):
+    env = deepcopy(env)
+    obs_first = None
+
+    win_count = 0
+    for n in range(num_games_per_worker):
+        # Get player order, switch every game
+        pid = n % 2
+        eid = (n+1) % 2
+
+        # Play two times with the same seed for more accurate winrate prediction (so no one can have a luck based board advantage)
+        if n % 2 == 0:
+            obs_first = env.reset()
+            env2 = deepcopy(env)
+        else:
+            env = env2
+        obs = obs_first
+
+        for i in range(sample_len):
+            # Get action
+            if i % 2 == pid:
+                act = nn(env, obs, agent1)
+            else:
+                act = nn(env, obs, agent2)
+
+            # Simulate one step and get new obs
+            obs, rew, done, info = env.step(act)
+
+            if done:
+                if i % 2 == pid:
+                    win_count += rew
+                break
+    return win_count

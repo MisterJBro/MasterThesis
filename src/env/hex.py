@@ -41,7 +41,7 @@ class HexEnv:
         pass
 
     def __str__(self):
-        return "Hex Game"
+        return "hexgame"
 
     def __getstate__(self):
         return (self.size, self.is_black, self.action_space, self.observation_space, self.env.to_pickle())

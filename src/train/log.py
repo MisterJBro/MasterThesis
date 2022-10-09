@@ -5,13 +5,14 @@ from datetime import timedelta
 class Logger(dict):
     """Basic logger for metrics"""
 
-    def __init__(self, config, path=None, *args, **kwargs):
+    def __init__(self, config, path=None, writer=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
         self.log_path = path
-        self.best_model_path = ""
+        self.save_paths = []
         self.best_metric = float('-inf')
         self.timer = time.time()
+        self.writer = writer
 
     def __call__(self, metric, value):
         self[metric] = value
@@ -29,3 +30,7 @@ class Logger(dict):
         path = path if path is not None else self.log_path
         with open(path + '/' + self.config['log_name'], 'a') as f:
             f.write(str(self) + '\n')
+
+    def to_writer(self, iter):
+        for k, v in self.items():
+            self.writer.add_scalar(str(k), v, iter)

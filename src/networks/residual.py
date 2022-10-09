@@ -127,13 +127,17 @@ class HexPolicy(nn.Module):
 
         # Policy loss
         self.opt_policy.zero_grad()
+        trainset = TensorDataset(obs, act, adv)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10))
 
-        dist = self.get_dist(obs)
-        logp = dist.log_prob(act)
-        loss_policy = -(logp * adv).mean()
-        loss_entropy = - dist.entropy().mean()
-        loss = loss_policy + self.config["pi_entropy"] * loss_entropy
-        loss.backward()
+        # Splitting obs, to fit on GPU memory
+        for obs_batch, act_batch, adv_batch in trainloader:
+            dist = self.get_dist(obs_batch)
+            logp = dist.log_prob(act_batch)
+            loss_policy = -(logp * adv_batch).mean()
+            loss_entropy = - dist.entropy().mean()
+            loss = loss_policy + self.config["pi_entropy"] * loss_entropy
+            loss.backward()
         nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
         self.opt_policy.step()
 

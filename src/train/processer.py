@@ -80,9 +80,9 @@ def calc_metrics(sample_batch):
         returns = [np.sum(rew[b]) for b in range(rew.shape[0])]
 
     return {
-        'avg ret': np.mean(returns),
-        'max ret': np.max(returns),
-        'min ret': np.min(returns),
+        #'avg_ret': np.mean(returns),
+        #'max_ret': np.max(returns),
+        #'min_ret': np.min(returns),
     }
 
 def post_processing(policy, sample_batch, config):

@@ -19,7 +19,7 @@ if __name__ == '__main__':
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "search_return_adv": True,
-        "num_cpus": 4,
+        "num_cpus": 3,
         "num_envs": 16,
         "device": "cuda:0",
         "pi_lr": 1e-3,
