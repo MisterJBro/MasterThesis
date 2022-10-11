@@ -65,7 +65,10 @@ class HexPolicy(nn.Module):
             nn.Linear(self.size*self.size*16, 256),
             nn.ReLU(),
         )
-        self.value_head = nn.Linear(256, 1)
+        self.value_head = nn.Sequential(
+            nn.Linear(256, 1),
+            nn.Tanh(),
+        )
 
         self.opt_hidden = optim.Adam(list(self.input_layer.parameters()) + list(self.res_blocks.parameters()), lr=config["pi_lr"])
         self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
@@ -80,7 +83,7 @@ class HexPolicy(nn.Module):
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)
         dist = Categorical(logits=logits)
-        val = torch.tanh(self.value_head(self.value(x)).reshape(-1))
+        val = self.value_head(self.value(x)).reshape(-1)
         return dist, val
 
     def get_action(self, x_numpy, legal_actions=None):
@@ -103,7 +106,7 @@ class HexPolicy(nn.Module):
     def get_value(self, x):
         x = self.input_layer(x)
         x = self.res_blocks(x)
-        val = torch.tanh(self.value_head(self.value(x)).reshape(-1))
+        val = self.value_head(self.value(x)).reshape(-1)
         return val
 
     def get_hidden(self, x):
