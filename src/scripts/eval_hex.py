@@ -21,19 +21,19 @@ if __name__ == '__main__':
     config = create_config({
         "env": env,
         "puct_c": 20.0,
-        "uct_c": 20.0,
+        "uct_c": 4.0,
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "dirichlet_eps": 0.0,
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
-        "device": "cpu",
+        "device": "cuda:0",
         "search_return_adv": True,
     })
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_pg_iter=38_metric=309.pt")
+    policy.load("checkpoints/policy_hexgame_pg_iter=99_metric=50.pt")
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
     def nn(env, obs):
         # obs (2, 9, 9, 1)
-        obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+        obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
             dist, val = policy(obs, legal_actions=[env.available_actions()])
         act = dist.logits.argmax(-1).cpu().numpy()[0]

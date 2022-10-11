@@ -80,7 +80,7 @@ class HexPolicy(nn.Module):
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)
         dist = Categorical(logits=logits)
-        val = self.value_head(self.value(x)).reshape(-1)
+        val = torch.tanh(self.value_head(self.value(x)).reshape(-1))
         return dist, val
 
     def get_action(self, x_numpy, legal_actions=None):
@@ -103,7 +103,7 @@ class HexPolicy(nn.Module):
     def get_value(self, x):
         x = self.input_layer(x)
         x = self.res_blocks(x)
-        val = self.value_head(self.value(x)).reshape(-1)
+        val = torch.tanh(self.value_head(self.value(x)).reshape(-1))
         return val
 
     def get_hidden(self, x):
@@ -128,28 +128,46 @@ class HexPolicy(nn.Module):
         ret = data["ret"]
 
         # Policy loss
-        trainset = TensorDataset(obs, act, adv, ret)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10), shuffle=True)
+        trainset = TensorDataset(obs, act)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/8))
+
+        # Get old log_p
+        with torch.no_grad():
+            old_logp = []
+            for obs_batch, act_batch in trainloader:
+                old_logp_batch = self.get_dist(obs_batch).log_prob(act_batch)
+                old_logp.append(old_logp_batch)
+            old_logp = torch.cat(old_logp, 0)
+
+        trainset = TensorDataset(obs, act, adv, ret, old_logp)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/8), shuffle=True)
 
         # Minibatch training to fit on GPU memory
-        for _ in range(1):
-            for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
-                self.opt_hidden.zero_grad()
-                self.opt_policy.zero_grad()
-                self.opt_value.zero_grad()
-
+        for _ in range(3):
+            self.opt_hidden.zero_grad()
+            self.opt_policy.zero_grad()
+            self.opt_value.zero_grad()
+            for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
                 dist, val_batch = self(obs_batch)
-                loss_value = self.scalar_loss(val_batch, ret_batch)
+
+                # PPO loss
                 logp = dist.log_prob(act_batch)
-                loss_policy = -(logp * adv_batch).mean()
+                ratio = torch.exp(logp - old_logp_batch)
+                clipped = torch.clamp(ratio, 1-0.2, 1+0.2)*adv_batch
+                #loss_policy = -(logp * adv_batch).mean()
+                loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
+                #kl_approx = (old_logp_batch - logp).mean().item()
+                #if kl_approx > 0.1:
+                #    return
                 loss_entropy = - dist.entropy().mean()
+                loss_value = self.scalar_loss(val_batch, ret_batch)
                 loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
                 loss.backward()
 
-                nn.utils.clip_grad_norm_(self.parameters(),  self.config["grad_clip"])
-                self.opt_hidden.step()
-                self.opt_policy.step()
-                self.opt_value.step()
+            nn.utils.clip_grad_norm_(self.parameters(),  self.config["grad_clip"])
+            self.opt_hidden.step()
+            self.opt_policy.step()
+            self.opt_value.step()
 
     def loss_gradient(self, data):
         obs = data["obs"]

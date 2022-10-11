@@ -13,24 +13,25 @@ if __name__ == '__main__':
     size = 9
     env = HexEnv(size)
     config = create_config({
-        "train_iters": 100,
+        "train_iters": 1_000,
         "env": env,
-        "puct_c": 20.0,
+        "puct_c": 4.0,
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "search_return_adv": True,
         "num_cpus": 3,
-        "num_envs": 16,
+        "num_envs": 32,
         "device": "cuda:0",
-        "pi_lr": 1e-3,
-        "vf_lr": 1e-3,
+        "pi_lr": 2e-4,
+        "vf_lr": 2e-4,
+        "pi_entropy": 0.0001,
         "vf_iters": 2,
-        "sample_len": 600,
+        "sample_len": 1_000,
     })
 
     # Import policy and model
     policy = HexPolicy(config)
-    #policy.load("checkpoints/policy_pdlm_pgtrainer.pt")
+    #policy.load("checkpoints/policy_hexgame_pg_iter=99_metric=61.pt")
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 

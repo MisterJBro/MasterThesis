@@ -125,7 +125,7 @@ class Trainer(ABC):
                 deepcopy(env).render()
                 time.sleep(0.1)
             act, _ = self.get_action(obs[np.newaxis], envs=[deepcopy(env)], use_best=True)
-            obs, rew, done, _ = env.step(act)
+            obs, rew, done, _ = env.step(act[0])
             rews.append(rew)
 
             if done:
@@ -150,9 +150,13 @@ class Trainer(ABC):
         # Evaluate in parallel
         win_count = sum(p.starmap(evaluate, [(int(num_games / num_worker), env, self.policy, old_policy, sample_len) for _ in range(num_worker)]))
         win_rate = win_count/num_games * 100.0
-        last_elo = self.elos[-1]
-        elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=30)
-        self.elos.append(elo)
+        if win_rate > 52.0:
+            last_elo = self.elos[-1]
+            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=30)
+            self.elos.append(elo)
+        else:
+            self.policy = old_policy
+            elo = self.elos[-1]
         return win_rate, elo
 
     def save(self, path=None):

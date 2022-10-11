@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
     # === Networks settings ===
     "train_iters": 100,
     "pi_lr": 1e-3,
-    "pi_entropy": 0.1,
+    "pi_entropy": 0.001,
     "vf_lr": 1e-3,
     "vf_iters": 5,
     "vf_minibatches": 10,
