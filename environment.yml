@@ -15,7 +15,7 @@ dependencies:
     - matplotlib==3.5.2
     - maturin==0.12.17
     - numba==0.56.0
-    - numpy==1.22.4
+    - numpy==1.21.0
     - pandas==1.4.2
     - protobuf==3.19.4
     - psutil==5.9.1

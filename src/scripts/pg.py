@@ -7,6 +7,7 @@ from src.train.pg import PGTrainer
 from src.train.trainer import Trainer
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method('spawn')
     freeze_support()
 
     # Init for algos
