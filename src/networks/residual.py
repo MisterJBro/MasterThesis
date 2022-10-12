@@ -39,7 +39,7 @@ class HexPolicy(nn.Module):
         self.kernel_size = 3
         self.num_res_blocks = 19
         self.size = config["obs_dim"][-1]
-        self.scalar_loss = nn.HuberLoss()
+        self.scalar_loss = nn.MSELoss()
 
         # Layers
         self.input_layer = nn.Sequential(
@@ -65,10 +65,10 @@ class HexPolicy(nn.Module):
             nn.Linear(self.size*self.size*16, 256),
             nn.ReLU(),
         )
-        self.value_head = nn.Sequential(
-            nn.Linear(256, 1),
-            nn.Tanh(),
-        )
+        self.value_head = nn.Linear(256, 1)#nn.Sequential(
+        #    nn.Linear(256, 1),
+        #    nn.Tanh(),
+        #)
 
         self.opt_hidden = optim.Adam(list(self.input_layer.parameters()) + list(self.res_blocks.parameters()), lr=config["pi_lr"])
         self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])

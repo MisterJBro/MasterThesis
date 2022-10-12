@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_pg_iter=99_metric=50.pt")
+    policy.load("checkpoints/policy_hexgame_pg_iter=99_metric=61.pt")
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -81,13 +81,14 @@ if __name__ == '__main__':
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
             dist, val = policy(obs, legal_actions=[env.available_actions()])
+            print(val)
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
     # Simulate
-    players = [nn, random]
-    num_games = 100
-    render = False
+    players = [random, nn]
+    num_games = 1
+    render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):

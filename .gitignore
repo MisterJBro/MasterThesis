@@ -37,3 +37,7 @@ notes
 gym-tictactoe
 gym_rust
 src/scripts/log/
+net.python
+data/
+net.onnx
+net.pt

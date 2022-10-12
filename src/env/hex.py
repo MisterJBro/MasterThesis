@@ -29,7 +29,7 @@ class HexEnv:
         return obs, rew, done, {"pid": int(not self.is_black)}
 
     def render(self):
-        print(self)
+        print(self.env)
 
     def available_actions(self):
         return self.env.available_actions()
