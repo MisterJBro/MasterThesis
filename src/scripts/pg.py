@@ -19,13 +19,12 @@ if __name__ == '__main__':
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "search_return_adv": True,
-        "num_cpus": 3,
-        "num_envs": 32,
+        "num_cpus": 15,
+        "num_envs": 120,
         "device": "cuda:0",
         "pi_lr": 2e-4,
         "vf_lr": 2e-4,
         "pi_entropy": 0.0001,
-        "vf_iters": 2,
         "sample_len": 1_000,
     })
 

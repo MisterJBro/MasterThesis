@@ -1,28 +1,29 @@
 name: rl
 channels:
   - pytorch
-  - numba
   - conda-forge
   - defaults
 dependencies:
-  - cudatoolkit=10.2
-  - numpy
-  - python=3.9.12
-  - pytorch=1.10.1
-  - torchaudio=0.10.1=py39_cu102
-  - torchvision=0.11.2=py39_cu102
+  - cudatoolkit=11.6.0
+  - pip=22.2.2
+  - python=3.9.13
+  - pytorch=1.12.1
+  - torchaudio=0.12.1
+  - torchvision=0.13.1
   - pip:
-    - gym==0.25
+    - gym==0.25.0
     - matplotlib==3.5.2
     - maturin==0.12.17
     - numba==0.56.0
+    - numpy==1.22.4
     - pandas==1.4.2
-    - pip
     - protobuf==3.19.4
     - psutil==5.9.1
     - pygame==2.1.2
     - pyglet==1.5.23
     - pytorch-lightning==1.6.4
+    - onnx==1.12.0
+    - onnxruntime==1.12.1
     - scikit-image==0.19.3
     - scipy==1.8.0
     - seaborn==0.11.2
@@ -30,4 +31,3 @@ dependencies:
     - tabulate==0.8.10
     - tensorboard==2.9.0
     - tqdm==4.64.0
-
