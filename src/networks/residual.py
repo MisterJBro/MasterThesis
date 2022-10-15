@@ -132,7 +132,7 @@ class HexPolicy(nn.Module):
 
         # Policy loss
         trainset = TensorDataset(obs, act)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/8))
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/24))
 
         # Get old log_p
         with torch.no_grad():
@@ -143,7 +143,7 @@ class HexPolicy(nn.Module):
             old_logp = torch.cat(old_logp, 0)
 
         trainset = TensorDataset(obs, act, adv, ret, old_logp)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/8), shuffle=True)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/24), shuffle=True)
 
         # Minibatch training to fit on GPU memory
         for _ in range(3):

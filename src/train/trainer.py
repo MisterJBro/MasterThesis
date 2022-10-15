@@ -12,7 +12,6 @@ from src.train.log import Logger
 
 from torch.multiprocessing import freeze_support
 from src.train.processer import post_processing
-from torch.utils.tensorboard import SummaryWriter
 from tabulate import tabulate
 from src.env.sample_batch import SampleBatch
 from multiprocessing import Pool
@@ -34,8 +33,7 @@ class Trainer(ABC):
         self.device = config["device"]
         self.envs = Envs(config)
         self.policy = None
-        self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
-        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/', writer=self.writer)
+        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
         self.eval_pool = Pool(self.config["num_cpus"])
         self.elos = [0]
 
@@ -179,8 +177,7 @@ class Trainer(ABC):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.envs.close()
-        self.writer.flush()
-        self.writer.close()
+        self.log.close()
         self.eval_pool.close()
 
 def nn(env, obs, policy):

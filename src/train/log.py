@@ -2,17 +2,20 @@ import time
 import numpy as np
 from datetime import timedelta
 
+from torch.utils.tensorboard import SummaryWriter
+
 class Logger(dict):
     """Basic logger for metrics"""
 
-    def __init__(self, config, path=None, writer=None, *args, **kwargs):
+    def __init__(self, config, path=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
         self.log_path = path
         self.save_paths = []
         self.best_metric = float('-inf')
         self.timer = time.time()
-        self.writer = writer
+        if config["log_to_writer"]:
+            self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
 
     def __call__(self, metric, value):
         self[metric] = value
@@ -34,3 +37,8 @@ class Logger(dict):
     def to_writer(self, iter):
         for k, v in self.items():
             self.writer.add_scalar(str(k), v, iter)
+
+    def close(self):
+        if self.writer is not None:
+            self.writer.flush()
+            self.writer.close()

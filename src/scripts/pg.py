@@ -1,3 +1,4 @@
+import torch
 from multiprocessing import freeze_support
 from src.env.hex import HexEnv
 from src.networks.residual import HexPolicy
@@ -6,9 +7,11 @@ from src.train.config import create_config
 from src.train.pg import PGTrainer
 from src.train.trainer import Trainer
 
+
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
     freeze_support()
+    
 
     # Init for algos
     size = 9
@@ -22,11 +25,12 @@ if __name__ == '__main__':
         "search_return_adv": True,
         "num_cpus": 15,
         "num_envs": 120,
-        "device": "cuda:0",
+        "device": "cpu",
         "pi_lr": 2e-4,
         "vf_lr": 2e-4,
         "pi_entropy": 0.0001,
         "sample_len": 1_000,
+        "log_to_writer": False,
     })
 
     # Import policy and model

@@ -1,6 +1,7 @@
 import gym
 import torch
 import numpy as np
+import argparse
 
 # Default configuration of all algorithm. Ideas adopted from ray framework.
 DEFAULT_CONFIG = {
@@ -78,6 +79,12 @@ def compute_config(config):
     config["num_players"] = env.num_players
 
     return config
+
+# Argparser
+def arg_config():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--job_id', type=int, default=0)
+    args = parser.parse_args()
 
 # Create new config by using own config arguments and the rest from default config
 def create_config(new_config):
