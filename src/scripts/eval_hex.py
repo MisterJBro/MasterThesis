@@ -13,6 +13,7 @@ from tqdm import tqdm, trange
 
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method('spawn')
     freeze_support()
 
     # Init for algos
