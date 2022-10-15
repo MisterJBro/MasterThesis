@@ -14,6 +14,7 @@ dependencies:
     - gym
     - matplotlib
     - maturin
+    - monkeytype==22.2.0
     - numba==0.56.0
     - numpy==1.21.0
     - pandas
