@@ -84,11 +84,24 @@ def compute_config(config):
 def args_config(config):
     parser = argparse.ArgumentParser()
     for key, value in config.items():
-        parser.add_argument(f'--{key}', type=type(value))
+        if type(value)==bool:
+            parser.add_argument(f'--{key}', type=str2bool)
+        else:
+            parser.add_argument(f'--{key}', type=type(value))
     args = parser.parse_args()
     args = {k: v for k, v in vars(args).items() if v is not None}
-    print("Commando line arguments: ", args)
     return args
+
+# From https://stackoverflow.com/questions/15008758/parsing-boolean-values-with-argparse
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 # Create new config by using own config arguments and the rest from default config
 def create_config(new_config):

@@ -1,5 +1,6 @@
 import timeit
 from multiprocessing import freeze_support
+from torchinfo import summary
 import numpy as np
 import torch
 import torch.nn as nn
@@ -56,6 +57,9 @@ if __name__ == '__main__':
     optimizer = optim.Adam(net.parameters(), lr=2e-4)
     criterion1 = nn.CrossEntropyLoss()
     criterion2 = nn.HuberLoss()
+
+    # Summary
+    summary(net, input_size=(1000, 1, 28, 28))
 
     # Get MNIST trainset
     trainset = datasets.MNIST(
