@@ -14,6 +14,7 @@ class Logger(dict):
         self.save_paths = []
         self.best_metric = float('-inf')
         self.timer = time.time()
+        self.writer = None
         if config["log_to_writer"]:
             self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
 

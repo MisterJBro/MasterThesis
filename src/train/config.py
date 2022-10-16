@@ -80,16 +80,20 @@ def compute_config(config):
 
     return config
 
-# Argparser
-def arg_config():
+# Get config from argparser
+def args_config(config):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--job_id', type=int, default=0)
+    for key, value in config.items():
+        parser.add_argument(f'--{key}', type=type(value))
     args = parser.parse_args()
+    args = {k: v for k, v in vars(args).items() if v is not None}
+    return args
 
 # Create new config by using own config arguments and the rest from default config
 def create_config(new_config):
     config = DEFAULT_CONFIG.copy()
     config.update(new_config)
+    config.update(args_config(config))
     config = compute_config(config)
     check_config(config)
     return config
