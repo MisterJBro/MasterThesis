@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from numba import jit
 import scipy.signal
+from torch.utils.data import TensorDataset, DataLoader
 
 def discount_cumsum2(x, discount):
     """from https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/vpg/core.py under MIT License"""
@@ -91,8 +92,15 @@ def post_processing(policy, sample_batch, config):
     obs = torch.as_tensor(sample_batch.obs).flatten(start_dim=0, end_dim=1).to(policy.device)
     last_obs = torch.as_tensor(sample_batch.last_obs).to(policy.device)
 
+    trainset = TensorDataset(obs)
+    trainloader = DataLoader(trainset, batch_size=int(obs.shape[0]/24))
+
     with torch.no_grad():
-        val = policy.get_value(obs)
+        val = []
+        for (obs_batch,) in trainloader:
+            val_batch = policy.get_value(obs_batch)
+            val.append(val_batch)
+        val = torch.cat(val, 0)
         val = val.reshape(buffer_shape)
         val = val.cpu().numpy()
 

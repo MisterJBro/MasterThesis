@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.utils.data import TensorDataset, DataLoader
+import humanize
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
@@ -125,6 +126,7 @@ class HexPolicy(nn.Module):
         return new_logits
 
     def loss(self, data):
+        torch.cuda.empty_cache()
         obs = data["obs"]
         act = data["act"]
         adv = data["adv"]
@@ -144,12 +146,14 @@ class HexPolicy(nn.Module):
 
         trainset = TensorDataset(obs, act, adv, ret, old_logp)
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/24), shuffle=True)
-
+        mem = torch.cuda.mem_get_info()
+        print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
         # Minibatch training to fit on GPU memory
-        for _ in range(3):
-            self.opt_hidden.zero_grad()
-            self.opt_policy.zero_grad()
-            self.opt_value.zero_grad()
+        for _ in range(1):
+            torch.cuda.empty_cache()
+            self.opt_hidden.zero_grad(set_to_none=True)
+            self.opt_policy.zero_grad(set_to_none=True)
+            self.opt_value.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
                 dist, val_batch = self(obs_batch)
 
@@ -171,6 +175,8 @@ class HexPolicy(nn.Module):
             self.opt_hidden.step()
             self.opt_policy.step()
             self.opt_value.step()
+            mem = torch.cuda.mem_get_info()
+            print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
 
     def loss_gradient(self, data):
         obs = data["obs"]

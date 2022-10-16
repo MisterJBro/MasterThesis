@@ -140,7 +140,7 @@ class Trainer(ABC):
         # Parameters
         p = self.eval_pool
         num_worker = self.config["num_cpus"]
-        num_games = 100
+        num_games = max(100, num_worker)
         num_games -= num_games % num_worker
         env = self.config["env"]
         sample_len = self.config["sample_len"]

@@ -5,7 +5,7 @@
 #SBATCH -n 1
 #SBATCH -c 16
 #SBATCH --mem-per-cpu=3800
-##SBATCH --gres=gpu:v100
+#SBATCH --gres=gpu:a100
 #SBATCH -t 23:00:00
 #SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/HEX_PG_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
@@ -32,4 +32,5 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.pg
+nvidia-smi
+python -m src.scripts.pg --log_to_writer False --log_to_file False

@@ -87,6 +87,7 @@ def args_config(config):
         parser.add_argument(f'--{key}', type=type(value))
     args = parser.parse_args()
     args = {k: v for k, v in vars(args).items() if v is not None}
+    print("Commando line arguments: ", args)
     return args
 
 # Create new config by using own config arguments and the rest from default config
