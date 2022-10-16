@@ -17,6 +17,8 @@ DEFAULT_CONFIG = {
     "lam": 0.97,
     "seed": 0,
     "test_len": 500,
+    "num_eval_games": 210,
+    "min_win_rate_to_update": 0.53,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,
@@ -35,6 +37,7 @@ DEFAULT_CONFIG = {
     "model_minibatches": 10,
     "model_unroll_len": 5,
     "grad_clip": 100.0,
+    "num_batch_split": 20,
 
     # === Search algorithms ===
     "search_num_workers": 4,

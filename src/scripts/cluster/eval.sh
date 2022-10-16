@@ -33,4 +33,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.eval_pdlm --job_id=$SLURM_ARRAY_TASK_ID
+python -m src.scripts.eval_hex # --job_id=$SLURM_ARRAY_TASK_ID

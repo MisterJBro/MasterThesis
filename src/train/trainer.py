@@ -140,7 +140,7 @@ class Trainer(ABC):
         # Parameters
         p = self.eval_pool
         num_worker = self.config["num_cpus"]
-        num_games = max(100, num_worker)
+        num_games = max(self.config["num_eval_games"], num_worker)
         num_games -= num_games % num_worker
         env = self.config["env"]
         sample_len = self.config["sample_len"]
@@ -148,7 +148,7 @@ class Trainer(ABC):
         # Evaluate in parallel
         win_count = sum(p.starmap(evaluate, [(int(num_games / num_worker), env, self.policy, old_policy, sample_len) for _ in range(num_worker)]))
         win_rate = win_count/num_games * 100.0
-        if win_rate > 52.0:
+        if win_rate > self.config["min_win_rate_to_update"]:
             last_elo = self.elos[-1]
             elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=30)
             self.elos.append(elo)

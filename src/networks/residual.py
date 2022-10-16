@@ -134,7 +134,7 @@ class HexPolicy(nn.Module):
 
         # Policy loss
         trainset = TensorDataset(obs, act)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/24))
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Get old log_p
         with torch.no_grad():
@@ -145,11 +145,10 @@ class HexPolicy(nn.Module):
             old_logp = torch.cat(old_logp, 0)
 
         trainset = TensorDataset(obs, act, adv, ret, old_logp)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/24), shuffle=True)
-        mem = torch.cuda.mem_get_info()
-        print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]), shuffle=True)
+
         # Minibatch training to fit on GPU memory
-        for _ in range(1):
+        for _ in range(2):
             torch.cuda.empty_cache()
             self.opt_hidden.zero_grad(set_to_none=True)
             self.opt_policy.zero_grad(set_to_none=True)
@@ -163,12 +162,13 @@ class HexPolicy(nn.Module):
                 clipped = torch.clamp(ratio, 1-0.2, 1+0.2)*adv_batch
                 #loss_policy = -(logp * adv_batch).mean()
                 loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
-                #kl_approx = (old_logp_batch - logp).mean().item()
-                #if kl_approx > 0.1:
-                #    return
+                kl_approx = (old_logp_batch - logp).mean().item()
+                if kl_approx > 0.1:
+                    return
                 loss_entropy = - dist.entropy().mean()
                 loss_value = self.scalar_loss(val_batch, ret_batch)
                 loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
+                loss /= self.config["num_batch_split"]
                 loss.backward()
 
             nn.utils.clip_grad_norm_(self.parameters(),  self.config["grad_clip"])

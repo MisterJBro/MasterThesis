@@ -32,5 +32,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-nvidia-smi
-python -m src.scripts.pg --log_to_writer False --log_to_file False
+python -m src.scripts.pg --log_to_writer False --log_to_file True
