@@ -38,6 +38,8 @@ DEFAULT_CONFIG = {
     "model_unroll_len": 5,
     "grad_clip": 100.0,
     "num_batch_split": 20,
+    "num_filters": 128,
+    "num_res_blocks": 16,
 
     # === Search algorithms ===
     "search_num_workers": 4,

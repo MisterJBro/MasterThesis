@@ -26,6 +26,7 @@ dependencies:
     - pytorch-lightning
     - onnx
     - onnxruntime
+    - onnxruntime-gpu
     - scikit-image
     - scipy
     - seaborn
