@@ -150,12 +150,15 @@ if __name__ == '__main__':
         torch.cuda.synchronize()
 
         print(f"GPU Inference (PyTorch): {timeit.timeit(lambda: net_gpu(input_batch.cuda(), mode)[0].cpu() + 1, number=1000):.03f}s")
+        with torch.cuda.amp.autocast():
+            print(f"GPU Inference (PyTorch AMP): {timeit.timeit(lambda: net_gpu(input_batch.cuda(), mode)[0].cpu() + 1, number=1000):.03f}s")
         print(f"GPU Inference (TorchScript): {timeit.timeit(lambda: net_jit_gpu(input_batch.cuda(), mode)[0].cpu() + 1, number=1000):.03f}s")
         print(f"GPU Inference (ONNX CUDA): {timeit.timeit(lambda: session_cuda.run(None, {'x': input_batch.numpy(), 'mode': mode.numpy()})[0] + 1, number=1000):.03f}s")
         print(f"GPU Inference (ONNX TensorRT): {timeit.timeit(lambda: session_tensorrt.run(None, {'x': input_batch.numpy(), 'mode': mode.numpy()})[0] + 1, number=1000):.03f}s")
 
         print(net(input, mode))
-        print(net_jit(input, mode))
+        with torch.cuda.amp.autocast():
+            print(net(input, mode))
         print(session.run(None, {'x': input.numpy(), 'mode': mode.numpy()}))
         py_out = net(input, mode)[0].cpu().numpy().argmax()
         ort_out = session.run(None, {'x': input.numpy(), 'mode': mode.numpy()})[0].argmax()
