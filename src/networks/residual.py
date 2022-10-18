@@ -12,18 +12,14 @@ PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 class ResBlock(nn.Module):
     """ Residual Block with Skip Connection, just like ResNet. """
-    def __init__(self, config):
+    def __init__(self, num_filters, kernel_size):
         super(ResBlock, self).__init__()
-        self.config = config
-        self.num_filters = 128
-        self.kernel_size = 3
-
         self.layers = nn.Sequential(
-            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size, padding=1),
-            nn.BatchNorm2d(self.num_filters),
+            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
+            nn.BatchNorm2d(num_filters),
             nn.ReLU(),
-            nn.Conv2d(self.num_filters, self.num_filters, self.kernel_size, padding=1),
-            nn.BatchNorm2d(self.num_filters),
+            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
+            nn.BatchNorm2d(num_filters),
         )
 
     def forward(self, x):
@@ -36,18 +32,19 @@ class HexPolicy(nn.Module):
     def __init__(self, config):
         super(HexPolicy, self).__init__()
         self.config = config
-        self.num_filters = 128
+        self.num_filters = config["num_filters"]
         self.kernel_size = 3
-        self.num_res_blocks = 19
+        self.num_res_blocks = config["num_res_blocks"]
         self.size = config["obs_dim"][-1]
         self.scalar_loss = nn.MSELoss()
 
         # Layers
-        self.input_layer = nn.Sequential(
-            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1),
+        self.body = nn.Sequential(
+            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1, bias=False),
             nn.BatchNorm2d(self.num_filters),
+            nn.ReLU(),
+            *[ResBlock(self.num_filters, self.kernel_size) for _ in range(self.num_res_blocks)],
         )
-        self.res_blocks = nn.Sequential(*[ResBlock(config) for _ in range(10)])
 
         # Heads
         self.policy = nn.Sequential(
@@ -71,7 +68,7 @@ class HexPolicy(nn.Module):
         #    nn.Tanh(),
         #)
 
-        self.opt_hidden = optim.Adam(list(self.input_layer.parameters()) + list(self.res_blocks.parameters()), lr=config["pi_lr"])
+        self.opt_hidden = optim.Adam(self.body.parameters(), lr=config["pi_lr"])
         self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
         self.opt_value = optim.Adam(list(self.value.parameters()) + list(self.value_head.parameters()), lr=config["vf_lr"])
         self.device = config["device"]
