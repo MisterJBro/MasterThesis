@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cudatoolkit=11.6.0
+  - cudatoolkit=11.3.0
   - pip
   - python=3.9.13
   - pytorch
@@ -25,6 +25,7 @@ dependencies:
     - pyglet
     - pytorch-lightning
     - onnx
+    - onnxoptimizer
     - onnxruntime
     - onnxruntime-gpu
     - scikit-image

@@ -11,6 +11,10 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 import matplotlib.pyplot as plt
+import onnx
+import onnxruntime as ort
+import onnxoptimizer
+
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -59,7 +63,9 @@ class Network(nn.Module):
 
 if __name__ == '__main__':
     freeze_support()
+    # Pytorch Optimizations
     torch.backends.cudnn.benchmark = True
+    torch.set_float32_matmul_precision("high") # https://pytorch.org/docs/master/generated/torch.set_float32_matmul_precision.html?highlight=precision#torch.set_float32_matmul_precision
 
     # Init
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -67,7 +73,7 @@ if __name__ == '__main__':
     optimizer = optim.Adam(net.parameters(), lr=2e-4)
     criterion1 = nn.CrossEntropyLoss()
     criterion2 = nn.HuberLoss()
-    dummy_input = [torch.randn(1, 1, 28, 28, dtype=torch.float32), torch.tensor(0, dtype=torch.long)]
+    dummy_input = [torch.randn(1, 1, 28, 28, dtype=torch.float32), torch.tensor(0, dtype=torch.int32)]
 
     # Summary
     summary(net, input_data=dummy_input)
@@ -104,17 +110,24 @@ if __name__ == '__main__':
     net_jit = torch.jit.script(net, example_inputs=[dummy_input])
 
     # Model to onnx
-    torch.onnx.export(net_jit, dummy_input, 'net.onnx', opset_version=14, input_names=['x', 'mode'], output_names=['p', 'v'],
+    torch.onnx.export(net_jit, dummy_input, 'net.onnx', opset_version=16, input_names=['x', 'mode'], output_names=['p', 'v'],
         dynamic_axes={
             'x' : {0 : 'batch_size'},
             'p' : {0 : 'batch_size'},
             'v' : {0 : 'batch_size'},
         })
 
+    # Optimize model (so we do not get any warning later)
+    onnx_model = onnx.load('net.onnx')
+    passes = ["extract_constant_to_initializer", "eliminate_unused_initializer"]
+    optimized_model = onnxoptimizer.optimize(onnx_model, passes)
+
+    onnx.save(optimized_model, 'net.onnx')
+
     # Create onnx inference session
-    import onnxruntime as ort
     session = ort.InferenceSession('net.onnx', providers=['CPUExecutionProvider'])
-    #session_gpu = ort.InferenceSession('net.onnx', providers=['CUDAExecutionProvider']) #TensorrtExecutionProvider
+    session_cuda = ort.InferenceSession('net.onnx', providers=['CUDAExecutionProvider'])
+    session_tensorrt = ort.InferenceSession('net.onnx', providers=['TensorrtExecutionProvider', 'CUDAExecutionProvider'])
 
     # Prediction
     with torch.no_grad():
@@ -122,7 +135,7 @@ if __name__ == '__main__':
         batch_size = 32
         input = trainset.data[0].reshape(1, 1, 28, 28).float()
         input_batch = trainset.data[:batch_size].reshape(batch_size, 1, 28, 28).float()
-        mode = torch.tensor(2)
+        mode = torch.tensor(0, dtype=torch.int32)
 
         # CPU
         print(f"CPU Inference (PyTorch): {timeit.timeit(lambda: net(input_batch, mode), number=1000):.03f}s")
@@ -136,8 +149,10 @@ if __name__ == '__main__':
         input_gpu = input_batch.cuda()
         torch.cuda.synchronize()
 
-        print(f"GPU Inference (PyTorch): {timeit.timeit(lambda: net_gpu(input_gpu, mode), number=1000):.03f}s")
-        print(f"GPU Inference (TorchScript): {timeit.timeit(lambda: net_jit_gpu(input_gpu, mode), number=1000):.03f}s")
+        print(f"GPU Inference (PyTorch): {timeit.timeit(lambda: net_gpu(input_batch.cuda(), mode)[0].cpu() + 1, number=1000):.03f}s")
+        print(f"GPU Inference (TorchScript): {timeit.timeit(lambda: net_jit_gpu(input_batch.cuda(), mode)[0].cpu() + 1, number=1000):.03f}s")
+        print(f"GPU Inference (ONNX CUDA): {timeit.timeit(lambda: session_cuda.run(None, {'x': input_batch.numpy(), 'mode': mode.numpy()})[0] + 1, number=1000):.03f}s")
+        print(f"GPU Inference (ONNX TensorRT): {timeit.timeit(lambda: session_tensorrt.run(None, {'x': input_batch.numpy(), 'mode': mode.numpy()})[0] + 1, number=1000):.03f}s")
 
         print(net(input, mode))
         print(net_jit(input, mode))
