@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
     "seed": 0,
     "test_len": 500,
     "num_eval_games": 210,
-    "min_win_rate_to_update": 0.53,
+    "min_win_rate_to_update": 53,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,
