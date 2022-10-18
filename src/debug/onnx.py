@@ -110,7 +110,7 @@ if __name__ == '__main__':
     net_jit = torch.jit.script(net, example_inputs=[dummy_input])
 
     # Model to onnx
-    torch.onnx.export(net_jit, dummy_input, 'net.onnx', opset_version=16, input_names=['x', 'mode'], output_names=['p', 'v'],
+    torch.onnx.export(net_jit, dummy_input, 'net.onnx', opset_version=15, input_names=['x', 'mode'], output_names=['p', 'v'],
         dynamic_axes={
             'x' : {0 : 'batch_size'},
             'p' : {0 : 'batch_size'},
