@@ -25,8 +25,8 @@ if __name__ == '__main__':
         "num_cpus": 15,
         "num_envs": 120,
         "device": "cuda:0",
-        "pi_lr": 1e-3,
-        "vf_lr": 1e-3,
+        "pi_lr": 1e-4,
+        "vf_lr": 1e-4,
         "pi_entropy": 0.001,
         "sample_len": 1_000,
     })
