@@ -38,7 +38,7 @@ class MCTSCore:
             return node
 
         # Create new child nodes, lazy init
-        actions = node.state.get_possible_actions()
+        actions = node.get_legal_actions()
         for action in actions:
             new_node = self.NodeClass(None, action=action, parent=node)
             node.children.append(new_node)

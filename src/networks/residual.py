@@ -75,8 +75,7 @@ class HexPolicy(nn.Module):
         self.to(self.device)
 
     def forward(self, x, legal_actions=None):
-        x = self.input_layer(x)
-        x = self.res_blocks(x)
+        x = self.body(x)
 
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)
@@ -93,8 +92,7 @@ class HexPolicy(nn.Module):
         return act.cpu().numpy()
 
     def get_dist(self, x, legal_actions=None):
-        x = self.input_layer(x)
-        x = self.res_blocks(x)
+        x = self.body(x)
 
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)
@@ -102,14 +100,12 @@ class HexPolicy(nn.Module):
         return dist
 
     def get_value(self, x):
-        x = self.input_layer(x)
-        x = self.res_blocks(x)
+        x = self.body(x)
         val = self.value_head(self.value(x)).reshape(-1)
         return val
 
     def get_hidden(self, x):
-        x = self.input_layer(x)
-        x = self.res_blocks(x)
+        x = self.body(x)
         return self.policy(x), self.value(x)
 
     def filter_actions(self, logits, legal_actions=None):

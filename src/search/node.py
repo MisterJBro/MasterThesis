@@ -27,6 +27,9 @@ class Node(ABC):
     def create_state(self):
         self.state = self.parent.state.transition(self.action)
 
+    def get_legal_actions(self):
+        return self.state.get_possible_actions()
+
     def get_action_values(self, default=0):
         return np.array([child.total_rews/(child.num_visits+1e-12) if child.num_visits > 0 else default for child in self.children])
 

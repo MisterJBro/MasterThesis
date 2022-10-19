@@ -11,9 +11,11 @@ class State:
         self.done = done
         self.rew = rew
         self.obs = obs
+        self.legal_act = self.env.available_actions()
 
     def transition_inplace(self, action):
         self.obs, self.rew, self.done, _ = self.env.step(action)
+        self.legal_act = self.env.available_actions()
 
     def transition(self, action):
         next_state = deepcopy(self)
@@ -21,7 +23,7 @@ class State:
         return next_state
 
     def get_possible_actions(self):
-        return self.env.available_actions()
+        return self.legal_act
 
     def is_terminal(self):
         return self.done

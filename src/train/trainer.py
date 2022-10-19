@@ -3,10 +3,12 @@ import torch
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
+import os
 import gym
 import time
 import random
 from src.debug.elo import update_ratings
+from src.debug.util import measure_time
 from src.env.envs import Envs
 from src.train.log import Logger
 
@@ -34,6 +36,7 @@ class Trainer(ABC):
         self.envs = Envs(config)
         self.policy = None
         self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
+        self.save_paths = []
         self.eval_pool = Pool(self.config["num_cpus"])
         self.elos = [0]
 
@@ -51,8 +54,11 @@ class Trainer(ABC):
             self.log("iter", iter)
 
             # Main
-            sample_batch = self.get_sample_batch()
-            self.update(sample_batch)
+            sample_batch, sample_time = measure_time(self.get_sample_batch())
+            self.log("sample_time", sample_time)
+
+            _, update_time = measure_time(self.update(sample_batch))
+            self.log("update_time", update_time)
 
             # Self play test
             if self.config["num_players"] > 1:
@@ -74,7 +80,13 @@ class Trainer(ABC):
 
     def checkpoint(self, iter):
         last_path = f'{PROJECT_PATH}/checkpoints/policy_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_metric={self.log[self.config["log_main_metric"]]:.0f}.pt'
-        self.log.save_paths.append(last_path)
+        self.save_paths.append(last_path)
+        if len(self.save_paths) > self.config["num_checkpoints"]:
+            path = self.save_paths.pop(0)
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                print("Warning: %s checkpoint not found" % path)
         self.save(path=last_path)
 
     @abstractmethod
@@ -86,7 +98,7 @@ class Trainer(ABC):
         obs, legal_act = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, dist = self.get_action(obs, envs=self.envs, legal_actions=legal_act)
+            act, dist = self.get_action(obs, legal_actions=legal_act)
             obs_next, rew, done, info = self.envs.step(act)
 
             pid, legal_act = info
@@ -97,7 +109,7 @@ class Trainer(ABC):
         sample_batch = post_processing(self.policy, sample_batch, self.config)
         return sample_batch
 
-    def get_action(self, obs, envs=None, use_best=False, legal_actions=None):
+    def get_action(self, obs, env_list=None, use_best=False, legal_actions=None):
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         with torch.no_grad():
             dist = self.policy.get_dist(obs, legal_actions=legal_actions)
@@ -135,12 +147,12 @@ class Trainer(ABC):
     def evaluate(self):
         # Get last policy
         old_policy = deepcopy(self.policy)
-        old_policy.load(self.log.save_paths[-1])
+        old_policy.load(self.save_paths[-1])
 
         # Parameters
         p = self.eval_pool
         num_worker = self.config["num_cpus"]
-        num_games = max(self.config["num_eval_games"], num_worker)
+        num_games = max(self.config["self_play_num_eval_games"], num_worker)
         num_games -= num_games % num_worker
         env = self.config["env"]
         sample_len = self.config["sample_len"]
@@ -148,9 +160,9 @@ class Trainer(ABC):
         # Evaluate in parallel
         win_count = sum(p.starmap(evaluate, [(int(num_games / num_worker), env, self.policy, old_policy, sample_len) for _ in range(num_worker)]))
         win_rate = win_count/num_games * 100.0
-        if win_rate > self.config["min_win_rate_to_update"]:
+        if win_rate > self.config["self_play_update_win_rate"]:
             last_elo = self.elos[-1]
-            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=30)
+            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["self_play_elo_k"])
             self.elos.append(elo)
         else:
             self.policy = old_policy

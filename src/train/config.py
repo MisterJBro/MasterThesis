@@ -17,8 +17,6 @@ DEFAULT_CONFIG = {
     "lam": 0.97,
     "seed": 0,
     "test_len": 500,
-    "num_eval_games": 210,
-    "min_win_rate_to_update": 53,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,
@@ -40,6 +38,7 @@ DEFAULT_CONFIG = {
     "num_batch_split": 20,
     "num_filters": 128,
     "num_res_blocks": 16,
+    "num_checkpoints": 10,
 
     # === Search algorithms ===
     "search_num_workers": 4,
@@ -54,6 +53,11 @@ DEFAULT_CONFIG = {
     "dirichlet_noise": 1.0,
     "pgs_lr": 1e-4,
     "pgs_trunc_len": 10,
+
+    # === Self play ===
+    "self_play_elo_k": 30,
+    "self_play_num_eval_games": 210,
+    "self_play_update_win_rate": 53,
 
     # === Others ===
     "log_main_metric": "elo",

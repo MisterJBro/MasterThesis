@@ -11,7 +11,6 @@ class Logger(dict):
         super().__init__(*args, **kwargs)
         self.config = config
         self.log_path = path
-        self.save_paths = []
         self.best_metric = float('-inf')
         self.timer = time.time()
         self.writer = None

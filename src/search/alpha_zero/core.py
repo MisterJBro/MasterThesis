@@ -30,14 +30,14 @@ class AZCore(MCTSCore):
             return np.array(0)
 
         prob, val = self.eval_fn(node)
-        node.priors = prob
+        node.priors = prob[node.get_legal_actions()]
         return val
 
     def set_root(self, state):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if state is not None:
             prob, val = self.eval_fn(self.root)
-            self.root.priors = prob
+            self.root.priors = prob[self.root.get_legal_actions()]
             self.root.val = val
 
     def eval_fn(self, node):
