@@ -30,8 +30,12 @@ class Node(ABC):
     def get_legal_actions(self):
         return self.state.get_possible_actions()
 
-    def get_action_values(self, default=0):
-        return np.array([child.total_rews/(child.num_visits+1e-12) if child.num_visits > 0 else default for child in self.children])
+    def get_action_values(self, num_acts, default=0):
+        legal_act = self.get_legal_actions()
+        all_qvals = np.full(num_acts, -10e8)
+        qvals = np.array([child.total_rews/(child.num_visits+1e-12) if child.num_visits > 0 else default for child in self.children])
+        all_qvals[legal_act] = qvals
+        return all_qvals
 
 
 class UCTNode(Node):

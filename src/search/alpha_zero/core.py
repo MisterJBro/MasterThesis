@@ -20,7 +20,7 @@ class AZCore(MCTSCore):
         if self.config["search_return_adv"]:
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
-            adv = adv / np.abs(np.max(adv))
+            adv = adv / (np.abs(np.max(adv)) + 1e-8)
             return (100 + max_visits) * 0.005 * adv
         return self.get_normalized_visit_counts()
 
