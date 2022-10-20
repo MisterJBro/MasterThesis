@@ -38,7 +38,7 @@ DEFAULT_CONFIG = {
     "num_batch_split": 20,
     "num_filters": 128,
     "num_res_blocks": 16,
-    "num_checkpoints": 10,
+    "num_checkpoints": 3,
 
     # === Search algorithms ===
     "search_num_workers": 4,

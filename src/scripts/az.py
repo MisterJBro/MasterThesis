@@ -18,7 +18,7 @@ if __name__ == '__main__':
         "train_iters": 200,
         "env": env,
         "puct_c": 4.0,
-        "search_iters": 300,
+        "search_iters": 30,
         "search_return_adv": True,
         "search_num_workers": 3,
         "search_evaluator_batch_size": 3,
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         "pi_lr": 1e-4,
         "vf_lr": 1e-4,
         "pi_entropy": 0.001,
-        "sample_len": 1_000,
+        "sample_len": 1_0,
         "log_name": f"{'az'}_exit_log.txt",
         "log_to_file": True,
     })

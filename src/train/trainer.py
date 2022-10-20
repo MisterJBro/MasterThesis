@@ -54,16 +54,17 @@ class Trainer(ABC):
             self.log("iter", iter)
 
             # Main
-            sample_batch, sample_time = measure_time(self.get_sample_batch())
+            sample_batch, sample_time = measure_time(lambda: self.get_sample_batch())
             self.log("sample_time", sample_time)
 
-            _, update_time = measure_time(self.update(sample_batch))
+            _, update_time = measure_time(lambda: self.update(sample_batch))
             self.log("update_time", update_time)
 
             # Self play test
             if self.config["num_players"] > 1:
                 if iter > 0:
-                    win_rate, elo = self.evaluate()
+                    (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
+                    self.log("eval_time", eval_time)
                     self.log("win_rate", win_rate)
                 else:
                     elo = 0
