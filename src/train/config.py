@@ -12,7 +12,8 @@ DEFAULT_CONFIG = {
     # === Environments settings ===
     "env": "CartPole-v1",
     "num_envs": 15,
-    "sample_len": 500,
+    "sample_len": 1_000,
+    "eval_len": 81,
     "gamma": 1.0,
     "lam": 0.97,
     "seed": 0,
@@ -35,6 +36,7 @@ DEFAULT_CONFIG = {
     "model_minibatches": 10,
     "model_unroll_len": 5,
     "grad_clip": 100.0,
+    "clip_ratio": 0.2,
     "num_batch_split": 20,
     "num_filters": 128,
     "num_res_blocks": 16,

@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from itertools import compress
 
 import os
 import gym
@@ -38,7 +39,6 @@ class Trainer(ABC):
         self.policy = None
         self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
         self.save_paths = []
-        self.eval_pool = Pool(self.config["num_cpus"])
         self.elos = [0]
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
         self.scalar_loss = nn.MSELoss()
@@ -162,7 +162,7 @@ class Trainer(ABC):
         sample_len = self.config["sample_len"]
 
         # Evaluate in parallel
-        win_count = sum(p.starmap(evaluate, [(int(num_games / num_worker), env, self.policy, old_policy, sample_len) for _ in range(num_worker)]))
+        win_count = self.play_other(old_policy)
         win_rate = win_count/num_games * 100.0
         if win_rate > self.config["self_play_update_win_rate"]:
             last_elo = self.elos[-1]
@@ -172,6 +172,44 @@ class Trainer(ABC):
             self.policy = old_policy
             elo = self.elos[-1]
         return win_rate, elo
+
+    def play_other(self, other_policy):
+        curr_policy = deepcopy(self.policy)
+        win_count = 0
+
+        for iter in range(int(self.config["self_play_num_eval_games"]/self.config["num_envs"])):
+            obs, legal_act = self.envs.reset()
+            rews = np.zeros(self.config["num_envs"])
+            dones = np.full(self.config["num_envs"], False)
+            pid = iter % 2
+
+            for i in range(self.config["eval_len"]):
+                # Set current policy
+                if i % 2 == pid:
+                    self.policy = curr_policy
+                else:
+                    self.policy = other_policy
+
+                # If envs finished -> action does not matter (less calculations)
+                act = np.zeros(self.config["num_envs"], dtype=np.int32)
+                act_calc, _ = self.get_action(obs[~dones], legal_actions=list(compress(legal_act, ~dones)))
+                act[~dones] = act_calc
+                act_other = [x[0] for x in list(compress(legal_act, dones))]
+                act[dones] = act_other
+                obs_next, rew, done, info = self.envs.step(act)
+
+                # Add new information
+                pid, legal_act = info
+                if i % 2 == pid:
+                    rews += rew * (1 - dones)
+                dones |= done
+                obs = obs_next
+
+                if dones.all():
+                    break
+
+            win_count += np.sum(rews == 1)
+        return win_count
 
     def save(self, path=None):
         if path is not None:
@@ -195,45 +233,3 @@ class Trainer(ABC):
         self.envs.close()
         self.log.close()
         self.eval_pool.close()
-
-def nn_agent(env, obs, policy):
-    obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
-    with torch.no_grad():
-        dist = policy.get_dist(obs, legal_actions=[env.available_actions()])
-    act = dist.sample().cpu().numpy()[0]
-    return act
-
-# Self play evaluation
-def evaluate(num_games_per_worker, env, agent1, agent2, sample_len):
-    env = deepcopy(env)
-    obs_first = None
-
-    win_count = 0
-    for n in range(num_games_per_worker):
-        # Get player order, switch every game
-        pid = n % 2
-        eid = (n+1) % 2
-
-        # Play two times with the same seed for more accurate winrate prediction (so no one can have a luck based board advantage)
-        if n % 2 == 0:
-            obs_first = env.reset()
-            env2 = deepcopy(env)
-        else:
-            env = env2
-        obs = obs_first
-
-        for i in range(sample_len):
-            # Get action
-            if i % 2 == pid:
-                act = nn_agent(env, obs, agent1)
-            else:
-                act = nn_agent(env, obs, agent2)
-
-            # Simulate one step and get new obs
-            obs, rew, done, info = env.step(act)
-
-            if done:
-                if i % 2 == pid:
-                    win_count += rew
-                break
-    return win_count

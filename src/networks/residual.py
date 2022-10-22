@@ -33,10 +33,10 @@ class ResBlock(nn.Module):
         super(ResBlock, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
-            nn.BatchNorm2d(num_filters),
+            nn.BatchNorm2d(num_filters, eps=1e-4),
             nn.ReLU(),
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
-            nn.BatchNorm2d(num_filters),
+            nn.BatchNorm2d(num_filters, eps=1e-4),
         )
         self.use_se = use_se
         if use_se:
@@ -64,23 +64,23 @@ class HexPolicy(nn.Module):
         # Layers
         self.body = nn.Sequential(
             nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1, bias=False),
-            nn.BatchNorm2d(self.num_filters),
+            nn.BatchNorm2d(self.num_filters, eps=1e-4),
             nn.ReLU(),
             *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
         )
 
         # Heads
         self.policy = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(self.num_filters, 16, 1, bias=False),
+            nn.BatchNorm2d(16, eps=1e-4),
             nn.ReLU(),
             nn.Flatten(1, -1),
         )
         self.policy_head = nn.Linear(self.size*self.size*16, config["num_acts"])
 
         self.value = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(self.num_filters, 16, 1, bias=False),
+            nn.BatchNorm2d(16, eps=1e-4),
             nn.ReLU(),
             nn.Flatten(1, -1),
             nn.Linear(self.size*self.size*16, 256),
@@ -91,7 +91,7 @@ class HexPolicy(nn.Module):
             nn.Tanh(),
         )
 
-        self.optim = optim.Adam(self.parameters(), lr=config["pi_lr"])
+        self.optim = optim.Adam(self.parameters(), lr=config["pi_lr"], eps=1e-4)
         self.device = config["device"]
         self.to(self.device)
 

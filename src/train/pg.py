@@ -26,7 +26,7 @@ class PGTrainer(Trainer):
         # Minibatch training to fit on GPU memory
         for _ in range(2):
             for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
-                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', dtype=torch.float16, enabled=self.config["use_amp"]):
+                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
 
                     # PG loss
@@ -71,7 +71,7 @@ class PPOTrainer(PGTrainer):
         with torch.no_grad():
             old_logp = []
             for obs_batch, act_batch in trainloader:
-                old_logp_batch = self.get_dist(obs_batch).log_prob(act_batch)
+                old_logp_batch = self.policy.get_dist(obs_batch).log_prob(act_batch)
                 old_logp.append(old_logp_batch)
             old_logp = torch.cat(old_logp, 0)
 
@@ -81,13 +81,13 @@ class PPOTrainer(PGTrainer):
         # Minibatch training to fit on GPU memory
         for _ in range(2):
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
-                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', dtype=torch.float16, enabled=self.config["use_amp"]):
+                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
 
                     # PPO loss
                     logp = dist.log_prob(act_batch)
                     ratio = torch.exp(logp - old_logp_batch)
-                    clipped = torch.clamp(ratio, 1-0.2, 1+0.2)*adv_batch
+                    clipped = torch.clamp(ratio, 1-self.config["clip_ratio"], 1+self.config["clip_ratio"])*adv_batch
                     loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
                     kl_approx = (old_logp_batch - logp).mean().item()
                     if kl_approx > 0.1:
