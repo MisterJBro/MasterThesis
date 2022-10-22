@@ -39,6 +39,8 @@ DEFAULT_CONFIG = {
     "num_filters": 128,
     "num_res_blocks": 16,
     "num_checkpoints": 3,
+    "use_se": True,
+    "use_amp": False,
 
     # === Search algorithms ===
     "search_num_workers": 4,

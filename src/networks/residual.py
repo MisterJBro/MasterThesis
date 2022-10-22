@@ -3,16 +3,33 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Categorical
-from torch.utils.data import TensorDataset, DataLoader
-import humanize
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 
+class SEBlock(nn.Module):
+    """Squeeze and Excitation Block from https://github.com/moskomule/senet.pytorch/blob/master/senet/se_module.py"""
+    def __init__(self, channel, reduction=16):
+        super(SEBlock, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
+
 class ResBlock(nn.Module):
     """ Residual Block with Skip Connection, just like ResNet. """
-    def __init__(self, num_filters, kernel_size):
+    def __init__(self, num_filters, kernel_size, use_se):
         super(ResBlock, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
@@ -21,9 +38,15 @@ class ResBlock(nn.Module):
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
             nn.BatchNorm2d(num_filters),
         )
+        self.use_se = use_se
+        if use_se:
+            self.se = SEBlock(num_filters)
 
     def forward(self, x):
-        return F.relu(x + self.layers(x))
+        out = self.layers(x)
+        if self.use_se:
+            out = self.se(x)
+        return F.relu(x + out)
 
 
 class HexPolicy(nn.Module):
@@ -34,16 +57,16 @@ class HexPolicy(nn.Module):
         self.config = config
         self.num_filters = config["num_filters"]
         self.kernel_size = 3
+        self.use_se = config["use_se"]
         self.num_res_blocks = config["num_res_blocks"]
         self.size = config["obs_dim"][-1]
-        self.scalar_loss = nn.MSELoss()
 
         # Layers
         self.body = nn.Sequential(
             nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1, bias=False),
             nn.BatchNorm2d(self.num_filters),
             nn.ReLU(),
-            *[ResBlock(self.num_filters, self.kernel_size) for _ in range(self.num_res_blocks)],
+            *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
         )
 
         # Heads
@@ -63,14 +86,12 @@ class HexPolicy(nn.Module):
             nn.Linear(self.size*self.size*16, 256),
             nn.ReLU(),
         )
-        self.value_head = nn.Linear(256, 1)#nn.Sequential(
-        #    nn.Linear(256, 1),
-        #    nn.Tanh(),
-        #)
+        self.value_head = nn.Sequential(
+            nn.Linear(256, 1),
+            nn.Tanh(),
+        )
 
-        self.opt_hidden = optim.Adam(self.body.parameters(), lr=config["pi_lr"])
-        self.opt_policy = optim.Adam(list(self.policy.parameters()) + list(self.policy_head.parameters()), lr=config["pi_lr"])
-        self.opt_value = optim.Adam(list(self.value.parameters()) + list(self.value_head.parameters()), lr=config["vf_lr"])
+        self.optim = optim.Adam(self.parameters(), lr=config["pi_lr"])
         self.device = config["device"]
         self.to(self.device)
 
@@ -118,107 +139,13 @@ class HexPolicy(nn.Module):
             new_logits[i, row] = logits[i, row]
         return new_logits
 
-    def loss(self, data):
-        torch.cuda.empty_cache()
-        obs = data["obs"]
-        act = data["act"]
-        adv = data["adv"]
-        ret = data["ret"]
-
-        # Policy loss
-        trainset = TensorDataset(obs, act)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
-
-        # Get old log_p
-        with torch.no_grad():
-            old_logp = []
-            for obs_batch, act_batch in trainloader:
-                old_logp_batch = self.get_dist(obs_batch).log_prob(act_batch)
-                old_logp.append(old_logp_batch)
-            old_logp = torch.cat(old_logp, 0)
-
-        trainset = TensorDataset(obs, act, adv, ret, old_logp)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]), shuffle=True)
-
-        # Minibatch training to fit on GPU memory
-        for _ in range(2):
-            torch.cuda.empty_cache()
-            self.opt_hidden.zero_grad(set_to_none=True)
-            self.opt_policy.zero_grad(set_to_none=True)
-            self.opt_value.zero_grad(set_to_none=True)
-            for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
-                dist, val_batch = self(obs_batch)
-
-                # PPO loss
-                logp = dist.log_prob(act_batch)
-                ratio = torch.exp(logp - old_logp_batch)
-                clipped = torch.clamp(ratio, 1-0.2, 1+0.2)*adv_batch
-                #loss_policy = -(logp * adv_batch).mean()
-                loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
-                kl_approx = (old_logp_batch - logp).mean().item()
-                if kl_approx > 0.1:
-                    return
-                loss_entropy = - dist.entropy().mean()
-                loss_value = self.scalar_loss(val_batch, ret_batch)
-                loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
-                loss /= self.config["num_batch_split"]
-                loss.backward()
-
-            nn.utils.clip_grad_norm_(self.parameters(),  self.config["grad_clip"])
-            self.opt_hidden.step()
-            self.opt_policy.step()
-            self.opt_value.step()
-            mem = torch.cuda.mem_get_info()
-            print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
-
-    def loss_gradient(self, data):
-        obs = data["obs"]
-        act = data["act"]
-        adv = data["adv"]
-
-        # Policy loss
-        self.opt_policy.zero_grad()
-        trainset = TensorDataset(obs, act, adv)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/10))
-
-        # Splitting obs, to fit on GPU memory
-        for obs_batch, act_batch, adv_batch in trainloader:
-            dist = self.get_dist(obs_batch)
-            logp = dist.log_prob(act_batch)
-            loss_policy = -(logp * adv_batch).mean()
-            loss_entropy = - dist.entropy().mean()
-            loss = loss_policy + self.config["pi_entropy"] * loss_entropy
-            loss.backward()
-        nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
-        self.opt_policy.step()
-
-    def loss_value(self, data):
-        obs = data["obs"]
-        ret = data["ret"]
-        scalar_loss = nn.HuberLoss()
-
-        # Value loss
-        trainset = TensorDataset(obs, ret)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["vf_minibatches"]), shuffle=True)
-
-        for _ in range(self.config["vf_iters"]):
-            for obs_batch, ret_batch in trainloader:
-                self.opt_value.zero_grad()
-                val_batch = self.get_value(obs_batch)
-                loss_value = scalar_loss(val_batch, ret_batch)
-                loss_value.backward()
-                nn.utils.clip_grad_norm_(self.value.parameters(),  self.config["grad_clip"])
-                self.opt_value.step()
-
-    def save(self, path=f'{PROJECT_PATH}/checkpoints/policy_pdlm.pt'):
+    def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         torch.save({
             'parameters': self.state_dict(),
-            'optimizer_policy': self.opt_policy.state_dict(),
-            'optimizer_value': self.opt_value.state_dict(),
+            'optimizer': self.optim.state_dict(),
         }, path)
 
-    def load(self, path=f'{PROJECT_PATH}/checkpoints/policy_pdlm.pt'):
+    def load(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
-        self.opt_policy.load_state_dict(checkpoint['optimizer_policy'])
-        self.opt_value.load_state_dict(checkpoint['optimizer_value'])
+        self.optim.load_state_dict(checkpoint['optimizer'])

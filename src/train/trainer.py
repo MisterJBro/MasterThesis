@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
@@ -39,6 +40,8 @@ class Trainer(ABC):
         self.save_paths = []
         self.eval_pool = Pool(self.config["num_cpus"])
         self.elos = [0]
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
+        self.scalar_loss = nn.MSELoss()
 
         print(tabulate([
             ['Environment', config["env"]],
@@ -193,7 +196,7 @@ class Trainer(ABC):
         self.log.close()
         self.eval_pool.close()
 
-def nn(env, obs, policy):
+def nn_agent(env, obs, policy):
     obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
     with torch.no_grad():
         dist = policy.get_dist(obs, legal_actions=[env.available_actions()])
@@ -222,9 +225,9 @@ def evaluate(num_games_per_worker, env, agent1, agent2, sample_len):
         for i in range(sample_len):
             # Get action
             if i % 2 == pid:
-                act = nn(env, obs, agent1)
+                act = nn_agent(env, obs, agent1)
             else:
-                act = nn(env, obs, agent2)
+                act = nn_agent(env, obs, agent2)
 
             # Simulate one step and get new obs
             obs, rew, done, info = env.step(act)
