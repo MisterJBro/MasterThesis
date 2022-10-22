@@ -14,9 +14,9 @@ class SEBlock(nn.Module):
         super(SEBlock, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
+            nn.Linear(channel, channel // reduction),
             nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Linear(channel // reduction, channel),
             nn.Sigmoid()
         )
 
@@ -32,10 +32,10 @@ class ResBlock(nn.Module):
     def __init__(self, num_filters, kernel_size, use_se):
         super(ResBlock, self).__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
+            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
             nn.BatchNorm2d(num_filters, eps=1e-4),
-            nn.ReLU(),
-            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1, bias=False),
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
             nn.BatchNorm2d(num_filters, eps=1e-4),
         )
         self.use_se = use_se
@@ -63,28 +63,28 @@ class HexPolicy(nn.Module):
 
         # Layers
         self.body = nn.Sequential(
-            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1, bias=False),
+            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1),
             nn.BatchNorm2d(self.num_filters, eps=1e-4),
-            nn.ReLU(),
+            nn.LeakyReLU(inplace=True),
             *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
         )
 
         # Heads
         self.policy = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1, bias=False),
+            nn.Conv2d(self.num_filters, 16, 1),
             nn.BatchNorm2d(16, eps=1e-4),
-            nn.ReLU(),
+            nn.LeakyReLU(inplace=True),
             nn.Flatten(1, -1),
         )
         self.policy_head = nn.Linear(self.size*self.size*16, config["num_acts"])
 
         self.value = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1, bias=False),
+            nn.Conv2d(self.num_filters, 16, 1),
             nn.BatchNorm2d(16, eps=1e-4),
-            nn.ReLU(),
+            nn.LeakyReLU(inplace=True),
             nn.Flatten(1, -1),
             nn.Linear(self.size*self.size*16, 256),
-            nn.ReLU(),
+            nn.LeakyReLU(inplace=True),
         )
         self.value_head = nn.Sequential(
             nn.Linear(256, 1),
