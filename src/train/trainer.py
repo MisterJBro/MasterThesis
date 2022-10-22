@@ -232,4 +232,3 @@ class Trainer(ABC):
     def __exit__(self, exc_type, exc_value, traceback):
         self.envs.close()
         self.log.close()
-        self.eval_pool.close()
