@@ -45,7 +45,7 @@ class ResBlock(nn.Module):
     def forward(self, x):
         out = self.layers(x)
         if self.use_se:
-            out = self.se(x)
+            out = self.se(out)
         return F.relu(x + out)
 
 

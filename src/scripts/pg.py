@@ -3,7 +3,7 @@ from multiprocessing import freeze_support
 from src.env.hex import HexEnv
 from src.networks.residual import HexPolicy
 from src.train.config import create_config
-from src.train.pg import PGTrainer
+from src.train.pg import PGTrainer, PPOTrainer
 
 
 if __name__ == '__main__':
@@ -31,6 +31,6 @@ if __name__ == '__main__':
     # Import policy and model
     policy = HexPolicy(config)
 
-    with PGTrainer(config, policy) as tr:
+    with PPOTrainer(config, policy) as tr:
         tr.train()
         tr.test()

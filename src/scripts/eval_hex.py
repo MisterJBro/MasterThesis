@@ -21,7 +21,7 @@ if __name__ == '__main__':
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "puct_c": 20.0,
+        "puct_c": 4.0,
         "uct_c": 4.0,
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_pg_iter=124_metric=109.pt")
+    #policy.load("checkpoints/policy_hexgame_pg_iter=109_metric=60.pt")#
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
         if mcts_obj is None:
             mcts_obj = MCTS(config)
         result = mcts_obj.search(State(env, obs=obs), iters=200)
-        act = env.available_actions()[np.argmax(result)]
+        act = np.argmax(result)
         return act
 
     az_obj = None
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
         result = az_obj.search(State(env, obs=obs), iters=200)
-        act = env.available_actions()[np.argmax(result)]
+        act = np.argmax(result)
         return act
 
     pgs_obj = None
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
         result = pgs_obj.search(State(env, obs=obs), iters=200)
-        act = env.available_actions()[np.argmax(result)]
+        act = np.argmax(result)
         return act
 
     def human(env, obs):
@@ -82,14 +82,14 @@ if __name__ == '__main__':
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
             dist, val = policy(obs, legal_actions=[env.available_actions()])
-            print(val)
+        print(dist.probs)
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
     # Simulate
-    players = [random, nn]
-    num_games = 100
-    render = True
+    players = [random, az]
+    num_games = 1
+    render = False
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):

@@ -39,6 +39,8 @@ class AZCore(MCTSCore):
             prob, val = self.eval_fn(self.root)
             self.root.priors = prob[self.root.get_legal_actions()]
             self.root.val = val
+            print(self.root.priors)
+            print(self.root.val)
 
     def eval_fn(self, node):
         self.eval_channel.send({
