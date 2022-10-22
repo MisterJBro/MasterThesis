@@ -4,6 +4,7 @@ import numpy as np
 import torch.multiprocessing as mp
 from torch.multiprocessing import Process
 from multiprocessing.connection import wait
+from copy import deepcopy
 
 
 class Evaluator(Process):
@@ -92,6 +93,9 @@ class Evaluator(Process):
         return wids, reply
 
     def eval(self, obs):
+        print(self.policy.body.weight)
+        import time
+        time.sleep(100)
         with torch.no_grad():
             dist, val = self.policy(obs)
         probs = dist.probs.cpu().numpy()

@@ -10,6 +10,7 @@ from src.env.hex import HexEnv
 from src.search.mcts.mcts import MCTS
 from src.search.state import State
 from tqdm import tqdm, trange
+from copy import deepcopy
 
 
 if __name__ == '__main__':
@@ -52,7 +53,10 @@ if __name__ == '__main__':
     def az(env, obs):
         global az_obj
         if az_obj is None:
-            az_obj = AlphaZero(config, policy)
+            print(policy.body.weight)
+            az_obj = AlphaZero(config, deepcopy(policy))
+            print(policy.body.weight)
+            az_obj.update(policy.state_dict())
         result = az_obj.search(State(env, obs=obs), iters=200)
         act = np.argmax(result)
         return act
@@ -82,7 +86,6 @@ if __name__ == '__main__':
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
             dist, val = policy(obs, legal_actions=[env.available_actions()])
-        print(dist.probs)
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 

@@ -33,10 +33,10 @@ class ResBlock(nn.Module):
         super(ResBlock, self).__init__()
         self.layers = nn.Sequential(
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
-            nn.BatchNorm2d(num_filters, eps=1e-4),
+            nn.BatchNorm2d(num_filters),
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
-            nn.BatchNorm2d(num_filters, eps=1e-4),
+            nn.BatchNorm2d(num_filters),
         )
         self.use_se = use_se
         if use_se:
@@ -62,17 +62,18 @@ class HexPolicy(nn.Module):
         self.size = config["obs_dim"][-1]
 
         # Layers
-        self.body = nn.Sequential(
-            nn.Conv2d(2, self.num_filters, self.kernel_size, padding=1),
-            nn.BatchNorm2d(self.num_filters, eps=1e-4),
-            nn.LeakyReLU(inplace=True),
-            *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
-        )
+        self.body = nn.Conv2d(2, self.num_filters, kernel_size=self.kernel_size, padding=1)
+            #nn.Sequential(
+            #,
+            #nn.BatchNorm2d(self.num_filters),
+            #nn.LeakyReLU(inplace=True),
+            #*[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
+        #)
 
         # Heads
         self.policy = nn.Sequential(
             nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16, eps=1e-4),
+            nn.BatchNorm2d(16),
             nn.LeakyReLU(inplace=True),
             nn.Flatten(1, -1),
         )
@@ -80,7 +81,7 @@ class HexPolicy(nn.Module):
 
         self.value = nn.Sequential(
             nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16, eps=1e-4),
+            nn.BatchNorm2d(16),
             nn.LeakyReLU(inplace=True),
             nn.Flatten(1, -1),
             nn.Linear(self.size*self.size*16, 256),
@@ -91,12 +92,15 @@ class HexPolicy(nn.Module):
             nn.Tanh(),
         )
 
-        self.optim = optim.Adam(self.parameters(), lr=config["pi_lr"], eps=1e-4)
+        self.optim = optim.Adam(self.parameters(), lr=config["pi_lr"])
         self.device = config["device"]
         self.to(self.device)
 
     def forward(self, x, legal_actions=None):
+        x = torch.randn(1, 2, 9, 9).float().cuda()
+        print("Before: ", x.sum().item())
         x = self.body(x)
+        print("After: ", x.sum().item())
 
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)
