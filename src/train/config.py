@@ -90,6 +90,7 @@ def compute_config(config):
     config["num_acts"] = env.action_space.n
     config["flat_obs_dim"] = int(np.product(config["obs_dim"]))
     config["num_players"] = env.num_players
+    config["amp_device"] = "cpu" if config["device"] == "cpu" else "cuda"
 
     return config
 

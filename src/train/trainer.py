@@ -154,15 +154,10 @@ class Trainer(ABC):
         old_policy.load(self.save_paths[-1])
 
         # Parameters
-        p = self.eval_pool
-        num_worker = self.config["num_cpus"]
-        num_games = max(self.config["self_play_num_eval_games"], num_worker)
-        num_games -= num_games % num_worker
-        env = self.config["env"]
-        sample_len = self.config["sample_len"]
+        num_games = int(np.ceil(self.config["self_play_num_eval_games"]/self.config["num_envs"])) * self.config["num_envs"]
 
         # Evaluate in parallel
-        win_count = self.play_other(old_policy)
+        win_count = self.play_other(old_policy, num_games)
         win_rate = win_count/num_games * 100.0
         if win_rate > self.config["self_play_update_win_rate"]:
             last_elo = self.elos[-1]
@@ -173,19 +168,19 @@ class Trainer(ABC):
             elo = self.elos[-1]
         return win_rate, elo
 
-    def play_other(self, other_policy):
+    def play_other(self, other_policy, num_games):
         curr_policy = deepcopy(self.policy)
         win_count = 0
 
-        for iter in range(int(self.config["self_play_num_eval_games"]/self.config["num_envs"])):
+        for iter in range(int(num_games/self.config["num_envs"])):
             obs, legal_act = self.envs.reset()
             rews = np.zeros(self.config["num_envs"])
             dones = np.full(self.config["num_envs"], False)
-            pid = iter % 2
+            id = iter % 2
 
             for i in range(self.config["eval_len"]):
                 # Set current policy
-                if i % 2 == pid:
+                if i % 2 == id:
                     self.policy = curr_policy
                 else:
                     self.policy = other_policy
@@ -199,8 +194,8 @@ class Trainer(ABC):
                 obs_next, rew, done, info = self.envs.step(act)
 
                 # Add new information
-                pid, legal_act = info
-                if i % 2 == pid:
+                _, legal_act = info
+                if i % 2 == id:
                     rews += rew * (1 - dones)
                 dones |= done
                 obs = obs_next

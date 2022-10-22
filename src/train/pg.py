@@ -26,7 +26,7 @@ class PGTrainer(Trainer):
         # Minibatch training to fit on GPU memory
         for _ in range(2):
             for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
-                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', enabled=self.config["use_amp"]):
+                with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
 
                     # PG loss
@@ -81,7 +81,7 @@ class PPOTrainer(PGTrainer):
         # Minibatch training to fit on GPU memory
         for _ in range(2):
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
-                with torch.autocast(device_type='cpu' if self.config["device"] == 'cpu' else 'cuda', enabled=self.config["use_amp"]):
+                with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
 
                     # PPO loss

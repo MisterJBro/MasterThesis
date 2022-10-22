@@ -134,7 +134,8 @@ class HexPolicy(nn.Module):
             return logits
 
         # Mask out invalid actions
-        new_logits = torch.full(logits.shape, -10e8, dtype=torch.float32).to(self.device)
+        MASK_VALUE = -10e8 if logits.dtype == torch.float32 else -1e4
+        new_logits = torch.full(logits.shape, MASK_VALUE, dtype=logits.dtype).to(self.device)
         for i, row in enumerate(legal_actions):
             new_logits[i, row] = logits[i, row]
         return new_logits

@@ -8,6 +8,8 @@ from src.train.pg import PGTrainer
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
+    torch.backends.cudnn.benchmark = True
+    torch.set_float32_matmul_precision("high")
     freeze_support()
 
     # Init for algos
@@ -16,16 +18,14 @@ if __name__ == '__main__':
     config = create_config({
         "train_iters": 1_000,
         "env": env,
-        "puct_c": 4.0,
-        "search_return_adv": True,
         "num_cpus": 15,
         "num_envs": 120,
+        "sample_len": 1_000,
         "device": "cuda:0",
         "pi_lr": 1e-4,
-        "vf_lr": 1e-4,
         "pi_entropy": 0.001,
         "num_batch_split": 30,
-        "sample_len": 1_000,
+        "self_play_num_eval_games": 240,
     })
 
     # Import policy and model
