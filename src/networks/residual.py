@@ -62,13 +62,12 @@ class HexPolicy(nn.Module):
         self.size = config["obs_dim"][-1]
 
         # Layers
-        self.body = nn.Conv2d(2, self.num_filters, kernel_size=self.kernel_size, padding=1)
-            #nn.Sequential(
-            #,
-            #nn.BatchNorm2d(self.num_filters),
-            #nn.LeakyReLU(inplace=True),
-            #*[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
-        #)
+        self.body = nn.Sequential(
+            nn.Conv2d(2, self.num_filters, kernel_size=self.kernel_size, padding=1),
+            nn.BatchNorm2d(self.num_filters),
+            nn.LeakyReLU(inplace=True),
+            *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
+        )
 
         # Heads
         self.policy = nn.Sequential(
@@ -97,10 +96,7 @@ class HexPolicy(nn.Module):
         self.to(self.device)
 
     def forward(self, x, legal_actions=None):
-        x = torch.randn(1, 2, 9, 9).float().cuda()
-        print("Before: ", x.sum().item())
         x = self.body(x)
-        print("After: ", x.sum().item())
 
         logits = self.policy_head(self.policy(x))
         logits = self.filter_actions(logits, legal_actions)

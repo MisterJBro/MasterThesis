@@ -22,7 +22,7 @@ if __name__ == '__main__':
         "num_envs": 120,
         "sample_len": 1_000,
         "device": "cuda:0",
-        "pi_lr": 1e-5,
+        "pi_lr": 4e-4,
         "pi_entropy": 0.001,
         "num_batch_split": 30,
         "self_play_num_eval_games": 240,
