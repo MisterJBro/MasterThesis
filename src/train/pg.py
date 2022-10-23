@@ -12,6 +12,7 @@ class PGTrainer(Trainer):
         self.policy = policy
 
     def update(self, sample_batch):
+        self.policy.train()
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         act = data["act"]
@@ -24,7 +25,7 @@ class PGTrainer(Trainer):
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]), shuffle=True)
 
         # Minibatch training to fit on GPU memory
-        for _ in range(5):
+        for _ in range(4):
             for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
@@ -55,6 +56,7 @@ class PPOTrainer(PGTrainer):
     """ Train a policy using Proximal Policy Gradient."""
 
     def update(self, sample_batch):
+        self.policy.train()
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         act = data["act"]

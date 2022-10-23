@@ -32,4 +32,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.pg --log_to_writer False --log_to_file True --log_name ppo.txt --use_amp False
+python -m src.scripts.pg --log_to_writer False --log_to_file True --log_name ppo_amp.txt --use_amp True

@@ -40,7 +40,7 @@ DEFAULT_CONFIG = {
     "num_batch_split": 20,
     "num_filters": 128,
     "num_res_blocks": 16,
-    "num_checkpoints": 3,
+    "num_checkpoints": 2,
     "use_se": True,
     "use_amp": False,
 

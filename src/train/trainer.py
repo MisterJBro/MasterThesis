@@ -114,6 +114,7 @@ class Trainer(ABC):
         return sample_batch
 
     def get_action(self, obs, env_list=None, use_best=False, legal_actions=None):
+        self.policy.eval()
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         with torch.no_grad():
             dist = self.policy.get_dist(obs, legal_actions=legal_actions)
@@ -169,7 +170,7 @@ class Trainer(ABC):
         return win_rate, elo
 
     def play_other(self, other_policy, num_games):
-        curr_policy = deepcopy(self.policy)
+        curr_policy = deepcopy(self.policy) 
         win_count = 0
 
         for iter in range(int(num_games/self.config["num_envs"])):
