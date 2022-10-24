@@ -152,7 +152,10 @@ class Trainer(ABC):
     def evaluate(self):
         # Get last policy
         old_policy = deepcopy(self.policy)
-        old_policy.load(self.save_paths[-1])
+        #old_policy.load(self.save_paths[-1])
+        for layer in old_policy.children():
+            if hasattr(layer, 'reset_parameters'):
+                layer.reset_parameters()
 
         # Parameters
         num_games = int(np.ceil(self.config["self_play_num_eval_games"]/self.config["num_envs"])) * self.config["num_envs"]
@@ -170,7 +173,7 @@ class Trainer(ABC):
         return win_rate, elo
 
     def play_other(self, other_policy, num_games):
-        curr_policy = deepcopy(self.policy) 
+        curr_policy = deepcopy(self.policy)
         win_count = 0
 
         for iter in range(int(num_games/self.config["num_envs"])):

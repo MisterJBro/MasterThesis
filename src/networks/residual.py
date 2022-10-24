@@ -34,7 +34,7 @@ class ResBlock(nn.Module):
         self.layers = nn.Sequential(
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
             nn.BatchNorm2d(num_filters),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Conv2d(num_filters, num_filters, kernel_size, padding=1),
             nn.BatchNorm2d(num_filters),
         )
@@ -65,7 +65,7 @@ class HexPolicy(nn.Module):
         self.body = nn.Sequential(
             nn.Conv2d(2, self.num_filters, kernel_size=self.kernel_size, padding=1),
             nn.BatchNorm2d(self.num_filters),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             *[ResBlock(self.num_filters, self.kernel_size, self.use_se) for _ in range(self.num_res_blocks)],
         )
 
@@ -73,7 +73,7 @@ class HexPolicy(nn.Module):
         self.policy = nn.Sequential(
             nn.Conv2d(self.num_filters, 16, 1),
             nn.BatchNorm2d(16),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Flatten(1, -1),
         )
         self.policy_head = nn.Linear(self.size*self.size*16, config["num_acts"])
@@ -81,10 +81,10 @@ class HexPolicy(nn.Module):
         self.value = nn.Sequential(
             nn.Conv2d(self.num_filters, 16, 1),
             nn.BatchNorm2d(16),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Flatten(1, -1),
             nn.Linear(self.size*self.size*16, 256),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
         )
         self.value_head = nn.Sequential(
             nn.Linear(256, 1),

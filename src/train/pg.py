@@ -22,10 +22,11 @@ class PGTrainer(Trainer):
         data["adv"] = adv
 
         trainset = TensorDataset(obs, act, adv, ret)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]), shuffle=True)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Minibatch training to fit on GPU memory
         for _ in range(4):
+            self.policy.optim.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
@@ -46,10 +47,9 @@ class PGTrainer(Trainer):
             nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
             self.scaler.step(self.policy.optim)
             self.scaler.update()
-            self.policy.optim.zero_grad(set_to_none=True)
 
-            mem = torch.cuda.mem_get_info()
-            print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
+            #mem = torch.cuda.mem_get_info()
+            #print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
 
 
 class PPOTrainer(PGTrainer):
@@ -78,10 +78,11 @@ class PPOTrainer(PGTrainer):
             old_logp = torch.cat(old_logp, 0)
 
         trainset = TensorDataset(obs, act, adv, ret, old_logp)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]), shuffle=True)
+        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Minibatch training to fit on GPU memory
-        for _ in range(2):
+        for _ in range(10):
+            self.policy.optim.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
                     dist, val_batch = self.policy(obs_batch)
@@ -98,16 +99,19 @@ class PPOTrainer(PGTrainer):
                     loss_value = self.scalar_loss(val_batch, ret_batch)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
                     loss /= self.config["num_batch_split"]
+                    self.log("kl_approx", kl_approx)
+                    #self.log("loss_policy", loss_policy.item())
+                    #self.log("loss_entropy", loss_entropy.item())
+                    self.log("loss_value", loss_value.item())
 
                 # AMP loss backward
                 self.scaler.scale(loss).backward()
 
             # AMP Update
             self.scaler.unscale_(self.policy.optim)
-            nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
+            nn.utils.clip_grad_norm_(self.policy.parameters(), self.config["grad_clip"])
             self.scaler.step(self.policy.optim)
             self.scaler.update()
-            self.policy.optim.zero_grad(set_to_none=True)
 
-            mem = torch.cuda.mem_get_info()
-            print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
+            #mem = torch.cuda.mem_get_info()
+            #print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")

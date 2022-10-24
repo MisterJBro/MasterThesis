@@ -35,7 +35,8 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    #policy.load("checkpoints/policy_hexgame_pg_iter=109_metric=60.pt")#
+    policy.load("checkpoints/policy_hexgame_ppo_iter=421_metric=220.pt")
+    policy.eval()
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -90,8 +91,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [random, az]
-    num_games = 1
+    players = [random, nn]
+    num_games = 100
     render = False
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
