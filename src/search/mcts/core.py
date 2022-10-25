@@ -34,7 +34,7 @@ class MCTSCore:
         if node.state is None:
             node.create_state()
             return node
-        if node.state.is_terminal():
+        if node.is_terminal():
             return node
 
         # Create new child nodes, lazy init
@@ -66,6 +66,3 @@ class MCTSCore:
 
     def set_root(self, state):
         self.root = self.NodeClass(state)
-
-    def get_normalized_visit_counts(self, temp=1.0):
-        return [child.num_visits ** (1/temp) / self.root.num_visits ** (1/temp) for child in self.root.children]

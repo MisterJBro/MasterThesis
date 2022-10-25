@@ -18,11 +18,11 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 9
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "puct_c": 4.0,
+        "puct_c": 4000.0,
         "uct_c": 4.0,
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
@@ -30,12 +30,12 @@ if __name__ == '__main__':
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
         "device": "cuda:0",
-        "search_return_adv": True,
+        "search_return_adv": False,
     })
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_ppo_iter=421_metric=220.pt")
+    policy.load("checkpoints/policy_hexgame_ppo_iter=122_metric=777.pt")#policy_hexgame_ppo_iter=813_metric=166.pt")#
     policy.eval()
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=200)
+        result = mcts_obj.search(State(env, obs=obs), iters=1_000)
         act = np.argmax(result)
         return act
 
@@ -54,10 +54,7 @@ if __name__ == '__main__':
     def az(env, obs):
         global az_obj
         if az_obj is None:
-            print(policy.body.weight)
-            az_obj = AlphaZero(config, deepcopy(policy))
-            print(policy.body.weight)
-            az_obj.update(policy.state_dict())
+            az_obj = AlphaZero(config, policy)
         result = az_obj.search(State(env, obs=obs), iters=200)
         act = np.argmax(result)
         return act
@@ -91,9 +88,9 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [random, nn]
-    num_games = 100
-    render = False
+    players = [az, random]
+    num_games = 1
+    render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):

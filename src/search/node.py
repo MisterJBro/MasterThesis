@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from tkinter import N
 import numpy as np
 from numba import jit
 
@@ -27,6 +26,9 @@ class Node(ABC):
     def create_state(self):
         self.state = self.parent.state.transition(self.action)
 
+    def is_terminal(self):
+        return self.state.is_terminal()
+
     def get_legal_actions(self):
         return self.state.get_possible_actions()
 
@@ -37,6 +39,13 @@ class Node(ABC):
         all_qvals[legal_act] = qvals
         return all_qvals
 
+    def get_normalized_visit_counts(self, num_acts, temp=1.0):
+        legal_act = self.get_legal_actions()
+        all_visits = np.zeros(num_acts)
+        visits = np.array([child.num_visits for child in self.children])
+        all_visits[legal_act] = visits
+        normalized_visits = all_visits ** (1 / temp) / self.num_visits ** (1 / temp)
+        return normalized_visits
 
 class UCTNode(Node):
     """ Tree Node using Upper Confidence bound1 for Trees (UCT). """

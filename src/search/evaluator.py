@@ -40,6 +40,8 @@ class Evaluator(Process):
         return msg
 
     def run(self):
+        # Transfer to device here, doing this in init leads to errors
+        self.policy.to(self.policy.device)
         while True:
             if not self.master_channel.poll():
                 self.serve_requests()
@@ -93,9 +95,6 @@ class Evaluator(Process):
         return wids, reply
 
     def eval(self, obs):
-        print(self.policy.body.weight)
-        import time
-        time.sleep(100)
         with torch.no_grad():
             dist, val = self.policy(obs)
         probs = dist.probs.cpu().numpy()
