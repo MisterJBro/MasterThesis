@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #SBATCH -A project01854
-#SBATCH -J exit_pdlm
+#SBATCH -J hex_exit
 #SBATCH --mail-type=NONE
 #SBATCH -n 1
 #SBATCH -c 16
 #SBATCH --mem-per-cpu=3800
-##SBATCH --gres=gpu:a100
+#SBATCH --gres=gpu:a100
 #SBATCH -t 23:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/PGS_EXIT_%A_%a-out.txt
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/HEX_EXIT_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
 
@@ -32,4 +32,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.exit_pdlm --search_algo pgs
+python -m src.scripts.exit --search_algo az --log_to_writer False --log_to_file True

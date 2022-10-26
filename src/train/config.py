@@ -102,6 +102,10 @@ def args_config(config):
             parser.add_argument(f'--{key}', type=str2bool)
         else:
             parser.add_argument(f'--{key}', type=type(value))
+
+    # Custom arguments
+    parser.add_argument('--search_algo', type=str, default="az", choices=['az', 'mz', 'pgs', 'vepgs'])
+
     args = parser.parse_args()
     args = {k: v for k, v in vars(args).items() if v is not None}
     return args

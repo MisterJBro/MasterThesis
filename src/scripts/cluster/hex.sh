@@ -7,7 +7,7 @@
 #SBATCH --mem-per-cpu=3800
 #SBATCH --gres=gpu:a100
 #SBATCH -t 23:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/HEX_PPO_AMP_%A_%a-out.txt
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/HEX_PPO_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
 
@@ -32,4 +32,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.pg --log_to_writer False --log_to_file True --log_name ppo_amp.txt --use_amp True
+python -m src.scripts.pg --log_to_writer False --log_to_file True --log_name ppo.txt --use_amp False
