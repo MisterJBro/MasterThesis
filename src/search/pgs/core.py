@@ -73,12 +73,16 @@ class PGSCore(MCTSCore):
         #plot()
 
         if self.config["search_return_adv"]:
-            qvals = self.root.get_action_values()
+            qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
+            print("Normal visit counts:")
+            print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
+            print("QVALS: ", qvals.reshape(5,5).round(2))
+
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
-            adv = adv / np.abs(np.max(adv))
+            adv = adv / (np.abs(np.max(adv)) + 1e-8)
             return (100 + max_visits) * 0.005 * adv
-        return self.get_normalized_visit_counts()
+        return self.get_normalized_visit_counts(self.config["num_acts"])
 
     def expand(self, node):
         if node.state is None:
@@ -188,7 +192,7 @@ class PGSCore(MCTSCore):
 
         with torch.no_grad():
             val = self.sim_value(val_h).reshape(-1)
-            val = np.concatenate((val.numpy(), [rew[-1]]))
+            val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
         adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
         adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
@@ -230,12 +234,23 @@ class PGSCore(MCTSCore):
                 logits = self.base_policy(pol_h)
                 prob = F.softmax(logits, dim=-1)
                 val = self.base_value(val_h)
-            self.logits = logits.numpy().reshape(-1)
+            self.logits = logits.cpu().numpy().reshape(-1)
 
             self.root.priors = prob.cpu().numpy().reshape(-1)
             self.root.val = val.cpu().item()
             self.root.pol_h = pol_h
             self.root.val_h = val_h
+
+    def filter_actions(self, logits, legal_actions=None):
+        if legal_actions is None:
+            return logits
+
+        # Mask out invalid actions
+        MASK_VALUE = -10e8 if logits.dtype == torch.float32 else -1e4
+        new_logits = torch.full(logits.shape, MASK_VALUE, dtype=logits.dtype).to(self.device)
+        for i, row in enumerate(legal_actions):
+            new_logits[i, row] = logits[i, row]
+        return new_logits
 
     def eval_fn(self, obs):
         self.eval_channel.send({

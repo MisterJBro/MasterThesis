@@ -16,7 +16,7 @@ class AZCore(MCTSCore):
         self.set_root(state)
 
     def search(self, iters):
-        qvals = super().search(iters, default=self.root.val)
+        qvals = super().search(iters)
         if self.config["search_return_adv"]:
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
@@ -31,7 +31,7 @@ class AZCore(MCTSCore):
 
         prob, val = self.eval_fn(node)
         node.priors = prob[node.get_legal_actions()]
-        return val
+        return -val
 
     def set_root(self, state):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])

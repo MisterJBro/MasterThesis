@@ -47,6 +47,7 @@ class Node(ABC):
         normalized_visits = all_visits ** (1 / temp) / self.num_visits ** (1 / temp)
         return normalized_visits
 
+
 class UCTNode(Node):
     """ Tree Node using Upper Confidence bound1 for Trees (UCT). """
 
@@ -75,6 +76,9 @@ class UCTNode(Node):
         if num_visits == 0:
             return np.inf
         return total_rews/(num_visits+1e-12) + c * np.sqrt(np.log(parent_visits)/num_visits+1e-12)
+
+    def qvalue(self):
+        return self.total_rews/(self.num_visits+1e-12)
 
 
 class PUCTNode(Node):
@@ -106,6 +110,9 @@ class PUCTNode(Node):
         if num_visits == 0:
             return np.inf
         return total_rews/(num_visits+1e-12) + c * prior * np.sqrt(parent_visits) / (1 + num_visits)
+
+    def qvalue(self):
+        return self.total_rews/(self.num_visits+1e-12)
 
 
 class DirichletNode(PUCTNode):
@@ -151,9 +158,6 @@ class PGSNode(PUCTNode):
         if num_visits == 0:
             return np.inf
         return qval + c * prior * np.sqrt(parent_visits) / (1 + num_visits)
-
-    def qvalue(self):
-        return self.total_rews/(self.num_visits+1e-12) # self.qval #
 
     def get_action_values(self, default=0):
         return np.array([child.qvalue() if child.num_visits > 0 else default for child in self.children])

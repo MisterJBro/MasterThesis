@@ -22,7 +22,8 @@ class MCTSCore:
             self.backpropagate(new_leaf, ret)
             iter += 1
 
-        return self.root.get_action_values(self.config["num_acts"], default=default)
+        qvals = self.root.get_action_values(self.config["num_acts"], default=default)
+        return qvals
 
     def select(self):
         node = self.root

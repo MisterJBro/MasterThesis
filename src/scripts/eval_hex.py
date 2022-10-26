@@ -22,15 +22,15 @@ if __name__ == '__main__':
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "puct_c": 4.0,
-        "uct_c": 4.0,
+        "puct_c": 3.0,
+        "uct_c": np.sqrt(2),
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "dirichlet_eps": 0.0,
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
         "device": "cuda:0",
-        "search_return_adv": False,
+        "search_return_adv": True,
     })
 
     # Import policy and model
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=1_000)
+        result = mcts_obj.search(State(env, obs=obs), iters=10_000)
         act = np.argmax(result)
         return act
 
@@ -55,7 +55,8 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
-        result = az_obj.search(State(env, obs=obs), iters=200)
+        result = az_obj.search(State(env, obs=obs), iters=100)
+        print(result.reshape(size, size).round(2))
         act = np.argmax(result)
         return act
 
@@ -64,8 +65,9 @@ if __name__ == '__main__':
         global pgs_obj
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
-        result = pgs_obj.search(State(env, obs=obs), iters=200)
+        result = pgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
+        quit()
         return act
 
     def human(env, obs):
@@ -88,7 +90,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [az, random]
+    players = [pgs, random]
     num_games = 1
     render = True
     num_victories_first = 0

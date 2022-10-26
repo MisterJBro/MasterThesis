@@ -39,7 +39,7 @@ DEFAULT_CONFIG = {
     "clip_ratio": 0.2,
     "num_batch_split": 20,
     "num_filters": 128,
-    "num_res_blocks": 12,
+    "num_res_blocks": 16,
     "num_checkpoints": 1,
     "use_se": True,
     "use_amp": False,
