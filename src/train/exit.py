@@ -54,6 +54,7 @@ class ExitTrainer(Trainer):
         return act, dist
 
     def update(self, sample_batch):
+        self.policy.train()
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         dist = data["dist"]
@@ -65,9 +66,7 @@ class ExitTrainer(Trainer):
 
         for _ in range(3):
             for obs_batch, target_batch, ret_batch in trainloader:
-                self.policy.opt_hidden.zero_grad(set_to_none=True)
-                self.policy.opt_policy.zero_grad(set_to_none=True)
-                self.policy.opt_value.zero_grad(set_to_none=True)
+                self.policy.optim.zero_grad(set_to_none=True)
 
                 dist_batch, val_batch = self.policy(obs_batch)
                 loss_dist = kl_divergence(Categorical(probs=target_batch), dist_batch).mean()
@@ -76,9 +75,7 @@ class ExitTrainer(Trainer):
                 loss.backward()
 
                 nn.utils.clip_grad_norm_(self.policy.parameters(), self.config["grad_clip"])
-                self.policy.opt_hidden.step()
-                self.policy.opt_policy.step()
-                self.policy.opt_value.step()
+                self.policy.optim.step()
 
         # Model training
         if self.model is not None:

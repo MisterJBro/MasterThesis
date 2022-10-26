@@ -22,7 +22,7 @@ if __name__ == '__main__':
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "puct_c": 4000.0,
+        "puct_c": 4.0,
         "uct_c": 4.0,
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_ppo_iter=122_metric=777.pt")#policy_hexgame_ppo_iter=813_metric=166.pt")#
+    policy.load("checkpoints/policy_hexgame_ppo_iter=20_metric=295.pt")#policy_hexgame_ppo_iter=813_metric=166.pt")#
     policy.eval()
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")

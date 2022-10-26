@@ -23,7 +23,7 @@ class AlphaZero(ParallelSearchAlgorithm):
         eval_master_pipe = Pipe()
         eval_channels = [p[0] for p in eval_pipes]
         self.eval_channel = eval_master_pipe[0]
-        self.evaluator = Evaluator(config, deepcopy(policy.cpu()), eval_channels, eval_master_pipe[1])
+        self.evaluator = Evaluator(config, deepcopy(policy).cpu(), eval_channels, eval_master_pipe[1])
         self.evaluator.start()
 
     def update(self, policy_params):

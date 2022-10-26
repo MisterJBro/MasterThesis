@@ -140,6 +140,14 @@ class HexPolicy(nn.Module):
             new_logits[i, row] = logits[i, row]
         return new_logits
 
+    def set_requires_grad(self, requires_grad):
+        for param in self.policy.parameters():
+            param.requires_grad = requires_grad
+        for param in self.policy_head.parameters():
+            param.requires_grad = requires_grad
+        for param in self.body.parameters():
+            param.requires_grad = requires_grad
+
     def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         torch.save({
             'parameters': self.state_dict(),

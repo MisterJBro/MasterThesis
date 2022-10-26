@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 import humanize
+import numpy as np
 from src.train.trainer import Trainer
 
 class PGTrainer(Trainer):
@@ -57,6 +58,7 @@ class PPOTrainer(PGTrainer):
 
     def update(self, sample_batch):
         self.policy.train()
+        self.policy.set_requires_grad(True)
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         act = data["act"]
@@ -94,7 +96,7 @@ class PPOTrainer(PGTrainer):
                     loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
                     kl_approx = (old_logp_batch - logp).mean().item()
                     if kl_approx > 0.1:
-                        return
+                        self.policy.set_requires_grad(False)
                     loss_entropy = - dist.entropy().mean()
                     loss_value = self.scalar_loss(val_batch, ret_batch)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
@@ -103,6 +105,7 @@ class PPOTrainer(PGTrainer):
                     #self.log("loss_policy", loss_policy.item())
                     #self.log("loss_entropy", loss_entropy.item())
                     self.log("loss_value", loss_value.item())
+                    #print("\t", np.round(loss_value.item(), 3))
 
                 # AMP loss backward
                 self.scaler.scale(loss).backward()
