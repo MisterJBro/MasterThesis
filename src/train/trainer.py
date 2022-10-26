@@ -189,9 +189,13 @@ class Trainer(ABC):
                 else:
                     self.policy = other_policy
 
+                # Get all current envs that are not done
+                env_list = self.envs.get_all_env()
+                env_list = [env_list[i] for i in range(len(env_list)) if not dones[i]]
+
                 # If envs finished -> action does not matter (less calculations)
                 act = np.zeros(self.config["num_envs"], dtype=np.int32)
-                act_calc, _ = self.get_action(obs[~dones], legal_actions=list(compress(legal_act, ~dones)))
+                act_calc, _ = self.get_action(obs[~dones], env_list=env_list, legal_actions=list(compress(legal_act, ~dones)))
                 act[~dones] = act_calc
                 act_other = [x[0] for x in list(compress(legal_act, dones))]
                 act[dones] = act_other
