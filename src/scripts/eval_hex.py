@@ -57,8 +57,7 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
-        result = az_obj.search(State(env, obs=obs), iters=100)
-        print(result.reshape(size, size).round(2))
+        result = az_obj.search(State(env, obs=obs), iters=1000)
         act = np.argmax(result)
         return act
 
@@ -67,7 +66,8 @@ if __name__ == '__main__':
         global pgs_obj
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
-        result = pgs_obj.search(State(env, obs=obs), iters=5)
+        result = pgs_obj.search(State(env, obs=obs), iters=100)
+        print(result.reshape(5,5).round(2))
         act = np.argmax(result)
         quit()
         return act
