@@ -10,6 +10,7 @@ class PGS(ParallelSearchAlgorithm):
 
     def __init__(self, config, policy):
         super().__init__(config)
+        policy.cpu()
 
         # Create parallel tree workers
         pipes = [Pipe() for _ in range(self.num_workers)]
@@ -23,8 +24,9 @@ class PGS(ParallelSearchAlgorithm):
         eval_master_pipe = Pipe()
         eval_channels = [p[0] for p in eval_pipes]
         self.eval_channel = eval_master_pipe[0]
-        self.evaluator = PGSEvaluator(config, policy, eval_channels, eval_master_pipe[1])
+        self.evaluator = PGSEvaluator(config, deepcopy(policy), eval_channels, eval_master_pipe[1])
         self.evaluator.start()
+        policy.to(policy.device)
 
     def update(self, policy_params):
         self.eval_channel.send({

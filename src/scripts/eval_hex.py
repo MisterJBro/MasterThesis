@@ -1,4 +1,5 @@
 import random as rand
+import re
 import torch
 import numpy as np
 from torch.multiprocessing import freeze_support
@@ -29,7 +30,7 @@ if __name__ == '__main__':
         "dirichlet_eps": 0.0,
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
-        "device": "cuda:0",
+        "device": "cpu",
         "search_return_adv": True,
     })
 
@@ -47,6 +48,7 @@ if __name__ == '__main__':
         if mcts_obj is None:
             mcts_obj = MCTS(config)
         result = mcts_obj.search(State(env, obs=obs), iters=10_000)
+        print(result.reshape(size, size).round(2))
         act = np.argmax(result)
         return act
 
@@ -65,7 +67,7 @@ if __name__ == '__main__':
         global pgs_obj
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
-        result = pgs_obj.search(State(env, obs=obs), iters=100)
+        result = pgs_obj.search(State(env, obs=obs), iters=5)
         act = np.argmax(result)
         quit()
         return act
