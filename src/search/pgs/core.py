@@ -77,11 +77,10 @@ class PGSCore(MCTSCore):
 
         if self.config["search_return_adv"]:
             qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
-            print("Normal visit counts:")
-            print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
-            print("QVALS:")
-            qvals[qvals < -100] = 0
-            print(qvals.reshape(5,5).round(2))
+            #print("Normal visit counts:")
+            #print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
+            #print("QVALS:")
+            #print(qvals.reshape(5,5).round(2))
 
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
@@ -241,16 +240,19 @@ class PGSCore(MCTSCore):
 
         # Calculate return
         #print("val: ", val)
-        val = val.cpu().numpy().reshape(-1)
-        val[::2] = -val[::2]
-        #print("flip val: ",val)
-        p = 0.5
-        k = len(val)
-        log_dist = p**np.arange(k)/(-k*np.log(1-p))
-        #print("log_dist: ", log_dist)
-        #total_ret = val @ log_dist
-        total_ret = val[-1]
-        #print("total_ret: ", total_ret)
+        if last_val is None:
+            total_ret = -ret[0].numpy()
+        else:
+            val = val.cpu().numpy().reshape(-1)
+            val[::2] = -val[::2]
+            #print("flip val: ",val)
+            p = 0.8
+            k = len(val)
+            log_dist = p**np.arange(k)/(-k*np.log(1-p))
+            #print("log_dist: ", log_dist)
+            total_ret = val @ log_dist
+            #total_ret = val[-1]
+            #print("total_ret: ", total_ret)
 
         return total_ret
 

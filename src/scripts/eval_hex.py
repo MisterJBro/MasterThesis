@@ -47,8 +47,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=10_000)
-        print(result.reshape(size, size).round(2))
+        result = mcts_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
 
@@ -57,7 +56,7 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
-        result = az_obj.search(State(env, obs=obs), iters=1000)
+        result = az_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
 
@@ -67,9 +66,7 @@ if __name__ == '__main__':
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
-        print(result.reshape(5,5).round(2))
         act = np.argmax(result)
-        quit()
         return act
 
     def human(env, obs):
@@ -92,8 +89,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [pgs, random]
-    num_games = 1
+    players = [nn, pgs]
+    num_games = 5
     render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
