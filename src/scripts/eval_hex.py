@@ -1,4 +1,5 @@
 import random as rand
+import re
 import torch
 import numpy as np
 from torch.multiprocessing import freeze_support
@@ -29,7 +30,7 @@ if __name__ == '__main__':
         "dirichlet_eps": 0.0,
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
-        "device": "cuda:0",
+        "device": "cpu",
         "search_return_adv": True,
     })
 
@@ -46,7 +47,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=10_000)
+        result = mcts_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
 
@@ -56,7 +57,6 @@ if __name__ == '__main__':
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
         result = az_obj.search(State(env, obs=obs), iters=100)
-        print(result.reshape(size, size).round(2))
         act = np.argmax(result)
         return act
 
@@ -67,7 +67,6 @@ if __name__ == '__main__':
             pgs_obj = PGS(config, policy)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
-        quit()
         return act
 
     def human(env, obs):
@@ -90,8 +89,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [pgs, random]
-    num_games = 1
+    players = [nn, pgs]
+    num_games = 5
     render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")

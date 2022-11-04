@@ -158,6 +158,3 @@ class PGSNode(PUCTNode):
         if num_visits == 0:
             return np.inf
         return qval + c * prior * np.sqrt(parent_visits) / (1 + num_visits)
-
-    def get_action_values(self, default=0):
-        return np.array([child.qvalue() if child.num_visits > 0 else default for child in self.children])

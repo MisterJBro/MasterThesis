@@ -43,8 +43,8 @@ class PGSCore(MCTSCore):
             self.base_policy = base_policy
         if base_value is not None:
             self.base_value = base_value
-        self.sim_policy = deepcopy(self.base_policy)
-        self.sim_value = deepcopy(self.base_value)
+        self.sim_policy = deepcopy(self.base_policy.cpu()).to(self.config["device"])
+        self.sim_value = deepcopy(self.base_value.cpu()).to(self.config["device"])
         self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
         self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
@@ -58,6 +58,9 @@ class PGSCore(MCTSCore):
             self.backpropagate(new_leaf, ret)
             rets.append(ret)
             self.iter += 1
+
+            qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
+            #print(qvals.reshape(5,5).round(5))
 
         def plot():
             import os
@@ -74,15 +77,16 @@ class PGSCore(MCTSCore):
 
         if self.config["search_return_adv"]:
             qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
-            print("Normal visit counts:")
-            print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
-            print("QVALS: ", qvals.reshape(5,5).round(2))
+            #print("Normal visit counts:")
+            #print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
+            #print("QVALS:")
+            #print(qvals.reshape(5,5).round(2))
 
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
             adv = adv / (np.abs(np.max(adv)) + 1e-8)
             return (100 + max_visits) * 0.005 * adv
-        return self.get_normalized_visit_counts(self.config["num_acts"])
+        return self.root.get_normalized_visit_counts(self.config["num_acts"])
 
     def expand(self, node):
         if node.state is None:
@@ -90,14 +94,14 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(node.state.obs)
             node.pol_h = pol_h
             node.val_h = val_h
-            with torch.no_grad():
-                node.qval = node.state.rew + self.config["gamma"] * self.base_value(val_h).item()
+            #with torch.no_grad():
+            #    node.qval = node.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return node
-        if node.state.is_terminal():
+        if node.is_terminal():
             return node
         if node == self.root:
             # Create new child nodes, lazy init
-            actions = node.state.get_possible_actions()
+            actions = node.get_legal_actions()
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
@@ -113,8 +117,8 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(child.state.obs)
             child.pol_h = pol_h
             child.val_h = val_h
-            with torch.no_grad():
-                child.qval = child.state.rew + self.config["gamma"] * self.base_value(val_h).item()
+            #with torch.no_grad():
+            #    child.qval = child.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return child
         else:
             return node
@@ -134,8 +138,15 @@ class PGSCore(MCTSCore):
             val_hs.append(val_h)
 
             with torch.no_grad():
-                act = Categorical(logits=self.sim_policy(pol_h)).sample().item()
+                logits = self.sim_policy(pol_h)
+                logits = self.filter_actions(logits, legal_actions=[env.available_actions()])
+                # Get principal variations
+                #if node.num_visits == 0:
+                #    act = np.argmax(logits.cpu().numpy())
+                #else:
+                act = Categorical(logits=logits).sample().item()
             acts.append(act)
+            #env.render()
             obs, rew, done, _ = env.step(act)
 
             # Add reward
@@ -148,9 +159,9 @@ class PGSCore(MCTSCore):
                 rews.append(rew)
 
             # Truncated rollout
-            iter += 1
             if iter >= self.trunc_len:
                 break
+            iter += 1
 
             # Get next hidden states
             pol_h, val_h = self.eval_fn(obs)
@@ -162,17 +173,16 @@ class PGSCore(MCTSCore):
         if iter >= self.trunc_len:
             _, val_h = self.eval_fn(obs)
             with torch.no_grad():
-                last_val = self.base_value(val_h).item()
+                last_val = self.base_value(val_h.cpu()).item()
         else:
-             last_val = 0
-        rews.append(last_val)
-        rews = np.array(rews)
+            last_val = None
 
         return {
-            "rew": rews,
-            "act": torch.tensor(acts),
-            "pol_h": torch.concat(pol_hs, 0),
-            "val_h":  torch.concat(val_hs, 0),
+            "rew": np.array(rews),
+            "last_val": last_val,
+            "act": torch.tensor(acts).to(self.config["device"]),
+            "pol_h": torch.concat(pol_hs, 0).to(self.config["device"]),
+            "val_h":  torch.concat(val_hs, 0).to(self.config["device"]),
         }
 
     def train(self, traj):
@@ -181,22 +191,33 @@ class PGSCore(MCTSCore):
 
         # Get traj values
         rew = traj["rew"]
+        last_val = traj["last_val"]
         act = traj["act"]
+        pol_h_cpu = traj["pol_h"].clone().cpu()
         pol_h = traj["pol_h"].to(self.device)
         val_h = traj["val_h"].to(self.device)
 
-        # Get ret, vals and adv
-        ret = discount_cumsum(rew, self.config["gamma"])[:-1]
-        total_ret = ret[0]
+        # Get return
+        if self.num_players == 2:
+            # Finished Game
+            if last_val is None:
+                ret = np.full(len(rew), -rew[-1])
+                ret[::-2] = rew[-1]
+            else:
+                ret = np.full(len(rew), -last_val)
+                ret[::-2] = last_val
+        else:
+            ret = discount_cumsum(rew, self.config["gamma"])[:-1]
         ret = torch.as_tensor(ret).to(self.device)
 
         with torch.no_grad():
-            val = self.sim_value(val_h).reshape(-1)
-            val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
-        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
-        adv = torch.as_tensor(adv).to(self.device)
+            val = self.base_value(val_h).reshape(-1)
+            #val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
+        #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
+        adv = ret - val
+        #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
-            base_dist = Categorical(logits=self.base_policy(pol_h))
+            base_dist = Categorical(logits=self.base_policy(pol_h_cpu).to(self.device))
 
         # REINFORCE
         #if self.iter < 20:
@@ -212,18 +233,28 @@ class PGSCore(MCTSCore):
         self.optim_pol.step()
 
         # Value function
-        self.optim_val.step()
-        loss_value = F.huber_loss(self.sim_value(val_h).reshape(-1), ret)
-        loss_value.backward()
-        self.optim_val.zero_grad()
+        #self.optim_val.step()
+        #loss_value = F.huber_loss(self.sim_value(val_h).reshape(-1), ret)
+        #loss_value.backward()
+        #self.optim_val.zero_grad()
+
+        # Calculate return
+        #print("val: ", val)
+        if last_val is None:
+            total_ret = -ret[0].numpy()
+        else:
+            val = val.cpu().numpy().reshape(-1)
+            val[::2] = -val[::2]
+            #print("flip val: ",val)
+            p = 0.8
+            k = len(val)
+            log_dist = p**np.arange(k)/(-k*np.log(1-p))
+            #print("log_dist: ", log_dist)
+            total_ret = val @ log_dist
+            #total_ret = val[-1]
+            #print("total_ret: ", total_ret)
 
         return total_ret
-
-    def backpropagate(self, node, ret):
-        q_new = node.state.rew + self.config["gamma"] * ret
-        node.num_visits += 1
-        node.total_rews += q_new
-        #node.qval = node.qval + 0.2 * (q_new - node.qval)
 
     def set_root(self, state):
         self.iter = 0
@@ -231,12 +262,12 @@ class PGSCore(MCTSCore):
         if state is not None:
             pol_h, val_h = self.eval_fn(self.root.state.obs)
             with torch.no_grad():
-                logits = self.base_policy(pol_h)
+                logits = self.base_policy(pol_h.cpu())
                 prob = F.softmax(logits, dim=-1)
-                val = self.base_value(val_h)
+                val = self.base_value(val_h.cpu())
             self.logits = logits.cpu().numpy().reshape(-1)
 
-            self.root.priors = prob.cpu().numpy().reshape(-1)
+            self.root.priors = prob.cpu().numpy().reshape(-1)[self.root.get_legal_actions()]
             self.root.val = val.cpu().item()
             self.root.pol_h = pol_h
             self.root.val_h = val_h
