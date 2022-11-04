@@ -71,6 +71,7 @@ class Trainer(ABC):
                     self.log("win_rate", win_rate)
                 else:
                     elo = 0
+                    self.log("win_rate", 0.5)
                 self.log("elo", elo)
 
             # Logging

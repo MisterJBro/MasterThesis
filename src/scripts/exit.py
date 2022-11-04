@@ -18,22 +18,23 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 5
+    size = 9
     env = HexEnv(size)
     config = create_config({
         "env": env,
         "puct_c": 4.0,
         "train_iters": 50,
         "search_iters": 100,
-        "search_num_workers": 3,
-        "search_evaluator_batch_size": 3,
-        "num_cpus": 3,
-        "num_envs": 3,
+        "search_num_workers": 15,
+        "search_evaluator_batch_size": 15,
+        "num_cpus": 15,
+        "num_envs": 15,
         "device": "cuda:0",
         "pi_lr": 1e-3,
         "sample_len": 100,
         "search_return_adv": True,
-        "log_name": f"exit_log.txt",
+        "log_name": f"9x9exit_log.txt",
+        "self_play_num_eval_games": 100,
     })
 
     # Import policy and model

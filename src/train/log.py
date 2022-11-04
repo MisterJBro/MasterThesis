@@ -18,6 +18,9 @@ class Logger(dict):
             self.writer = SummaryWriter(log_dir="../runs",comment=f'{config["env"]}_{config["num_samples"]}')
 
     def __call__(self, metric, value):
+        if metric == self.config["log_main_metric"]:
+            self.best_metric = max(self.best_metric, value)
+        
         self[metric] = value
 
     def __str__(self):

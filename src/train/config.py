@@ -63,6 +63,12 @@ DEFAULT_CONFIG = {
     "self_play_num_eval_games": 210,
     "self_play_update_win_rate": 53,
 
+    # === Policy Gradients ===
+    "pg_iters": 4,
+    "ppo_iters": 10,
+    "vf_scale": 1.0,
+    "kl_approx_max": 0.1,
+    
     # === Others ===
     "log_main_metric": "elo",
     "log_name": "log.txt",

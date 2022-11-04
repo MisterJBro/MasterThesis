@@ -26,7 +26,7 @@ class PGTrainer(Trainer):
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Minibatch training to fit on GPU memory
-        for _ in range(4):
+        for _ in range(self.config["pg_iters"]):
             self.policy.optim.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
@@ -37,7 +37,7 @@ class PGTrainer(Trainer):
                     loss_policy = -(logp * adv_batch).mean()
                     loss_entropy = - dist.entropy().mean()
                     loss_value = self.scalar_loss(val_batch, ret_batch)
-                    loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
+                    loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= self.config["num_batch_split"]
 
                 # AMP loss backward
@@ -83,7 +83,7 @@ class PPOTrainer(PGTrainer):
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Minibatch training to fit on GPU memory
-        for _ in range(10):
+        for _ in range(self.config["ppo_iters"]):
             self.policy.optim.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
@@ -95,11 +95,11 @@ class PPOTrainer(PGTrainer):
                     clipped = torch.clamp(ratio, 1-self.config["clip_ratio"], 1+self.config["clip_ratio"])*adv_batch
                     loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
                     kl_approx = (old_logp_batch - logp).mean().item()
-                    if kl_approx > 0.1:
+                    if kl_approx > self.config["kl_approx_max"]:
                         self.policy.set_requires_grad(False)
                     loss_entropy = - dist.entropy().mean()
                     loss_value = self.scalar_loss(val_batch, ret_batch)
-                    loss = loss_policy + self.config["pi_entropy"] * loss_entropy + loss_value
+                    loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= self.config["num_batch_split"]
                     self.log("kl_approx", kl_approx)
                     #self.log("loss_policy", loss_policy.item())

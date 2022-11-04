@@ -13,6 +13,7 @@ dependencies:
   - pip:
     - gym
     - humanize
+    - hyperopt
     - matplotlib
     - maturin
     - monkeytype

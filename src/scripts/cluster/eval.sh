@@ -6,11 +6,11 @@
 #SBATCH -n 1
 #SBATCH -c 2
 #SBATCH --mem-per-cpu=3800
+##SBATCH--gres=gpu:a100
 #SBATCH -t 02:00:00
-#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/PGS_Version0_%A_%a-out.txt
+#SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/Eval_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
-##SBATCH--gres=gpu:v100
 
 # Setup modules
 module purge
