@@ -11,7 +11,7 @@ class Logger(dict):
         super().__init__(*args, **kwargs)
         self.config = config
         self.log_path = path
-        self.best_metric = float('-inf')
+        self.main_metric = []
         self.timer = time.time()
         self.writer = None
         if config["log_to_writer"]:
@@ -19,7 +19,7 @@ class Logger(dict):
 
     def __call__(self, metric, value):
         if metric == self.config["log_main_metric"]:
-            self.best_metric = max(self.best_metric, value)
+            self.main_metric.append(value)
         
         self[metric] = value
 
