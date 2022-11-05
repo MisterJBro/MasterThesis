@@ -140,7 +140,7 @@ class Trainer(ABC):
             if render:
                 deepcopy(env).render()
                 time.sleep(0.1)
-            act, _ = self.get_action(obs[np.newaxis], envs=[deepcopy(env)], use_best=True, legal_actions=[env.available_actions()])
+            act, _ = self.get_action(obs[np.newaxis], envs=[deepcopy(env)], use_best=True, legal_actions=[env.legal_actions()])
             obs, rew, done, _ = env.step(act[0])
             rews.append(rew)
 

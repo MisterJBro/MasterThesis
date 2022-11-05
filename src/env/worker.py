@@ -40,7 +40,7 @@ class Worker(Process):
 
     def reset(self):
         obs = np.array([env.reset() for env in self.envs])
-        legal_act = [env.available_actions() for env in self.envs]
+        legal_act = [env.legal_actions() for env in self.envs]
         return obs, legal_act
 
     def step(self, acts):
@@ -52,7 +52,7 @@ class Worker(Process):
 
             if done:
                 obs_next = self.envs[i].reset()
-            legal_act = self.envs[i].available_actions()
+            legal_act = self.envs[i].legal_actions()
 
             # Append
             obs_next_list.append(obs_next)

@@ -38,7 +38,7 @@ if __name__ == '__main__':
         #az.update_policy(policy.state_dict())
         qvals = az.search(State(env, obs=obs))
 
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
         ret += reward
 

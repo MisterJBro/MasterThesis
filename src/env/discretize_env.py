@@ -23,7 +23,7 @@ class DiscreteActionWrapper(gym.ActionWrapper):
         action = np.argwhere(self.converter == action)[0][0]
         return action
 
-    def available_actions(self):
+    def legal_actions(self):
         return np.arange(self.n_bins)
 
     def __str__(self):

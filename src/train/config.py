@@ -68,7 +68,7 @@ DEFAULT_CONFIG = {
     "ppo_iters": 10,
     "vf_scale": 1.0,
     "kl_approx_max": 0.1,
-    
+
     # === Others ===
     "log_main_metric": "elo",
     "log_name": "log.txt",

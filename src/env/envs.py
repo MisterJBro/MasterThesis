@@ -1,4 +1,3 @@
-from tkinter import E
 import numpy as np
 from torch.multiprocessing import Pipe
 from src.env.worker import Worker

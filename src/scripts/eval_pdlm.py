@@ -88,32 +88,32 @@ if __name__ == '__main__':
 
     def mcts(env, obs, iters):
         qvals = mcts_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     def az(env, obs, iters):
         qvals = az_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     def mz(env, obs, iters):
         qvals = mz_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     def mcs(env, obs, iters):
         qvals = mcs_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     def pgs(env, obs, iters):
         qvals = pgs_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     def vepgs(env, obs, iters):
         qvals = vepgs_obj.search(State(env, obs=obs), iters=iters)
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         return act
 
     # Eval

@@ -11,11 +11,11 @@ class State:
         self.done = done
         self.rew = rew
         self.obs = obs
-        self.legal_act = self.env.available_actions()
+        self.legal_act = self.env.legal_actions()
 
     def transition_inplace(self, action):
         self.obs, self.rew, self.done, _ = self.env.step(action)
-        self.legal_act = self.env.available_actions()
+        self.legal_act = self.env.legal_actions()
 
     def transition(self, action):
         next_state = deepcopy(self)
@@ -35,7 +35,7 @@ class State:
         player = 0
         while not done:
             player = (player + 1) % num_players
-            act = random.choice(env.available_actions())
+            act = random.choice(env.legal_actions())
             _, rew, done, _ = env.step(act)
 
             # Return
