@@ -12,6 +12,12 @@ from src.train.pg import PGTrainer, PPOTrainer
 def objective(params):
     print(f"Testing out params: {params}")
     
+    num_batch_split = 25
+    if params["sample_len"] == 2000:
+        num_batch_split = 50
+    elif params["sample_len"] == 4000:
+        num_batch_split = 75
+    
     # Init for algos
     size = 9
     env = HexEnv(size)
@@ -23,7 +29,7 @@ def objective(params):
         "num_envs": 120,
         "device": "cuda:0",
         "self_play_num_eval_games": 240,
-        "num_batch_split": 40,
+        "num_batch_split": num_batch_split,
         "grad_clip": 100.0,
         "log_to_writer": False,
         "log_to_file": True,
@@ -47,14 +53,14 @@ def objective(params):
 
     # Write progress
     f = open("tune_log.txt", "a")
-    f.write(f'Max Winrate: {np.max(win_rates)}  Slope: {slope_wr}  Max Drop: {max_drop_wr}\nParams: {params}\n')
+    f.write(f'Max Winrate: {max_wr:.02f}  Slope: {slope_wr:.02f}  Max Drop: {int(max_drop_wr)} Winrates: {np.round(win_rates, 1)}\n\tParams: {params}\n')
     f.close()
 
     return -(max_wr - 0.5*max_drop_wr) * (1 if slope_wr > 0 else 0)
 
 # Space
 space = {
-    "pi_lr": hp.choice("pi_lr", [4e-3, 3e-3, 1e-3, 6e-4, 3e-4, 1e-4, 6e-5]),
+    "pi_lr": hp.choice("pi_lr", [6e-3, 4e-3, 3e-3, 1e-3, 6e-4, 3e-4, 1e-4, 6e-5]),
     "pi_entropy": hp.uniform("pi_entropy", 0.01, 0.05),
     "clip_ratio": hp.uniform("clip_ratio", 0.1, 0.3),
     "num_filters": hp.choice("num_filters", [64, 128, 192, 256]),
@@ -63,7 +69,7 @@ space = {
     "ppo_iters": hp.randint("ppo_iters", 58) + 2,
     "vf_scale": hp.uniform("vf_scale", 0.4, 2.0),
     "kl_approx_max": hp.uniform("kl_approx_max", 0.2, 2.0),
-    "sample_len": hp.choice("sample_len", [1000, 2000, 4000, 8000]),
+    "sample_len": hp.choice("sample_len", [1000, 2000, 4000]),
 }
 
 if __name__ == '__main__':
