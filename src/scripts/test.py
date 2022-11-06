@@ -10,6 +10,6 @@ from src.env.hex import HexEnv
 
 env = HexEnv()
 
-print(env.step(env.available_actions()[0]))
-print(env.step(env.available_actions()[5]))
-print(env.step(env.available_actions()[1]))
+print(env.step(env.legal_actions()[0]))
+print(env.step(env.legal_actions()[5]))
+print(env.step(env.legal_actions()[1]))

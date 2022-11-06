@@ -139,7 +139,7 @@ class PGSCore(MCTSCore):
 
             with torch.no_grad():
                 logits = self.sim_policy(pol_h)
-                logits = self.filter_actions(logits, legal_actions=[env.available_actions()])
+                logits = self.filter_actions(logits, legal_actions=[env.legal_actions()])
                 # Get principal variations
                 #if node.num_visits == 0:
                 #    act = np.argmax(logits.cpu().numpy())

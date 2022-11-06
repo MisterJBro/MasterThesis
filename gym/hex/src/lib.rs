@@ -80,6 +80,8 @@ mod neighbors;
 mod serialize;
 mod union_find;
 mod python;
+mod env;
+mod envs;
 
 pub use crate::board::{Board, StoneMatrix, MAX_BOARD_SIZE, MIN_BOARD_SIZE};
 pub use crate::color::Color;
@@ -87,13 +89,16 @@ pub use crate::coords::{CoordValue, Coords};
 pub use crate::edges::{CoordsOrEdge, Edge};
 pub use crate::errors::{InvalidBoard, InvalidMove};
 pub use crate::game::{Game, Status};
+pub use crate::env::{Env};
+pub use crate::envs::{Envs};
 pub use crate::serialize::Serialization;
-pub use crate::python::HexGame;
+pub use crate::python::{PyEnv, PyEnvs};
 use pyo3::prelude::*;
 
 /// Register rust translator functions
 #[pymodule]
 fn hexgame(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<HexGame>()?;
+    m.add_class::<PyEnv>()?;
+    m.add_class::<PyEnvs>()?;
     Ok(())
 }

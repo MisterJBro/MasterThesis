@@ -40,7 +40,7 @@ if __name__ == '__main__':
         qvals = pgs.search(State(env, obs=obs))
 
         quit()
-        act = env.available_actions()[np.argmax(qvals)]
+        act = env.legal_actions()[np.argmax(qvals)]
         obs, reward, done, info = env.step(act)
         ret += reward
 

@@ -70,26 +70,26 @@ if __name__ == '__main__':
         return act
 
     def human(env, obs):
-        available_actions = env.available_actions()
+        legal_actions = env.legal_actions()
         while True:
             act = int(input("Please type in your action: "))
-            if act in [np.argmax(a) for a in available_actions]:
+            if act in [np.argmax(a) for a in legal_actions]:
                 break
         return act
 
     def random(env, obs):
-        return rand.choice(env.available_actions())
+        return rand.choice(env.legal_actions())
 
     def nn(env, obs):
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
-            dist, val = policy(obs, legal_actions=[env.available_actions()])
+            dist, val = policy(obs, legal_actions=[env.legal_actions()])
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
     # Simulate
-    players = [nn, pgs]
+    players = [mcts, random]
     num_games = 5
     render = True
     num_victories_first = 0
