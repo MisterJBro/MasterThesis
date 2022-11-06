@@ -7,7 +7,7 @@ use crate::hex_cells::{HexCells, Index};
 use crate::neighbors::get_neighbors;
 use crate::union_find::UnionFind;
 use std::iter::Iterator;
-use numpy::ndarray::{Array, Ix3};
+use numpy::ndarray::{Array, Ix3, Axis, s};
 use serde::{Deserialize, Serialize};
 
 
@@ -103,7 +103,7 @@ impl Board {
     }
 
     /// Convert this board to ndarray
-    pub fn to_ndarray(&self) -> Array<f32, Ix3> {
+    pub fn to_ndarray(&self, is_black: bool) -> Array<f32, Ix3> {
         let size = self.size() as usize;
         let mut array = Array::zeros((2, size, size));
         for row in 0..size {
@@ -111,9 +111,16 @@ impl Board {
                 let color = self.get_color(Coords::new(row as u8, column as u8));
 
                 if let Some(color) = color {
-                    match color {
-                        Color::Black => array[[0, row, column]] = 1.0,
-                        Color::White => array[[1, row, column]] = 1.0,
+                    if is_black {
+                        match color {
+                            Color::Black => array[[0, row, column]] = 1.0,
+                            Color::White => array[[1, row, column]] = 1.0,
+                        }
+                    } else {
+                        match color {
+                            Color::White => array[[0, column, row]] = 1.0,
+                            Color::Black => array[[1, column, row]] = 1.0,
+                        }
                     }
                 }
             }

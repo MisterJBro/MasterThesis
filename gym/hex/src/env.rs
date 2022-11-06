@@ -1,11 +1,17 @@
-use crate::{Coords};
+use crate::{Coords, Color};
 use crate::{Game, Status};
 use serde::{Deserialize, Serialize};
 use numpy::ndarray::{Array, Ix3};
+use dict_derive::{IntoPyObject};
 
 // Basic types
-type Action = u16;
-type Obs = Array<f32, Ix3>;
+pub type Action = u16;
+pub type Obs = Array<f32, Ix3>;
+#[derive(Debug, IntoPyObject)]
+pub struct Info {
+    pub pid: u8,
+    pub legal_act: Vec<Action>,
+}
 
 /// The Environment
 #[derive(Clone, Serialize, Deserialize)]
@@ -24,14 +30,14 @@ impl Env {
 
     /// Reset env
     #[inline]
-    pub fn reset(&mut self) -> (Obs, Vec<Action>) {
+    pub fn reset(&mut self) -> (Obs, Info) {
         self.game = Game::new(self.size);
-        (self.get_obs(), self.legal_actions())
+        (self.get_obs(), self.get_info())
     }
 
     /// Execute next action
     #[inline]
-    pub fn step(&mut self, action: Action) -> (Obs, f32, bool, Vec<Action>) {
+    pub fn step(&mut self, action: Action) -> (Obs, f32, bool, Info) {
         let mut done = false;
         let mut rew = 0f32;
 
@@ -49,8 +55,7 @@ impl Env {
                 done = true;
             }
         }
-
-        (self.get_obs(), rew, done, self.legal_actions())
+        (self.get_obs(), rew, done, self.get_info())
     }
 
     /// Board representation
@@ -66,10 +71,27 @@ impl Env {
     /// Get observation
     #[inline]
     pub fn get_obs(&self) -> Obs {
-        self.game.get_board().to_ndarray()
+        let current_player = self.game.get_current_player();
+        let is_black = if let Some(player) = current_player { player } else { Color::Black } == Color::Black;
+        self.game.get_board().to_ndarray(is_black)
     }
 
-    // Get legal actions
+    /// Get current player id
+    #[inline]
+    pub fn get_pid(&self) -> u8 {
+        let current_player = self.game.get_current_player();
+
+        if let Some(player) = current_player {
+            match player {
+                Color::Black => 0,
+                Color::White => 1,
+            }
+        } else {
+            2
+        }
+    }
+
+    /// Get legal actions
     #[inline]
     pub fn legal_actions(&self) -> Vec<Action> {
         let mut actions = Vec::new();
@@ -85,7 +107,16 @@ impl Env {
         actions
     }
 
-    // Close environment
+    /// Get extra info
+    #[inline]
+    pub fn get_info(&self) -> Info {
+        Info {
+            pid: self.get_pid(),
+            legal_act: self.legal_actions(),
+        }
+    }
+
+    /// Close environment
     pub fn close(&self) { }
 }
 

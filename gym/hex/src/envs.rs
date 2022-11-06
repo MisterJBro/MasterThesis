@@ -1,11 +1,18 @@
-use crate::{Env,};
+use crate::{Env, Info};
 use std::thread;
 use numpy::ndarray::{Array, Ix1, Ix3, Ix4, stack, Axis};
 use crossbeam::channel::{bounded, Sender, Receiver};
+use dict_derive::{IntoPyObject};
 
 // Basic types
 type Action = u16;
 type Obs = Array<f32, Ix3>;
+
+#[derive(IntoPyObject, Debug)]
+pub struct Infos {
+    pub pid: Vec<u8>,
+    pub legal_act: Vec<Vec<Action>>,
+}
 
 /// The Environment
 #[derive()]
@@ -40,7 +47,7 @@ impl Envs {
     }
 
     /// Reset env
-    pub fn reset(&self) -> (Array<f32, Ix4>, Vec<Vec<Action>>) {
+    pub fn reset(&self) -> (Array<f32, Ix4>, Infos) {
         // Send
         for (cid, c) in self.workers_channels.iter().enumerate() {
             for local_eid in 0..self.num_envs_per_worker {
@@ -65,17 +72,21 @@ impl Envs {
 
         // Process
         let mut obs = Vec::with_capacity(self.num_envs);
-        let mut legal_acts = Vec::with_capacity(self.num_envs);
+        let mut pid = Vec::with_capacity(self.num_envs);
+        let mut legal_act = Vec::with_capacity(self.num_envs);
         for msg in msgs.into_iter() {
             obs.push(msg.obs);
-            legal_acts.push(msg.legal_act);
+            pid.push(msg.info.pid);
+            legal_act.push(msg.info.legal_act);
         }
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
-        (obs, legal_acts)
+        let info = Infos{pid: pid, legal_act: legal_act};
+
+        (obs, info)
     }
 
     /// Execute next action
-    pub fn step(&self, acts: Vec<Action>) -> (Array<f32, Ix4>, Array<f32, Ix1>, Array<bool, Ix1>, Vec<Vec<Action>>)  {
+    pub fn step(&self, acts: Vec<Action>) -> (Array<f32, Ix4>, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
         // Send
         for (cid, c) in self.workers_channels.iter().enumerate() {
             for local_eid in 0..self.num_envs_per_worker {
@@ -102,18 +113,22 @@ impl Envs {
         let mut obs = Vec::with_capacity(self.num_envs);
         let mut rews = Vec::with_capacity(self.num_envs);
         let mut dones = Vec::with_capacity(self.num_envs);
-        let mut legal_acts = Vec::with_capacity(self.num_envs);
+        let mut pid = Vec::with_capacity(self.num_envs);
+        let mut legal_act = Vec::with_capacity(self.num_envs);
+
         for msg in msgs.into_iter() {
             obs.push(msg.obs);
             rews.push(msg.rew.unwrap());
             dones.push(msg.done.unwrap());
-            legal_acts.push(msg.legal_act);
+            pid.push(msg.info.pid);
+            legal_act.push(msg.info.legal_act);
         }
         // rews and dones to ndarrays
         let rews = Array::from_shape_vec((self.num_envs,), rews).unwrap();
         let dones = Array::from_shape_vec((self.num_envs,), dones).unwrap();
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
-        (obs, rews, dones, legal_acts)
+        let info = Infos{pid: pid, legal_act: legal_act};
+        (obs, rews, dones, info)
     }
 
     /// Render
@@ -160,9 +175,9 @@ enum MasterMessage {
 #[derive(Debug)]
 struct WorkerMessage {
     obs: Obs,
-    legal_act: Vec<Action>,
     rew: Option<f32>,
     done: Option<bool>,
+    info: Info,
     eid: usize,
 }
 
@@ -184,12 +199,12 @@ impl Worker {
                         MasterMessage::Reset{eid} => {
                             // Reset
                             let local_eid = eid - eid_start;
-                            let (obs, legal_act) = envs[local_eid].reset();
+                            let (obs, info) = envs[local_eid].reset();
                             let msg = WorkerMessage{
                                 obs,
-                                legal_act,
                                 rew: None,
                                 done: None,
+                                info,
                                 eid,
                             };
 
@@ -201,18 +216,18 @@ impl Worker {
                         MasterMessage::Step{eid, act} => {
                             // Step
                             let local_eid = eid - eid_start;
-                            let (mut obs, rew, done, mut legal_act) = envs[local_eid].step(act);
+                            let (mut obs, rew, done, mut info) = envs[local_eid].step(act);
 
                             if done {
                                 let result = envs[local_eid].reset();
                                 obs = result.0;
-                                legal_act = result.1;
+                                info = result.1;
                             }
                             let msg = WorkerMessage{
                                 obs,
-                                legal_act,
                                 rew: Some(rew),
                                 done: Some(done),
+                                info,
                                 eid,
                             };
 

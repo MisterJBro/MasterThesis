@@ -29,12 +29,13 @@ class Envs:
         for c in self.channels:
             c.send({"command": "reset"})
         msg = [c.recv() for c in self.channels]
-        obs, legal_act = [], []
-        for o, la in msg:
+        obs, legal_act, pid = [], [], []
+        for o, i in msg:
             obs.append(o)
-            legal_act += la
+            legal_act += i["legal_act"]
+            pid += i["pid"]
         obs = np.concatenate(obs)
-        return obs, legal_act
+        return obs, {"legal_act": legal_act, "pid": pid}
 
     def step(self, act):
         for i, c in enumerate(self.channels):
@@ -51,17 +52,17 @@ class Envs:
 
         obs_next, rew, done, pid, legal_act = [], [], [], [], []
         msg = [c.recv() for c in self.channels]
-        for on, r, d, [p, la] in msg:
+        for on, r, d, i in msg:
             obs_next.append(on)
             rew.append(r)
             done.append(d)
-            pid.append(p)
-            legal_act += la
+
+            pid += i["pid"]
+            legal_act += i["legal_act"]
         obs_next = np.concatenate(obs_next)
         rew = np.concatenate(rew)
         done = np.concatenate(done)
-        pid = np.concatenate(pid)
-        info = [pid, legal_act]
+        info = {"pid": pid, "legal_act": legal_act}
 
         return obs_next, rew, done, info
 

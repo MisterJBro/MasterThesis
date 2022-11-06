@@ -67,6 +67,8 @@ Then type the coordinates of the space where you would like to place your next s
 
 Optionally, you can specify the size of the board like in `cargo run 7`.
 */
+extern crate dict_derive;
+
 mod attacked_bridges;
 mod board;
 mod color;
@@ -89,8 +91,8 @@ pub use crate::coords::{CoordValue, Coords};
 pub use crate::edges::{CoordsOrEdge, Edge};
 pub use crate::errors::{InvalidBoard, InvalidMove};
 pub use crate::game::{Game, Status};
-pub use crate::env::{Env};
-pub use crate::envs::{Envs};
+pub use crate::env::{Env, Action, Obs, Info};
+pub use crate::envs::{Envs, Infos};
 pub use crate::serialize::Serialization;
 pub use crate::python::{PyEnv, PyEnvs};
 use pyo3::prelude::*;

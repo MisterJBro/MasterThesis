@@ -23,13 +23,16 @@ if __name__ == '__main__':
 
     def python_mp():
         start = time.time()
-        obs, legal_act = envs.reset()
+        obs, info = envs.reset()
+        pid = info["pid"]
+        legal_act = info["legal_act"]
 
         for _ in range(config["sample_len"]):
             act = [random.choice(legal_act[i]) for i in range(len(legal_act))]
             obs_next, rew, done, info = envs.step(act)
 
-            pid, legal_act = info
+            pid = info["pid"]
+            legal_act = info["legal_act"]
             obs = obs_next
 
         end = time.time()
@@ -37,11 +40,16 @@ if __name__ == '__main__':
 
     def rust():
         start = time.time()
-        obs, legal_act = rust_envs.reset()
+        obs, info = rust_envs.reset()
+        pid = info["pid"]
+        legal_act = info["legal_act"]
 
         for _ in range(config["sample_len"]):
             act = [random.choice(legal_act[i]) for i in range(len(legal_act))]
-            obs_next, rew, done, legal_act = rust_envs.step(act)
+            obs_next, rew, done, info = rust_envs.step(act)
+
+            pid = info["pid"]
+            legal_act = info["legal_act"]
             obs = obs_next
 
         end = time.time()

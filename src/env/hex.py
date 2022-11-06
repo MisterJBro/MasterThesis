@@ -8,7 +8,6 @@ class HexEnv:
 
     def __init__(self, size=9):
         self.size = size
-        self.is_black = True
         self.env = RustEnv(size)
         self.action_space = gym.spaces.Discrete(size*size)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(2, size, size), dtype=np.float32)
@@ -16,18 +15,16 @@ class HexEnv:
         self.converter = np.eye(size*size)
 
     def reset(self):
-        self.is_black = True
         return self.env.reset()
 
     def step(self, action):
-        self.is_black = not self.is_black
-        obs, rew, done, legal_act = self.env.step(action)
+        obs, rew, done, info = self.env.step(action)
 
-        if not self.is_black:
-            obs[[0, 1]] = obs[[1, 0]]
-            obs[0] = obs[0].T
-            obs[1] = obs[1].T
-        return obs, rew, done, {"pid": int(not self.is_black), "legal_act": legal_act}
+        #if not self.is_black:
+        #    obs[[0, 1]] = obs[[1, 0]]
+        #    obs[0] = obs[0].T
+        #    obs[1] = obs[1].T
+        return obs, rew, done, info
 
     def render(self):
         print(self.env)
@@ -45,9 +42,9 @@ class HexEnv:
         return "hex"
 
     def __getstate__(self):
-        return (self.size, self.is_black, self.action_space, self.observation_space, self.env.to_pickle())
+        return (self.size, self.action_space, self.observation_space, self.env.to_pickle())
 
     def __setstate__(self, state):
-        self.size, self.is_black, self.action_space, self.observation_space, pickle = state
+        self.size, self.action_space, self.observation_space, pickle = state
         self.env = RustEnv(self.size)
         self.env.from_pickle(pickle)

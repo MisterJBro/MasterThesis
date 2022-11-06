@@ -40,40 +40,40 @@ class Worker(Process):
 
     def reset(self):
         obs = []
+        pid = []
         legal_act = []
         for env in self.envs:
-            o, l = env.reset()
+            o, i = env.reset()
             obs.append(o)
-            legal_act.append(l)
-        return np.array(obs), legal_act
+            pid.append(i["pid"])
+            legal_act.append(i["legal_act"])
+        return np.array(obs), {"pid": pid, "legal_act": legal_act}
 
     def step(self, acts):
-        obs_next_list, rew_list, done_list, pid_list, legal_act_list = [], [], [], [], []
+        obs_next_list, rew_list, done_list, pid, legal_act_list = [], [], [], [], []
 
         for i in range(self.num_envs):
             # Env step
             obs_next, rew, done, info = self.envs[i].step(acts[i])
-            legal_act = info["legal_act"]
 
             if done:
-                obs_next, legal_act = self.envs[i].reset()
+                obs_next, info = self.envs[i].reset()
 
             # Append
             obs_next_list.append(obs_next)
             rew_list.append(rew)
             done_list.append(done)
             if self.is_multiplayer:
-                pid_list.append(info["pid"])
+                pid.append(info["pid"])
             else:
-                pid_list.append(0)
-            legal_act_list.append(legal_act)
+                pid.append(0)
+            legal_act_list.append(info["legal_act"])
         obs_next = np.stack(obs_next_list, axis=0)
         rew = np.stack(rew_list, axis=0)
         done = np.stack(done_list, axis=0)
 
-        pid = np.stack(pid_list, axis=0)
         legal_act = legal_act_list
-        info = [pid, legal_act]
+        info = {"pid": pid, "legal_act": legal_act}
 
         return obs_next, rew, done, info
 

@@ -1,4 +1,4 @@
-use crate::{Env, Envs};
+use crate::{Env, Envs, Action, Obs, Info, Infos};
 use numpy::ToPyArray;
 use numpy::{PyArray1, PyArray3, PyArray4};
 use pyo3::prelude::*;
@@ -24,15 +24,15 @@ impl PyEnv {
     }
 
     /// Reset the environment
-    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray3<f32>, Vec<u16>) {
-        let (obs, legal_act) = self.0.reset();
-        (obs.to_pyarray(py), legal_act)
+    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray3<f32>, Info) {
+        let (obs, info) = self.0.reset();
+        (obs.to_pyarray(py), info)
     }
 
     /// Execute the current actions and update the board
-    fn step<'py>(&mut self, py: Python<'py>, act: u16) -> (&'py PyArray3<f32>, f32, bool, Vec<u16>) {
-        let (obs, rew, done, legal_act) = self.0.step(act);
-        (obs.to_pyarray(py), rew, done, legal_act)
+    fn step<'py>(&mut self, py: Python<'py>, act: u16) -> (&'py PyArray3<f32>, f32, bool, Info) {
+        let (obs, rew, done, info) = self.0.step(act);
+        (obs.to_pyarray(py), rew, done, info)
     }
 
     /// Render env
@@ -81,15 +81,15 @@ impl PyEnvs {
     }
 
     /// Reset the environment
-    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray4<f32>, Vec<Vec<u16>>) {
-        let (obs, legal_act) = self.0.reset();
-        (obs.to_pyarray(py), legal_act)
+    fn reset<'py>(&mut self, py: Python<'py>) -> (&'py PyArray4<f32>, Infos) {
+        let (obs, info) = self.0.reset();
+        (obs.to_pyarray(py), info)
     }
 
     /// Execute the current actions and update the board
-    fn step<'py>(&mut self, py: Python<'py>, act: Vec<u16>) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Vec<Vec<u16>>) {
-        let (obs, rew, done, legal_act) = self.0.step(act);
-        (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), legal_act)
+    fn step<'py>(&mut self, py: Python<'py>, act: Vec<u16>) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
+        let (obs, rew, done, info) = self.0.step(act);
+        (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), info)
     }
 
     /// Render env

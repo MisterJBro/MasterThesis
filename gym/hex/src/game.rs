@@ -46,7 +46,7 @@ impl Game {
     pub fn get_current_player(&self) -> Option<Color> {
         match self.status {
             Status::Ongoing(color) => Some(color),
-            Status::Finished(_) => None,
+            Status::Finished(color) => None,
         }
     }
 

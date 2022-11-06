@@ -12,6 +12,7 @@ import random
 from src.debug.elo import update_ratings
 from src.debug.util import measure_time
 from src.env.envs import Envs
+from hexgame import RustEnvs
 from src.train.log import Logger
 
 from torch.multiprocessing import freeze_support
@@ -71,7 +72,7 @@ class Trainer(ABC):
                     self.log("win_rate", win_rate)
                 else:
                     elo = 0
-                    self.log("win_rate", 0.5)
+                    self.log("win_rate", 50)
                 self.log("elo", elo)
 
             # Logging
@@ -100,13 +101,16 @@ class Trainer(ABC):
 
     def get_sample_batch(self):
         sample_batch = SampleBatch(self.config)
-        obs, legal_act = self.envs.reset()
+        obs, info = self.envs.reset()
+        pid = info["pid"]
+        legal_act = info["legal_act"]
 
         for _ in range(self.config["sample_len"]):
             act, dist = self.get_action(obs, legal_actions=legal_act)
             obs_next, rew, done, info = self.envs.step(act)
 
-            pid, legal_act = info
+            pid = info["pid"]
+            legal_act = info["legal_act"]
             sample_batch.append(obs, act, rew, done, dist, pid)
             obs = obs_next
 
@@ -178,7 +182,8 @@ class Trainer(ABC):
         win_count = 0
 
         for iter in range(int(num_games/self.config["num_envs"])):
-            obs, legal_act = self.envs.reset()
+            obs, info = self.envs.reset()
+            legal_act = info["legal_act"]
             rews = np.zeros(self.config["num_envs"])
             dones = np.full(self.config["num_envs"], False)
             id = iter % 2
@@ -203,7 +208,7 @@ class Trainer(ABC):
                 obs_next, rew, done, info = self.envs.step(act)
 
                 # Add new information
-                _, legal_act = info
+                legal_act = info["legal_act"]
                 if i % 2 == id:
                     rews += rew * (1 - dones)
                 dones |= done
