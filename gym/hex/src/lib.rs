@@ -92,12 +92,13 @@ pub use crate::game::{Game, Status};
 pub use crate::env::{Env};
 pub use crate::envs::{Envs};
 pub use crate::serialize::Serialization;
-pub use crate::python::PyEnv;
+pub use crate::python::{PyEnv, PyEnvs};
 use pyo3::prelude::*;
 
 /// Register rust translator functions
 #[pymodule]
 fn hexgame(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyEnv>()?;
+    m.add_class::<PyEnvs>()?;
     Ok(())
 }

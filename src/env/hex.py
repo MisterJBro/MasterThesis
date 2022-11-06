@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from hexgame import HexEnv as RustEnv
+from hexgame import RustEnv
 
 
 class HexEnv:
@@ -21,13 +21,13 @@ class HexEnv:
 
     def step(self, action):
         self.is_black = not self.is_black
-        obs, rew, done = self.env.step(action)
+        obs, rew, done, legal_act = self.env.step(action)
 
         if not self.is_black:
             obs[[0, 1]] = obs[[1, 0]]
             obs[0] = obs[0].T
             obs[1] = obs[1].T
-        return obs, rew, done, {"pid": int(not self.is_black)}
+        return obs, rew, done, {"pid": int(not self.is_black), "legal_act": legal_act}
 
     def render(self):
         print(self.env)
