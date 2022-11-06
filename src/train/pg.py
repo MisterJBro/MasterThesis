@@ -19,7 +19,7 @@ class PGTrainer(Trainer):
         act = data["act"]
         ret = data["ret"]
         val = data["val"]
-        adv = ret - val
+        adv = ret
         data["adv"] = adv
 
         trainset = TensorDataset(obs, act, adv, ret)
@@ -58,13 +58,13 @@ class PPOTrainer(PGTrainer):
 
     def update(self, sample_batch):
         self.policy.train()
-        self.policy.set_requires_grad(True)
+        #self.policy.set_requires_grad(True)
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         act = data["act"]
         ret = data["ret"]
         val = data["val"]
-        adv = ret - val
+        adv = ret
         data["adv"] = adv
 
         # Policy loss
@@ -94,14 +94,14 @@ class PPOTrainer(PGTrainer):
                     ratio = torch.exp(logp - old_logp_batch)
                     clipped = torch.clamp(ratio, 1-self.config["clip_ratio"], 1+self.config["clip_ratio"])*adv_batch
                     loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
-                    kl_approx = (old_logp_batch - logp).mean().item()
-                    if kl_approx > self.config["kl_approx_max"]:
-                        self.policy.set_requires_grad(False)
+                    #kl_approx = (old_logp_batch - logp).mean().item()
+                    #if kl_approx > self.config["kl_approx_max"]:
+                    #    self.policy.set_requires_grad(False)
                     loss_entropy = - dist.entropy().mean()
                     loss_value = self.scalar_loss(val_batch, ret_batch)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= self.config["num_batch_split"]
-                    self.log("kl_approx", kl_approx)
+                    #self.log("kl_approx", kl_approx)
                     #self.log("loss_policy", loss_policy.item())
                     #self.log("loss_entropy", loss_entropy.item())
                     self.log("loss_value", loss_value.item())
