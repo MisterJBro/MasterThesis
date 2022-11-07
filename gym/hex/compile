@@ -1,1 +1,19 @@
 maturin develop --release
+# --rustc-extra-args="--my-arg"
+
+# Profiled-Guided Optimization: https://doc.rust-lang.org/rustc/profile-guided-optimization.html
+# Windows:
+# set RUSTFLAGS=-Cprofile-generate=./pgo-data
+# cargo build --release
+# cd target/release/
+# hexgame.exe
+# hexgame.exe
+# hexgame.exe
+
+# C:\Users\jrb\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\bin\llvm-profdata merge -o ./pgo-data/merged.profdata ./pgo-data
+# llvm-profdata merge -o ./pgo-data/merged.profdata ./pgo-data
+# set RUSTFLAGS=-Cprofile-use=./pgo-data/merged.profdata
+# cargo build --release
+
+# Ubuntu:
+# RUSTFLAGS="-Cprofile-generate=.\pgo-data" cargo build --release
