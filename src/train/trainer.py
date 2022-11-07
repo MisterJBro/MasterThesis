@@ -66,13 +66,9 @@ class Trainer(ABC):
 
             # Self play test
             if self.config["num_players"] > 1:
-                if iter > 0:
-                    (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
-                    self.log("eval_time", eval_time)
-                    self.log("win_rate", win_rate)
-                else:
-                    elo = 0
-                    self.log("win_rate", 50)
+                (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
+                self.log("eval_time", eval_time)
+                self.log("win_rate", win_rate)
                 self.log("elo", elo)
 
             # Logging
@@ -109,9 +105,9 @@ class Trainer(ABC):
             act, dist = self.get_action(obs, legal_actions=legal_act)
             obs_next, rew, done, info = self.envs.step(act)
 
+            sample_batch.append(obs, act, rew, done, dist, pid, legal_act)
             pid = info["pid"]
             legal_act = info["legal_act"]
-            sample_batch.append(obs, act, rew, done, dist, pid)
             obs = obs_next
 
         sample_batch.set_last_obs(obs)
@@ -157,7 +153,9 @@ class Trainer(ABC):
     def evaluate(self):
         # Get last policy
         old_policy = deepcopy(self.policy)
+        # if len(self.save_paths) > 0:
         #old_policy.load(self.save_paths[-1])
+        # else:
         for layer in old_policy.children():
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()

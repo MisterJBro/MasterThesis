@@ -21,22 +21,26 @@ class SampleBatch:
         self.last_obs = np.empty((self.num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
         self.dist = np.empty((self.num_envs, config["sample_len"], self.num_acts), dtype=np.float32)
         self.pid = np.empty((self.num_envs, config["sample_len"]), dtype=np.int8)
+        self.legal_act = [[] for _ in range(self.num_envs)]
         self.ret = None
         self.val = None
 
     def reset(self):
         self.idx = 0
+        self.legal_act = [[] for _ in range(self.num_envs)]
 
     def set_last_obs(self, obs):
         self.last_obs = obs.astype(self.obs_dtype, copy=False)
 
-    def append(self, obs, act, rew, done, dist, pid):
+    def append(self, obs, act, rew, done, dist, pid, legal_act):
         self.obs[:, self.idx] = obs.astype(self.obs_dtype, copy=False)
         self.act[:, self.idx] = act.astype(self.act_dtype, copy=False)
         self.rew[:, self.idx] = rew.astype(self.rew_dtype, copy=False)
         self.done[:, self.idx] = done
         self.dist[:, self.idx] = dist
         self.pid[:, self.idx] = pid
+        for i in range(self.num_envs):
+            self.legal_act[i].append(legal_act[i])
 
         self.idx += 1
 
@@ -66,6 +70,9 @@ class SampleBatch:
         dist = torch.from_numpy(self.dist).float().reshape(-1, self.num_acts).to(self.device)
         done = torch.from_numpy(self.done).reshape(-1).to(self.device)
         pid = torch.from_numpy(self.pid).reshape(-1).to(self.device)
+        legal_act = []
+        for i in range(self.num_envs):
+            legal_act += self.legal_act[i]
         sections = self.get_sections()
 
         return {
@@ -78,5 +85,6 @@ class SampleBatch:
             "dist": dist,
             "done": done,
             "pid": pid,
+            "legal_act": legal_act,
             "sections": sections,
         }

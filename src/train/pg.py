@@ -64,7 +64,8 @@ class PPOTrainer(PGTrainer):
         act = data["act"]
         ret = data["ret"]
         val = data["val"]
-        adv = ret
+        legal_act = data["legal_act"]
+        adv = ret - val
         data["adv"] = adv
 
         # Policy loss
@@ -75,7 +76,7 @@ class PPOTrainer(PGTrainer):
         with torch.no_grad():
             old_logp = []
             for obs_batch, act_batch in trainloader:
-                old_logp_batch = self.policy.get_dist(obs_batch).log_prob(act_batch)
+                old_logp_batch = self.policy.get_dist(obs_batch,  legal_actions=legal_act).log_prob(act_batch)
                 old_logp.append(old_logp_batch)
             old_logp = torch.cat(old_logp, 0)
 
@@ -87,7 +88,7 @@ class PPOTrainer(PGTrainer):
             self.policy.optim.zero_grad(set_to_none=True)
             for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
-                    dist, val_batch = self.policy(obs_batch)
+                    dist, val_batch = self.policy(obs_batch,  legal_actions=legal_act)
 
                     # PPO loss
                     logp = dist.log_prob(act_batch)
@@ -102,8 +103,8 @@ class PPOTrainer(PGTrainer):
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= self.config["num_batch_split"]
                     #self.log("kl_approx", kl_approx)
-                    #self.log("loss_policy", loss_policy.item())
-                    #self.log("loss_entropy", loss_entropy.item())
+                    self.log("loss_entropy", loss_entropy.item())
+                    self.log("loss_policy", loss_policy.item())
                     self.log("loss_value", loss_value.item())
                     #print("\t", np.round(loss_value.item(), 3))
 
