@@ -28,7 +28,7 @@ if __name__ == '__main__':
         "ppo_iters": 6,
         "vf_scale": 1.0,
         "clip_ratio": 0.2,
-        "num_batch_split": 1,
+        "num_batch_split": 4,
         "self_play_num_eval_games": 100,
         "self_play_update_win_rate": 0,
     })

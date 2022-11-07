@@ -69,26 +69,26 @@ class PPOTrainer(PGTrainer):
         data["adv"] = adv
 
         # Policy loss
-        trainset = TensorDataset(obs, act)
+        trainset = TensorDataset(obs, act, legal_act)
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Get old log_p
         with torch.no_grad():
             old_logp = []
-            for obs_batch, act_batch in trainloader:
-                old_logp_batch = self.policy.get_dist(obs_batch,  legal_actions=legal_act).log_prob(act_batch)
+            for obs_batch, act_batch, legal_act_batch in trainloader:
+                old_logp_batch = self.policy.get_dist(obs_batch,  legal_actions=legal_act_batch).log_prob(act_batch)
                 old_logp.append(old_logp_batch)
             old_logp = torch.cat(old_logp, 0)
 
-        trainset = TensorDataset(obs, act, adv, ret, old_logp)
+        trainset = TensorDataset(obs, act, adv, ret, old_logp, legal_act)
         trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
 
         # Minibatch training to fit on GPU memory
         for _ in range(self.config["ppo_iters"]):
             self.policy.optim.zero_grad(set_to_none=True)
-            for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch in trainloader:
+            for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch, legal_act_batch in trainloader:
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
-                    dist, val_batch = self.policy(obs_batch,  legal_actions=legal_act)
+                    dist, val_batch = self.policy(obs_batch,  legal_actions=legal_act_batch)
 
                     # PPO loss
                     logp = dist.log_prob(act_batch)
