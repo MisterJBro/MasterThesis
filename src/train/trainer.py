@@ -199,9 +199,9 @@ class Trainer(ABC):
 
                 # If envs finished -> action does not matter (less calculations)
                 act = np.zeros(self.config["num_envs"], dtype=np.int32)
-                act_calc, _ = self.get_action(obs[~dones], env_list=env_list, legal_actions=list(compress(legal_act, ~dones)))
+                act_calc, _ = self.get_action(obs[~dones], env_list=env_list, legal_actions=legal_act[~dones])
                 act[~dones] = act_calc
-                act_other = [x[0] for x in list(compress(legal_act, dones))]
+                act_other = [np.arange(self.config["env"].size**2)[x][0] for x in list(compress(legal_act, dones))]
                 act[dones] = act_other
                 obs_next, rew, done, info = self.envs.step(act)
 

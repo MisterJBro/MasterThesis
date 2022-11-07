@@ -10,7 +10,7 @@ pub type Obs = Array<f32, Ix3>;
 #[derive(Debug, IntoPyObject)]
 pub struct Info {
     pub pid: u8,
-    pub legal_act: Vec<Action>,
+    pub legal_act: Vec<bool>,
 }
 
 /// The Environment
@@ -93,14 +93,15 @@ impl Env {
 
     /// Get legal actions
     #[inline]
-    pub fn legal_actions(&self) -> Vec<Action> {
-        let mut actions = Vec::new();
+    pub fn legal_actions(&self) -> Vec<bool> {
+        let mut actions = vec![false; self.size as usize * self.size as usize];
         for x in 0..self.size {
             for y in 0..self.size {
                 let color = self.game.get_board().get_color(Coords::new(x as u8, y as u8));
 
                 if color.is_none() {
-                    actions.push(y as u16 + self.size as u16 * x as u16);
+                    let index = y + self.size * x;
+                    actions[index as usize] = true;
                 }
             }
         }

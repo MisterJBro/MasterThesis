@@ -60,6 +60,7 @@ class HexPolicy(nn.Module):
         self.use_se = config["use_se"]
         self.num_res_blocks = config["num_res_blocks"]
         self.size = config["obs_dim"][-1]
+        self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
 
         # Layers
         self.body = nn.Sequential(
@@ -134,11 +135,9 @@ class HexPolicy(nn.Module):
             return logits
 
         # Mask out invalid actions
-        MASK_VALUE = -10e8 if logits.dtype == torch.float32 else -1e4
-        new_logits = torch.full(logits.shape, MASK_VALUE, dtype=logits.dtype).to(self.device)
-        for i, row in enumerate(legal_actions):
-            new_logits[i, row] = logits[i, row]
-        return new_logits
+        illegal_actions = ~torch.as_tensor(legal_actions, dtype=torch.bool)
+        logits[illegal_actions] = self.MASK_VALUE
+        return logits
 
     def set_requires_grad(self, requires_grad):
         for param in self.policy.parameters():

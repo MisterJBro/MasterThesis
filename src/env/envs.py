@@ -35,6 +35,7 @@ class Envs:
             legal_act += i["legal_act"]
             pid += i["pid"]
         obs = np.concatenate(obs)
+        legal_act = np.stack(legal_act)
         return obs, {"legal_act": legal_act, "pid": pid}
 
     def step(self, act):
@@ -62,6 +63,7 @@ class Envs:
         obs_next = np.concatenate(obs_next)
         rew = np.concatenate(rew)
         done = np.concatenate(done)
+        legal_act = np.stack(legal_act)
         info = {"pid": pid, "legal_act": legal_act}
 
         return obs_next, rew, done, info

@@ -15,15 +15,15 @@ class HexEnv:
         self.converter = np.eye(size*size)
 
     def reset(self):
-        return self.env.reset()
+        obs, info = self.env.reset()
+        info["legal_act"] = np.array(info["legal_act"])
+
+        return obs, info
 
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
+        info["legal_act"] = np.array(info["legal_act"])
 
-        #if not self.is_black:
-        #    obs[[0, 1]] = obs[[1, 0]]
-        #    obs[0] = obs[0].T
-        #    obs[1] = obs[1].T
         return obs, rew, done, info
 
     def render(self):

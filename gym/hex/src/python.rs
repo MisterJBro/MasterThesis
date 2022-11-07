@@ -46,7 +46,7 @@ impl PyEnv {
     }
 
     // Get all legal actions
-    fn legal_actions(&self) -> Vec<u16> {
+    fn legal_actions(&self) -> Vec<bool> {
         self.0.legal_actions()
     }
 

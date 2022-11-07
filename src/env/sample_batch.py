@@ -21,7 +21,7 @@ class SampleBatch:
         self.last_obs = np.empty((self.num_envs,) + config["obs_dim"], dtype=self.obs_dtype)
         self.dist = np.empty((self.num_envs, config["sample_len"], self.num_acts), dtype=np.float32)
         self.pid = np.empty((self.num_envs, config["sample_len"]), dtype=np.int8)
-        self.legal_act = [[] for _ in range(self.num_envs)]
+        self.legal_act = np.empty((self.num_envs, config["sample_len"], self.num_acts), dtype=np.bool8)
         self.ret = None
         self.val = None
 
@@ -39,8 +39,7 @@ class SampleBatch:
         self.done[:, self.idx] = done
         self.dist[:, self.idx] = dist
         self.pid[:, self.idx] = pid
-        for i in range(self.num_envs):
-            self.legal_act[i].append(legal_act[i])
+        self.legal_act[:, self.idx] = legal_act
 
         self.idx += 1
 
@@ -70,9 +69,7 @@ class SampleBatch:
         dist = torch.from_numpy(self.dist).float().reshape(-1, self.num_acts).to(self.device)
         done = torch.from_numpy(self.done).reshape(-1).to(self.device)
         pid = torch.from_numpy(self.pid).reshape(-1).to(self.device)
-        legal_act = []
-        for i in range(self.num_envs):
-            legal_act += self.legal_act[i]
+        legal_act = torch.from_numpy(self.legal_act).reshape(-1, self.num_acts).to(self.device)
         sections = self.get_sections()
 
         return {

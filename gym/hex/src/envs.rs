@@ -11,7 +11,7 @@ type Obs = Array<f32, Ix3>;
 #[derive(IntoPyObject, Debug)]
 pub struct Infos {
     pub pid: Vec<u8>,
-    pub legal_act: Vec<Vec<Action>>,
+    pub legal_act: Vec<Vec<bool>>,
 }
 
 /// The Environment

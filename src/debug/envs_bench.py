@@ -5,6 +5,7 @@ from hexgame import RustEnvs
 from src.train.config import create_config
 import time
 import random
+import numpy as np
 
 
 if __name__ == '__main__':
@@ -28,7 +29,7 @@ if __name__ == '__main__':
         legal_act = info["legal_act"]
 
         for _ in range(config["sample_len"]):
-            act = [random.choice(legal_act[i]) for i in range(len(legal_act))]
+            act = [random.choice(np.arange(size*size)[legal_act[i]]) for i in range(len(legal_act))]
             obs_next, rew, done, info = envs.step(act)
 
             pid = info["pid"]
@@ -45,7 +46,7 @@ if __name__ == '__main__':
         legal_act = info["legal_act"]
 
         for _ in range(config["sample_len"]):
-            act = [random.choice(legal_act[i]) for i in range(len(legal_act))]
+            act = [random.choice(np.arange(size*size)[legal_act[i]]) for i in range(len(legal_act))]
             obs_next, rew, done, info = rust_envs.step(act)
 
             pid = info["pid"]

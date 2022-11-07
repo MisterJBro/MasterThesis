@@ -14,7 +14,8 @@ fn main() {
     let mut rng = rand::thread_rng();
 
     for _ in 0..1_000 {
-        let act = legal_act.iter().map(|x| *x.choose(&mut rng).unwrap()).collect::<Vec<_>>();
+        // Get act by choosing randomly from legal act, which is an array where each action which is legal is false
+        let act = legal_act.iter().map(|x| *x.iter().enumerate().filter(|(_, &x)| x).map(|(i, _)| i as u16).collect::<Vec<u16>>().choose(&mut rng).unwrap()).collect::<Vec<_>>();
         let (obs, rew, done, info) = envs.step(act);
         legal_act = info.legal_act;
     }
