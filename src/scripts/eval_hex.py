@@ -19,7 +19,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 5
+    size = 6
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -36,14 +36,14 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hexgame_ppo_iter=20_metric=295.pt")#policy_hexgame_ppo_iter=813_metric=166.pt")#
+    policy.load("checkpoints/policy_hex_6x6.pt")
     policy.eval()
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
     # Algorithms /Players
     mcts_obj = None
-    def mcts(env, obs):
+    def mcts(env, obs, info):
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         return act
 
     az_obj = None
-    def az(env, obs):
+    def az(env, obs, info):
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         return act
 
     pgs_obj = None
-    def pgs(env, obs):
+    def pgs(env, obs, info):
         global pgs_obj
         if pgs_obj is None:
             pgs_obj = PGS(config, policy)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
         act = np.argmax(result)
         return act
 
-    def human(env, obs):
+    def human(env, obs, info):
         legal_actions = env.legal_actions()
         while True:
             act = int(input("Please type in your action: "))
@@ -77,25 +77,25 @@ if __name__ == '__main__':
                 break
         return act
 
-    def random(env, obs):
-        return rand.choice(env.legal_actions())
+    def random(env, obs, info):
+        return rand.choice(np.arange(size**2)[env.legal_actions()])
 
-    def nn(env, obs):
+    def nn(env, obs, info):
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
-            dist, val = policy(obs, legal_actions=[env.legal_actions()])
+            dist, val = policy(obs, legal_actions=info["legal_act"][np.newaxis])
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
     # Simulate
-    players = [mcts, random]
-    num_games = 5
+    players = [random, nn]
+    num_games = 1
     render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):
-        obs = env.reset()
+        obs, info = env.reset()
 
         done = False
         black_turn = True
@@ -104,11 +104,11 @@ if __name__ == '__main__':
                 env.render()
 
             if black_turn:
-                act = players[0](env, obs)
+                act = players[0](env, obs, info)
             else:
-                act = players[1](env, obs)
+                act = players[1](env, obs, info)
 
-            obs, reward, done, _ = env.step(act)
+            obs, reward, done, info = env.step(act)
 
             black_turn = not black_turn
 

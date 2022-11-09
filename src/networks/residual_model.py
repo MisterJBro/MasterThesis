@@ -192,8 +192,11 @@ class ValueEquivalenceModel(nn.Module):
                     if i == 0:
                         state = self.representation(obs[start:end])
                     else:
+                        print(act_ep[i-1].shape)
                         state = self.dynamics(state, act_ep[i-1])
-                        state = state[:-1]
+                        if i > 1:
+                            state = state[:-1]
+                    print(state.shape, val_targets[i].shape)
                     dist, val = self.prediction(state)
 
                     loss_val = scalar_loss(val, val_targets[i])

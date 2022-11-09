@@ -4,6 +4,11 @@ from torch.utils.data import TensorDataset, DataLoader
 import humanize
 import numpy as np
 from src.train.trainer import Trainer
+import os
+import pathlib
+
+PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
+
 
 class PGTrainer(Trainer):
     """ Train a policy using Policy Gradient with baseline."""
@@ -119,3 +124,33 @@ class PPOTrainer(PGTrainer):
 
             #mem = torch.cuda.mem_get_info()
             #print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
+
+
+class PPOTrainerModel(Trainer):
+    """ Train a policy using Proximal Policy Gradient."""
+
+    def __init__(self, config, policy, model):
+        super().__init__(config)
+        self.policy = policy
+        self.model = model
+
+    def update(self, sample_batch):
+        data = sample_batch.to_tensor_dict()
+        self.model.loss(data)
+
+    def checkpoint(self, iter):
+        last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_metric={self.log[self.config["log_main_metric"]]:.0f}.pt'
+        self.save_paths.append(last_path)
+        if len(self.save_paths) > self.config["num_checkpoints"]:
+            path = self.save_paths.pop(0)
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                print("Warning: %s checkpoint not found" % path)
+        self.save(path=last_path)
+
+    def save(self, path=None):
+        if path is not None:
+            self.model.save(path=path)
+        else:
+            self.model.save()
