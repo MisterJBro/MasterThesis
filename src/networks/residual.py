@@ -10,7 +10,7 @@ PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 class SEBlock(nn.Module):
     """Squeeze and Excitation Block from https://github.com/moskomule/senet.pytorch/blob/master/senet/se_module.py"""
-    def __init__(self, channel, reduction=16):
+    def __init__(self, channel, reduction=32):
         super(SEBlock, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
@@ -72,23 +72,21 @@ class HexPolicy(nn.Module):
 
         # Heads
         self.policy = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(self.num_filters, 32, 1),
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Flatten(1, -1),
         )
-        self.policy_head = nn.Linear(self.size*self.size*16, config["num_acts"])
+        self.policy_head = nn.Linear(self.size*self.size*32, config["num_acts"])
 
         self.value = nn.Sequential(
-            nn.Conv2d(self.num_filters, 16, 1),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(self.num_filters, 32, 1),
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Flatten(1, -1),
-            nn.Linear(self.size*self.size*16, 256),
-            nn.ReLU(inplace=True),
         )
         self.value_head = nn.Sequential(
-            nn.Linear(256, 1),
+            nn.Linear(self.size*self.size*32, 1),
             nn.Tanh(),
         )
 
