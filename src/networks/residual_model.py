@@ -5,7 +5,6 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
 import pathlib
 
@@ -64,6 +63,7 @@ class ValueEquivalenceModel(nn.Module):
         self.num_res_blocks = config["num_res_blocks"]
         self.size = config["obs_dim"][-1]
         self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
+        self.num_acts = config["num_acts"]
 
         # Representation function h
         self.repr = nn.Sequential(
@@ -134,44 +134,27 @@ class ValueEquivalenceModel(nn.Module):
         act = data["act"]
         done = data["done"]
         ret = data["ret"]
-        logits = data["logits"]
-        last_val = data["last_val"]
+        dist = data["dist"]
         sections = data["sections"]
 
         episodes = []
-        num_bootstraps = 0
         for (start, end) in sections:
             act_ep = []
             val_targets = []
             dist_targets = []
-            bootstrap = done[end-1]
-            if bootstrap:
-                next_val_targets = torch.concat([ret[start+1:end], torch.zeros(1, device=self.device)])
-            else:
-                next_val_targets = torch.concat([ret[start+1:end], last_val[num_bootstraps].unsqueeze(0)])
-                num_bootstraps += 1
+            completed = done[end-1]
 
-            for t in range(start, end):
-                end_ep = min(t+self.config["model_unroll_len"], end)
-                cut = (end_ep - t) != self.config["model_unroll_len"]
+            if not completed:
+                continue
 
-                next_actions = act[t:end_ep]
-                val_target = next_val_targets[t-start:end_ep-start]
-                dist_target = logits[t:end_ep]
-                if bootstrap and cut:
-                    val_target = torch.concat([val_target, torch.zeros(1, device=self.device)])
-                    random_action = torch.randint(0, self.num_acts, (1,), device=self.device)
-                    next_actions = torch.concat([next_actions, random_action])
-                    dist_target = torch.concat([dist_target, logits[end_ep-1].unsqueeze(0)])
-
-                val_targets.append(val_target)
-                dist_targets.append(dist_target)
-                act_ep.append(next_actions)
-
-            act_ep = torch.concat(act_ep)
-            val_targets = torch.concat(val_targets)
-            dist_targets = torch.concat(dist_targets)
-            dist_targets = Categorical(logits=dist_targets)
+            for i in range(self.config["model_unroll_len"]):
+                act_ep.append(act[start+i:end])
+                if i == 0:
+                    val_targets.append(ret[start+i:end])
+                    dist_targets.append(Categorical(logits=dist[start+i:end]))
+                else:
+                    val_targets.append(torch.concat((ret[start+i:end], torch.zeros(1, dtype=torch.float32, device=self.device)), 0))
+                    dist_targets.append(Categorical(logits=torch.concat((dist[start+i:end], dist[end].unsqueeze(0)), 0)))
 
             episodes.append({
                 'start': start,
@@ -199,20 +182,24 @@ class ValueEquivalenceModel(nn.Module):
             for ep in episodes:
                 start = ep["start"]
                 end = ep["end"]
+                print("Length", end-start)
                 act_ep = ep["act_ep"]
                 val_targets = ep["val_targets"]
                 dist_targets = ep["dist_targets"]
 
-                # Prediction
-                state = self.representation(obs[start:end])
-                hidden = self.dynamics(state, act_ep)
-                dist, val = self.prediction(hidden)
+                # Predictions
+                for i in range(self.config["model_unroll_len"]):
+                    if i == 0:
+                        state = self.representation(obs[start:end])
+                    else:
+                        state = self.dynamics(state, act_ep[i-1])
+                        state = state[:-1]
+                    dist, val = self.prediction(state)
 
-                loss_val = scalar_loss(val, val_targets)
-                # Mode seeking KL
-                loss_dist = kl_divergence(dist_targets, dist).mean()
-                loss = loss_val + loss_dist
-                losses.append(loss)
+                    loss_val = scalar_loss(val, val_targets[i])
+                    loss_dist = kl_divergence(dist_targets[i], dist).mean()
+                    loss = loss_val + loss_dist
+                    losses.append(loss)
 
                 # Minibatch update
                 steps += end - start
