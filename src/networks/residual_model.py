@@ -182,7 +182,6 @@ class ValueEquivalenceModel(nn.Module):
             for ep in episodes:
                 start = ep["start"]
                 end = ep["end"]
-                print("Length", end-start)
                 act_ep = ep["act_ep"]
                 val_targets = ep["val_targets"]
                 dist_targets = ep["dist_targets"]
@@ -192,11 +191,9 @@ class ValueEquivalenceModel(nn.Module):
                     if i == 0:
                         state = self.representation(obs[start:end])
                     else:
-                        print(act_ep[i-1].shape)
-                        state = self.dynamics(state, act_ep[i-1])
-                        if i > 1:
+                        if i != 1:
                             state = state[:-1]
-                    print(state.shape, val_targets[i].shape)
+                        state = self.dynamics(state, act_ep[i-1])
                     dist, val = self.prediction(state)
 
                     loss_val = scalar_loss(val, val_targets[i])
@@ -209,6 +206,7 @@ class ValueEquivalenceModel(nn.Module):
                 if steps >= batch_size:
                     self.opt.zero_grad()
                     loss = torch.mean(torch.stack(losses))
+                    print(loss)
                     loss.backward()
                     self.opt.step()
                     steps = 0
