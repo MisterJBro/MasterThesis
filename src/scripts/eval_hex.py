@@ -35,9 +35,12 @@ if __name__ == '__main__':
     })
 
     # Import policy and model
-    policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hex_6x6.pt")
-    policy.eval()
+    policy1 = HexPolicy(config)
+    policy1.load("checkpoints/policy_hex_6x6.pt")
+    policy1.eval()
+    policy2 = HexPolicy(config)
+    policy2.load("checkpoints/policy_hex_6x6_1.pt")
+    policy2.eval()
     #model = ValueEquivalenceModel(config)
     #model.load("checkpoints/ve_model.pt")
 
@@ -55,7 +58,7 @@ if __name__ == '__main__':
     def az(env, obs, info):
         global az_obj
         if az_obj is None:
-            az_obj = AlphaZero(config, policy)
+            az_obj = AlphaZero(config, policy1)
         result = az_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
@@ -64,7 +67,7 @@ if __name__ == '__main__':
     def pgs(env, obs, info):
         global pgs_obj
         if pgs_obj is None:
-            pgs_obj = PGS(config, policy)
+            pgs_obj = PGS(config, policy1)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
@@ -80,18 +83,26 @@ if __name__ == '__main__':
     def random(env, obs, info):
         return rand.choice(np.arange(size**2)[env.legal_actions()])
 
-    def nn(env, obs, info):
+    def nn1(env, obs, info):
         # obs (2, 9, 9, 1)
-        obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
+        obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy1.device)
         with torch.no_grad():
-            dist, val = policy(obs, legal_actions=info["legal_act"][np.newaxis])
+            dist, val = policy1(obs, legal_actions=info["legal_act"][np.newaxis])
+        act = dist.logits.argmax(-1).cpu().numpy()[0]
+        return act
+
+    def nn2(env, obs, info):
+        # obs (2, 9, 9, 1)
+        obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy1.device)
+        with torch.no_grad():
+            dist, val = policy2(obs, legal_actions=info["legal_act"][np.newaxis])
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
     # Simulate
-    players = [az, random]
-    num_games = 1
-    render = True
+    players = [nn1, nn2]
+    num_games = 50
+    render = False
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):

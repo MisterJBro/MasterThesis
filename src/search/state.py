@@ -23,7 +23,7 @@ class State:
         return next_state
 
     def get_possible_actions(self):
-        return self.legal_act
+        return np.arange(self.env.size**2)[self.legal_act]
 
     def is_terminal(self):
         return self.done

@@ -154,7 +154,7 @@ class ValueEquivalenceModel(nn.Module):
                     dist_targets.append(Categorical(logits=dist[start+i:end]))
                 else:
                     val_targets.append(torch.concat((ret[start+i:end], torch.zeros(1, dtype=torch.float32, device=self.device)), 0))
-                    dist_targets.append(Categorical(logits=torch.concat((dist[start+i:end], dist[end].unsqueeze(0)), 0)))
+                    dist_targets.append(Categorical(logits=torch.concat((dist[start+i:end], dist[end-1].unsqueeze(0)), 0)))
 
             episodes.append({
                 'start': start,

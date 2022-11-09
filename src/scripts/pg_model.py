@@ -32,6 +32,7 @@ if __name__ == '__main__':
 
         "model_lr": 1e-3,
         "model_unroll_len": 5,
+        "model_minibatches": 50,
     })
 
     # Import policy and model
