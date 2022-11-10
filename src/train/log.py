@@ -20,7 +20,7 @@ class Logger(dict):
     def __call__(self, metric, value):
         if metric == self.config["log_main_metric"]:
             self.main_metric.append(value)
-        
+
         self[metric] = value
 
     def __str__(self):
