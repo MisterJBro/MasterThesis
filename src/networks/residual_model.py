@@ -123,6 +123,9 @@ class ValueEquivalenceModel(nn.Module):
         s = self.dyna(s)
         return s
 
+    def prediction_hidden(self, s):
+        return self.pred(s)
+
     def prediction(self, s):
         s = self.pred(s)
         pi = Categorical(logits=self.pred_pi(s).reshape(-1, self.num_acts))

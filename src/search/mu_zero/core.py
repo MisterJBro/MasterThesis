@@ -16,7 +16,10 @@ class MZCore(AZCore):
             return node
 
         # Create new child nodes, lazy init
-        actions = np.eye(self.num_acts)
+        if node == self.root:
+            actions = node.get_legal_actions()
+        else:
+            actions = np.arange(self.num_acts)
         for action in actions:
             new_node = self.NodeClass(None, action=action, parent=node)
             node.children.append(new_node)
@@ -35,7 +38,7 @@ class MZCore(AZCore):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if self.root.state is not None:
             prob, abs, val = self.eval_obs(self.root)
-            self.root.priors = prob
+            self.root.priors = prob[self.root.get_legal_actions()]
             self.root.val = val
             self.root.state.abs = abs
 

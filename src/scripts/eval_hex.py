@@ -1,10 +1,12 @@
 import random as rand
-import re
+from src.networks.residual_model import ValueEquivalenceModel
 import torch
 import numpy as np
 from torch.multiprocessing import freeze_support
 from src.networks.residual import HexPolicy
 from src.search.alpha_zero.alpha_zero import AlphaZero
+from src.search.ve_pgs.ve_pgs import VEPGS
+from src.search.mu_zero.mu_zero import MuZero
 from src.search.pgs.pgs import PGS
 from src.train.config import create_config
 from src.env.hex import HexEnv
@@ -41,8 +43,8 @@ if __name__ == '__main__':
     policy2 = HexPolicy(config)
     policy2.load("checkpoints/policy_hex_6x6_1.pt")
     policy2.eval()
-    #model = ValueEquivalenceModel(config)
-    #model.load("checkpoints/ve_model.pt")
+    model = ValueEquivalenceModel(config)
+    model.load("checkpoints/model_hex_ppomodel_iter=41_metric=100.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -69,6 +71,24 @@ if __name__ == '__main__':
         if pgs_obj is None:
             pgs_obj = PGS(config, policy1)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
+        act = np.argmax(result)
+        return act
+
+    muzero_obj = None
+    def muzero(env, obs, info):
+        global muzero_obj
+        if muzero_obj is None:
+            muzero_obj = MuZero(config, policy1, model)
+        result = muzero_obj.search(State(env, obs=obs), iters=100)
+        act = np.argmax(result)
+        return act
+
+    vepgs_obj = None
+    def vepgs(env, obs, info):
+        global vepgs_obj
+        if vepgs_obj is None:
+            vepgs_obj = VEPGS(config, policy1, model)
+        result = vepgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
 
@@ -100,9 +120,9 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [nn1, nn2]
-    num_games = 50
-    render = False
+    players = [muzero, random]
+    num_games = 1
+    render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
     for i in trange(num_games):
@@ -128,7 +148,6 @@ if __name__ == '__main__':
         black_turn = not black_turn
         if black_turn:
             num_victories_first += 1
-
 
     print(f"Winrate {players[0].__name__.upper()}: {num_victories_first / num_games :.02f}")
 

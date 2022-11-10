@@ -1,3 +1,4 @@
+import numpy as np
 from src.search.evaluator import Evaluator
 from src.search.mu_zero.evaluator import MZEvaluator
 
@@ -11,20 +12,15 @@ class VEPGSEvaluator(MZEvaluator):
         self.model = model
 
     def eval_abs(self, abs, act):
-        act = self.model.dyn_linear(act).unsqueeze(1)
-        hidden, abs_next = self.model.dynamics(abs, act)
-        abs_next0 = abs_next[0].permute(1, 0, 2)
-        abs_next1 = abs_next[1].permute(1, 0, 2)
+        new_abs = self.dynamics(abs, act)
+        hidden = self.prediction_hidden(new_abs)
 
-        # Inference only reward
-        rew = self.model.get_reward(hidden)
-        rew = rew.cpu().numpy()
 
         return [{
-            "abs": (a0.unsqueeze(1), a1.unsqueeze(1)),
-            "rew": r,
+            "abs": a,
+            "rew": np.zeros_like(h),
             "hidden": h,
-            } for a0, a1, h, r, in zip(abs_next0, abs_next1, hidden, rew)]
+            } for a, h in zip(abs, hidden)]
 
     def update(self, msg):
         self.policy.load_state_dict(msg["policy_params"])
