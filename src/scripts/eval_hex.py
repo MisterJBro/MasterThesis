@@ -41,7 +41,7 @@ if __name__ == '__main__':
     policy1.load("checkpoints/policy_hex_6x6.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
-    policy2.load("checkpoints/policy_hex_6x6_3.pt")
+    policy2.load("checkpoints/policy_hex_6x6_1.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
     model.load("checkpoints/model_hex_ppomodel_iter=41_metric=100.pt")
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     def az(env, obs, info):
         global az_obj
         if az_obj is None:
-            az_obj = AlphaZero(config, policy2)
+            az_obj = AlphaZero(config, policy1)
         result = az_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result)
         return act
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     def random(env, obs, info):
         return rand.choice(np.arange(size**2)[env.legal_actions()])
 
-    def nn1(env, obs, info):
+    def pn1(env, obs, info):
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy1.device)
         with torch.no_grad():
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
-    def nn2(env, obs, info):
+    def pn2(env, obs, info):
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy1.device)
         with torch.no_grad():
@@ -120,7 +120,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [az, nn2]
+    players = [pn1, pn2]
     num_games = 1
     render = True
     num_victories_first = 0

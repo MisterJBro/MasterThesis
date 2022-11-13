@@ -46,8 +46,8 @@ impl PyEnv {
     }
 
     // Get all legal actions
-    fn legal_actions(&self) -> Vec<bool> {
-        self.0.legal_actions()
+    fn legal_actions<'py>(&self, py: Python<'py>) -> &'py PyArray1<bool> {
+        self.0.legal_actions().to_pyarray(py)
     }
 
 
@@ -87,8 +87,8 @@ impl PyEnvs {
     }
 
     /// Execute the current actions and update the board
-    fn step<'py>(&mut self, py: Python<'py>, act: Vec<u16>) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
-        let (obs, rew, done, info) = self.0.step(act);
+    fn step<'py>(&mut self, py: Python<'py>, act: Vec<(usize, u16)>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
+        let (obs, rew, done, info) = self.0.step(act, num_waits);
         (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), info)
     }
 

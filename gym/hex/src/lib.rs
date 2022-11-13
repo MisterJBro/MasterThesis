@@ -67,8 +67,6 @@ Then type the coordinates of the space where you would like to place your next s
 
 Optionally, you can specify the size of the board like in `cargo run 7`.
 */
-extern crate dict_derive;
-
 mod attacked_bridges;
 mod board;
 mod color;

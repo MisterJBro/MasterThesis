@@ -1,17 +1,31 @@
 use crate::{Env, Info};
 use std::thread;
-use numpy::ndarray::{Array, Ix1, Ix3, Ix4, stack, Axis};
+use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
+use numpy::{IntoPyArray};
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, IntoPyDict};
 use crossbeam::channel::{bounded, Sender, Receiver};
-use dict_derive::{IntoPyObject};
 
 // Basic types
 type Action = u16;
 type Obs = Array<f32, Ix3>;
 
-#[derive(IntoPyObject, Debug)]
+#[derive(Debug)]
 pub struct Infos {
-    pub pid: Vec<u8>,
-    pub legal_act: Vec<Vec<bool>>,
+    pub pid: Array<u8, Ix1>,
+    pub eid: Array<usize, Ix1>,
+    pub legal_act: Array<bool, Ix2>,
+}
+impl IntoPy<PyObject> for Infos {
+    fn into_py(self, py: Python) -> PyObject {
+        let key_vals: Vec<(&str, PyObject)> = vec![
+            ("pid", self.pid.into_pyarray(py).to_object(py)),
+            ("eid", self.eid.into_pyarray(py).to_object(py)),
+            ("legal_act", self.legal_act.into_pyarray(py).to_object(py)),
+        ];
+        let dict = key_vals.into_py_dict(py);
+        dict.to_object(py)
+    }
 }
 
 /// The Environment
@@ -19,6 +33,7 @@ pub struct Infos {
 pub struct Envs {
     num_envs: usize,
     num_envs_per_worker: usize,
+    num_pending_request: usize,
     workers: Vec<Worker>,
     workers_channels: Vec<Sender<MasterMessage>>,
     master_channel: Receiver<WorkerMessage>,
@@ -40,6 +55,7 @@ impl Envs {
         Envs {
             num_envs,
             num_envs_per_worker,
+            num_pending_request: 0,
             workers,
             workers_channels,
             master_channel,
@@ -47,7 +63,7 @@ impl Envs {
     }
 
     /// Reset env
-    pub fn reset(&self) -> (Array<f32, Ix4>, Infos) {
+    pub fn reset(&mut self) -> (Array<f32, Ix4>, Infos) {
         // Send
         for (cid, c) in self.workers_channels.iter().enumerate() {
             for local_eid in 0..self.num_envs_per_worker {
@@ -80,54 +96,63 @@ impl Envs {
             legal_act.push(msg.info.legal_act);
         }
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
-        let info = Infos{pid: pid, legal_act: legal_act};
+
+        // Create info
+        let pid = Array::from_vec(pid);
+        let eid = Array::from_iter(0..self.num_envs);
+        let legal_act = stack(Axis(0), &legal_act.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
+        let info = Infos{pid, eid, legal_act};
 
         (obs, info)
     }
 
     /// Execute next action
-    pub fn step(&self, acts: Vec<Action>) -> (Array<f32, Ix4>, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
+    pub fn step(&mut self, acts: Vec<(usize, Action)>, num_wait: usize) -> (Array<f32, Ix4>, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
         // Send
-        for (cid, c) in self.workers_channels.iter().enumerate() {
-            for local_eid in 0..self.num_envs_per_worker {
-                let eid = local_eid + cid * self.num_envs_per_worker;
-                if c.try_send(MasterMessage::Step{eid: eid, act: acts[eid]}).is_err() {
-                    panic!("Error sending message STEP to worker");
-                }
+        for (eid, act) in acts {
+            let cid = eid / self.num_envs_per_worker;
+            let c = &self.workers_channels[cid];
+            if c.try_send(MasterMessage::Step{eid: eid, act: act}).is_err() {
+                panic!("Error sending message STEP to worker");
+            } else {
+                self.num_pending_request += 1;
             }
         }
 
         // Receive
-        let mut msgs = Vec::with_capacity(self.num_envs);
-        for _ in 0..self.num_envs {
-            match self.master_channel.recv() {
-                Ok(msg) => {
-                    msgs.push(msg);
-                },
-                _ => panic!("Error receiving message STEP from worker"),
-            }
-        }
+        let num_wait = num_wait.min(self.num_pending_request);
+        while self.master_channel.len() < num_wait { }
+        let mut msgs: Vec<WorkerMessage> = self.master_channel.try_iter().collect();
+        let num_msgs = msgs.len();
+        self.num_pending_request -= num_msgs;
         msgs.sort_by_key(|m| m.eid);
 
         // Process also rew and done
-        let mut obs = Vec::with_capacity(self.num_envs);
-        let mut rews = Vec::with_capacity(self.num_envs);
-        let mut dones = Vec::with_capacity(self.num_envs);
-        let mut pid = Vec::with_capacity(self.num_envs);
-        let mut legal_act = Vec::with_capacity(self.num_envs);
+        let mut obs = Vec::with_capacity(num_msgs);
+        let mut rews = Vec::with_capacity(num_msgs);
+        let mut dones = Vec::with_capacity(num_msgs);
+        let mut pid = Vec::with_capacity(num_msgs);
+        let mut eid = Vec::with_capacity(num_msgs);
+        let mut legal_act = Vec::with_capacity(num_msgs);
 
         for msg in msgs.into_iter() {
             obs.push(msg.obs);
             rews.push(msg.rew.unwrap());
             dones.push(msg.done.unwrap());
             pid.push(msg.info.pid);
+            eid.push(msg.eid);
             legal_act.push(msg.info.legal_act);
         }
-        // rews and dones to ndarrays
-        let rews = Array::from_shape_vec((self.num_envs,), rews).unwrap();
-        let dones = Array::from_shape_vec((self.num_envs,), dones).unwrap();
+        // To ndarray
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
-        let info = Infos{pid: pid, legal_act: legal_act};
+        let rews = Array::from_vec(rews);
+        let dones = Array::from_vec(dones);
+
+        // Create info
+        let pid = Array::from_vec(pid);
+        let eid = Array::from_vec(eid);
+        let legal_act = stack(Axis(0), &legal_act.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
+        let info = Infos{pid, eid, legal_act};
         (obs, rews, dones, info)
     }
 

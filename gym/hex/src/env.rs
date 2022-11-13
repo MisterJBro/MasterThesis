@@ -1,16 +1,29 @@
 use crate::{Coords, Color};
 use crate::{Game, Status};
 use serde::{Deserialize, Serialize};
-use numpy::ndarray::{Array, Ix3};
-use dict_derive::{IntoPyObject};
+use numpy::ndarray::{Array, Ix1, Ix3};
+use numpy::{IntoPyArray};
+use pyo3::prelude::*;
+use pyo3::types::{IntoPyDict};
 
 // Basic types
 pub type Action = u16;
 pub type Obs = Array<f32, Ix3>;
-#[derive(Debug, IntoPyObject)]
+#[derive(Debug)]
+
 pub struct Info {
     pub pid: u8,
-    pub legal_act: Vec<bool>,
+    pub legal_act: Array<bool, Ix1>,
+}
+impl IntoPy<PyObject> for Info {
+    fn into_py(self, py: Python) -> PyObject {
+        let key_vals: Vec<(&str, PyObject)> = vec![
+            ("pid", self.pid.to_object(py)),
+            ("legal_act", self.legal_act.into_pyarray(py).to_object(py)),
+        ];
+        let dict = key_vals.into_py_dict(py);
+        dict.to_object(py)
+    }
 }
 
 /// The Environment
@@ -93,7 +106,7 @@ impl Env {
 
     /// Get legal actions
     #[inline]
-    pub fn legal_actions(&self) -> Vec<bool> {
+    pub fn legal_actions(&self) -> Array<bool, Ix1> {
         let mut actions = vec![false; self.size as usize * self.size as usize];
         for x in 0..self.size {
             for y in 0..self.size {
@@ -105,7 +118,7 @@ impl Env {
                 }
             }
         }
-        actions
+        Array::from_vec(actions)
     }
 
     /// Get extra info
