@@ -1,5 +1,6 @@
 use crate::{Env, Info};
 use std::thread;
+use core_affinity::CoreId;
 use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
 use numpy::{IntoPyArray};
 use pyo3::prelude::*;
@@ -40,16 +41,31 @@ pub struct Envs {
 }
 
 impl Envs {
-    pub fn new(num_workers: usize, num_envs_per_worker: usize, size: u8) -> Envs {
+    pub fn new(num_workers: usize, num_envs_per_worker: usize, mut core_pinning: bool, size: u8) -> Envs {
         let num_envs = num_workers * num_envs_per_worker;
         let mut workers = Vec::with_capacity(num_workers);
         let mut workers_channels = Vec::with_capacity(num_workers);
         let (master_sender, master_channel) = bounded(num_envs*4);
+        let core_ids = core_affinity::get_core_ids().unwrap();
+        let num_cores = core_ids.len();
+        if num_workers > num_cores {
+            println!("Warning: More workers: {} than cpu cores: {}. Deactivating thread to core pinning", num_workers, num_cores);
+            core_pinning = false;
+        }
 
         for id in 0..num_workers {
+            // Channel
             let (s, r) = bounded(num_envs_per_worker*4);
             workers_channels.push(s);
-            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), size));
+
+            // Core
+            let core_id = if core_pinning {
+                Some(core_ids[id])
+            } else {
+                None
+            };
+
+            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), core_id, size));
         }
 
         Envs {
@@ -173,18 +189,15 @@ impl Envs {
     }
 
     // Close environment
-    pub fn close(&self) {
+    pub fn close(&mut self) {
         for (cid, c) in self.workers_channels.iter().enumerate() {
-            for local_eid in 0..self.num_envs_per_worker {
-                let eid = local_eid + cid * self.num_envs_per_worker;
-                if c.try_send(MasterMessage::Close{eid: eid}).is_err() {
-                    panic!("Error sending message CLOSE to worker");
-                }
+            if c.try_send(MasterMessage::Shutdown).is_err() {
+                panic!("Error sending message SHUTDOWN to worker");
             }
         }
-        //for worker in self.workers.into_iter() {
-        //    worker.close();
-        //}
+        for worker in self.workers.iter_mut() {
+            worker.close();
+        }
     }
 }
 
@@ -195,6 +208,7 @@ enum MasterMessage {
     Step{eid: usize, act: Action},
     Render{eid: usize},
     Close{eid: usize},
+    Shutdown,
 }
 
 #[derive(Debug)]
@@ -208,14 +222,19 @@ struct WorkerMessage {
 
 struct Worker {
     id: usize,
-    thread: thread::JoinHandle<()>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
-    fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<MasterMessage>, out_channel: Sender<WorkerMessage>, size: u8) -> Worker {
+    fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<MasterMessage>, out_channel: Sender<WorkerMessage>, core_id: Option<CoreId>, size: u8) -> Worker {
         let eid_start = id * num_envs_per_worker;
 
         let thread = thread::spawn(move || {
+            // Set core affinity
+            if let Some(core_id) = core_id {
+                core_affinity::set_for_current(core_id);
+            }
+
             let mut envs = vec![Env::new(size); num_envs_per_worker];
 
             loop {
@@ -271,6 +290,12 @@ impl Worker {
                             let local_eid = eid - eid_start;
                             envs[local_eid].close();
                         },
+                        MasterMessage::Shutdown => {
+                            for env in envs.iter_mut() {
+                                env.close();
+                            }
+                            break;
+                        },
                     }
                 }
             }
@@ -278,11 +303,13 @@ impl Worker {
 
         Worker {
             id,
-            thread,
+            thread: Some(thread),
         }
     }
 
-    pub fn close(self) {
-        self.thread.join().unwrap();
+    pub fn close(&mut self) {
+        if let Some(handle) = self.thread.take() {
+            handle.join().expect("Could not join env worker thread!");
+        }
     }
 }

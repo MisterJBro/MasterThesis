@@ -13,6 +13,7 @@ pub struct PyEnv(pub Env);
 #[pymethods]
 impl PyEnv {
     #[new]
+    #[args(size="9")]
     pub fn new(size: u8) -> PyEnv {
         PyEnv(Env::new(size))
     }
@@ -76,8 +77,9 @@ pub struct PyEnvs(pub Envs);
 #[pymethods]
 impl PyEnvs {
     #[new]
-    pub fn new(num_workers: usize, num_envs_per_worker: usize, size: u8) -> PyEnvs {
-        PyEnvs(Envs::new(num_workers, num_envs_per_worker, size))
+    #[args(num_workers="2", num_envs_per_worker = "2", core_pinning="false", size="9")]
+    pub fn new(num_workers: usize, num_envs_per_worker: usize, core_pinning: bool, size: u8) -> PyEnvs {
+        PyEnvs(Envs::new(num_workers, num_envs_per_worker, core_pinning, size))
     }
 
     /// Reset the environment
@@ -98,7 +100,7 @@ impl PyEnvs {
     }
 
     /// Close env
-    fn close(&self) {
+    fn close(&mut self) {
         self.0.close();
     }
 }

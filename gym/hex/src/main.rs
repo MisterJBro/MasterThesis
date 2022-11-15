@@ -6,7 +6,7 @@ fn main() {
     let num_cpus = 3;
     let num_envs_per_worker = 6;
     let size = 9;
-    let mut envs = Envs::new(num_cpus, num_envs_per_worker, size);
+    let mut envs = Envs::new(num_cpus, num_envs_per_worker, false, size);
     let start = Instant::now();
 
     let (obs, info) = envs.reset();
@@ -17,7 +17,7 @@ fn main() {
         // Get act by choosing randomly from legal act, which is an array where each action which is legal is false
         let act = legal_act.outer_iter().map(|x| *x.iter().enumerate().filter(|(_, &x)| x).map(|(i, _)| i as u16).collect::<Vec<u16>>().choose(&mut rng).unwrap()).collect::<Vec<_>>();
         let act = act.iter().enumerate().map(|(i, &x)| (i as usize, x)).collect::<Vec<_>>();
-        let (obs, rew, done, info) = envs.step(act, 9);
+        let (obs, rew, done, info) = envs.step(act, num_cpus*num_envs_per_worker);
         legal_act = info.legal_act;
     }
     let elapsed = start.elapsed();
