@@ -5,7 +5,7 @@ use pyo3::types::{IntoPyDict};
 
 
 /// Extra Information, for one env step
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 
 pub struct Info {
     pub pid: u8,
@@ -23,7 +23,7 @@ impl IntoPy<PyObject> for Info {
 }
 
 /// Extra information for several env.step with each env id
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Infos {
     pub pid: Array<u8, Ix1>,
     pub eid: Array<usize, Ix1>,

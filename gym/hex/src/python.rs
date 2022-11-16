@@ -1,4 +1,4 @@
-use crate::gym::{Env, Envs, Action, Obs, Info, Infos};
+use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut};
 use numpy::ToPyArray;
 use numpy::{PyArray1, PyArray3, PyArray4};
 use pyo3::prelude::*;
@@ -103,5 +103,10 @@ impl PyEnvs {
     /// Close env
     fn close(&mut self) {
         self.0.close();
+    }
+
+    /// Get episodes
+    fn get_episodes(&self) -> Vec<usize> {
+        vec![]
     }
 }
