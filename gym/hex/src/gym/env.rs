@@ -1,30 +1,8 @@
-use crate::{Coords, Color};
-use crate::{Game, Status};
+use crate::{Coords, Color, Game, Status};
+use crate::gym::{Action, Obs, Info};
 use serde::{Deserialize, Serialize};
-use numpy::ndarray::{Array, Ix1, Ix3};
-use numpy::{IntoPyArray};
-use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict};
+use numpy::ndarray::{Array, Ix1};
 
-// Basic types
-pub type Action = u16;
-pub type Obs = Array<f32, Ix3>;
-#[derive(Debug)]
-
-pub struct Info {
-    pub pid: u8,
-    pub legal_act: Array<bool, Ix1>,
-}
-impl IntoPy<PyObject> for Info {
-    fn into_py(self, py: Python) -> PyObject {
-        let key_vals: Vec<(&str, PyObject)> = vec![
-            ("pid", self.pid.to_object(py)),
-            ("legal_act", self.legal_act.into_pyarray(py).to_object(py)),
-        ];
-        let dict = key_vals.into_py_dict(py);
-        dict.to_object(py)
-    }
-}
 
 /// The Environment
 #[derive(Clone, Serialize, Deserialize)]

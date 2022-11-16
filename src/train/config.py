@@ -98,6 +98,13 @@ def compute_config(config):
     config["num_players"] = env.num_players
     config["amp_device"] = "cpu" if config["device"] == "cpu" else "cuda"
 
+    # Envs
+    config["num_envs_per_worker"] = config["num_envs"] // config["num_cpus"]
+    num_envs = config["num_envs_per_worker"] * config["num_cpus"]
+    if num_envs != config["num_envs"]:
+        print(f'Warning: Cannot equally distribute number of of envs: {config["num_envs"]} onto num_cpus: {config["num_cpus"]}. Setting num_envs to {num_envs}!')
+        config["num_envs"] = num_envs
+
     return config
 
 # Get config from argparser

@@ -1,32 +1,14 @@
-use crate::{Env, Info};
-use std::thread;
-use core_affinity::CoreId;
-use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
-use numpy::{IntoPyArray};
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, IntoPyDict};
+use crate::gym::{Action, Obss, Infos, Worker, WorkerMessage};
+use numpy::ndarray::{Array, Ix1, stack, Axis};
 use crossbeam::channel::{bounded, Sender, Receiver};
 
-// Basic types
-type Action = u16;
-type Obs = Array<f32, Ix3>;
-
 #[derive(Debug)]
-pub struct Infos {
-    pub pid: Array<u8, Ix1>,
-    pub eid: Array<usize, Ix1>,
-    pub legal_act: Array<bool, Ix2>,
-}
-impl IntoPy<PyObject> for Infos {
-    fn into_py(self, py: Python) -> PyObject {
-        let key_vals: Vec<(&str, PyObject)> = vec![
-            ("pid", self.pid.into_pyarray(py).to_object(py)),
-            ("eid", self.eid.into_pyarray(py).to_object(py)),
-            ("legal_act", self.legal_act.into_pyarray(py).to_object(py)),
-        ];
-        let dict = key_vals.into_py_dict(py);
-        dict.to_object(py)
-    }
+pub enum EnvsMessage {
+    Reset{eid: usize},
+    Step{eid: usize, act: Action},
+    Render{eid: usize},
+    Close{eid: usize},
+    Shutdown,
 }
 
 /// The Environment
@@ -36,7 +18,7 @@ pub struct Envs {
     num_envs_per_worker: usize,
     num_pending_request: usize,
     workers: Vec<Worker>,
-    workers_channels: Vec<Sender<MasterMessage>>,
+    workers_channels: Vec<Sender<EnvsMessage>>,
     master_channel: Receiver<WorkerMessage>,
 }
 
@@ -79,12 +61,12 @@ impl Envs {
     }
 
     /// Reset env
-    pub fn reset(&mut self) -> (Array<f32, Ix4>, Infos) {
+    pub fn reset(&mut self) -> (Obss, Infos) {
         // Send
         for (cid, c) in self.workers_channels.iter().enumerate() {
             for local_eid in 0..self.num_envs_per_worker {
                 let eid = local_eid + cid * self.num_envs_per_worker;
-                if c.try_send(MasterMessage::Reset{eid: eid}).is_err() {
+                if c.try_send(EnvsMessage::Reset{eid: eid}).is_err() {
                     panic!("Error sending message RESET to worker");
                 }
             }
@@ -123,12 +105,12 @@ impl Envs {
     }
 
     /// Execute next action
-    pub fn step(&mut self, acts: Vec<(usize, Action)>, num_wait: usize) -> (Array<f32, Ix4>, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
+    pub fn step(&mut self, acts: Vec<(usize, Action)>, num_wait: usize) -> (Obss, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
         // Send
         for (eid, act) in acts {
             let cid = eid / self.num_envs_per_worker;
             let c = &self.workers_channels[cid];
-            if c.try_send(MasterMessage::Step{eid: eid, act: act}).is_err() {
+            if c.try_send(EnvsMessage::Step{eid: eid, act: act}).is_err() {
                 panic!("Error sending message STEP to worker");
             } else {
                 self.num_pending_request += 1;
@@ -177,7 +159,7 @@ impl Envs {
         for (cid, c) in self.workers_channels.iter().enumerate() {
             for local_eid in 0..self.num_envs_per_worker {
                 let eid = local_eid + cid * self.num_envs_per_worker;
-                if c.try_send(MasterMessage::Render{eid: eid}).is_err() {
+                if c.try_send(EnvsMessage::Render{eid: eid}).is_err() {
                     panic!("Error sending message RENDER to worker");
                 }
             }
@@ -191,125 +173,12 @@ impl Envs {
     // Close environment
     pub fn close(&mut self) {
         for (cid, c) in self.workers_channels.iter().enumerate() {
-            if c.try_send(MasterMessage::Shutdown).is_err() {
+            if c.try_send(EnvsMessage::Shutdown).is_err() {
                 panic!("Error sending message SHUTDOWN to worker");
             }
         }
         for worker in self.workers.iter_mut() {
             worker.close();
-        }
-    }
-}
-
-
-#[derive(Debug)]
-enum MasterMessage {
-    Reset{eid: usize},
-    Step{eid: usize, act: Action},
-    Render{eid: usize},
-    Close{eid: usize},
-    Shutdown,
-}
-
-#[derive(Debug)]
-struct WorkerMessage {
-    obs: Obs,
-    rew: Option<f32>,
-    done: Option<bool>,
-    info: Info,
-    eid: usize,
-}
-
-struct Worker {
-    id: usize,
-    thread: Option<thread::JoinHandle<()>>,
-}
-
-impl Worker {
-    fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<MasterMessage>, out_channel: Sender<WorkerMessage>, core_id: Option<CoreId>, size: u8) -> Worker {
-        let eid_start = id * num_envs_per_worker;
-
-        let thread = thread::spawn(move || {
-            // Set core affinity
-            if let Some(core_id) = core_id {
-                core_affinity::set_for_current(core_id);
-            }
-
-            let mut envs = vec![Env::new(size); num_envs_per_worker];
-
-            loop {
-                if let Ok(message) = in_channel.recv() {
-                    match message {
-                        MasterMessage::Reset{eid} => {
-                            // Reset
-                            let local_eid = eid - eid_start;
-                            let (obs, info) = envs[local_eid].reset();
-                            let msg = WorkerMessage{
-                                obs,
-                                rew: None,
-                                done: None,
-                                info,
-                                eid,
-                            };
-
-                            // Send
-                            if out_channel.try_send(msg).is_err() {
-                                panic!("Error sending message to master");
-                            }
-                        },
-                        MasterMessage::Step{eid, act} => {
-                            // Step
-                            let local_eid = eid - eid_start;
-                            let (mut obs, rew, done, mut info) = envs[local_eid].step(act);
-
-                            if done {
-                                let result = envs[local_eid].reset();
-                                obs = result.0;
-                                info = result.1;
-                            }
-                            let msg = WorkerMessage{
-                                obs,
-                                rew: Some(rew),
-                                done: Some(done),
-                                info,
-                                eid,
-                            };
-
-                            // Send
-                            if out_channel.try_send(msg).is_err() {
-                                panic!("Error sending message to master");
-                            }
-                        },
-                        MasterMessage::Render{eid} => {
-                            // Render
-                            let local_eid = eid - eid_start;
-                            println!("Render Env ID: {}\n{}", eid, envs[local_eid].to_string());
-                        },
-                        MasterMessage::Close{eid} => {
-                            // Close
-                            let local_eid = eid - eid_start;
-                            envs[local_eid].close();
-                        },
-                        MasterMessage::Shutdown => {
-                            for env in envs.iter_mut() {
-                                env.close();
-                            }
-                            break;
-                        },
-                    }
-                }
-            }
-        });
-
-        Worker {
-            id,
-            thread: Some(thread),
-        }
-    }
-
-    pub fn close(&mut self) {
-        if let Some(handle) = self.thread.take() {
-            handle.join().expect("Could not join env worker thread!");
         }
     }
 }

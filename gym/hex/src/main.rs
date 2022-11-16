@@ -1,4 +1,4 @@
-use hexgame::{Envs};
+use hexgame::gym::{Envs};
 use rand::seq::SliceRandom;
 use std::time::{Duration, Instant};
 

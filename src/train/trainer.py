@@ -36,7 +36,10 @@ class Trainer(ABC):
 
         self.config = config
         self.device = config["device"]
-        self.envs = Envs(config)
+        #self.envs = Envs(config)
+        num_workers = config["num_cpus"]
+        num_envs_per_worker = config["num_envs_per_worker"]
+        self.envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, size=config["env"].size)
         self.policy = None
         self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
         self.save_paths = []

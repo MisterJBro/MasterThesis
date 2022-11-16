@@ -1,4 +1,4 @@
-use crate::{Env, Envs, Action, Obs, Info, Infos};
+use crate::gym::{Env, Envs, Action, Obs, Info, Infos};
 use numpy::ToPyArray;
 use numpy::{PyArray1, PyArray3, PyArray4};
 use pyo3::prelude::*;
@@ -89,6 +89,7 @@ impl PyEnvs {
     }
 
     /// Execute the current actions and update the board
+    #[args(num_waits="1")]
     fn step<'py>(&mut self, py: Python<'py>, act: Vec<(usize, u16)>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
         let (obs, rew, done, info) = self.0.step(act, num_waits);
         (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), info)
