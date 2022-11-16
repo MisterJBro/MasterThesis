@@ -1,4 +1,4 @@
-use crate::gym::{Action, Collector, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
+use crate::gym::{Action, Collector, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
 use numpy::ndarray::{Array, Ix1, stack, Axis};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
 
@@ -17,7 +17,7 @@ pub struct Envs {
 }
 
 impl Envs {
-    pub fn new(num_workers: usize, num_envs_per_worker: usize, mut core_pinning: bool, size: u8) -> Envs {
+    pub fn new(num_workers: usize, num_envs_per_worker: usize, mut core_pinning: bool, max_len: usize, size: u8) -> Envs {
         let num_envs = num_workers * num_envs_per_worker;
         let mut workers = Vec::with_capacity(num_workers);
         let mut workers_ins = Vec::with_capacity(num_workers);
@@ -41,13 +41,13 @@ impl Envs {
                 None
             };
 
-            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), core_id, size));
+            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), max_len, core_id, size));
         }
 
         // Collector
-        let (collector_in, master_out) = bounded(num_envs*16);
+        let (collector_in, master_out) = bounded(num_envs*4);
         let (master_in, collector_out) = bounded(num_envs);
-        let collector = Collector::new(master_out, master_in);
+        let collector = Collector::new(num_envs, max_len, master_out, master_in);
 
         Envs {
             num_envs,
@@ -70,14 +70,16 @@ impl Envs {
                 let eid = local_eid + cid * self.num_envs_per_worker;
                 if c.try_send(WorkerMessageIn::Reset{eid: eid}).is_err() {
                     panic!("Error sending message RESET to worker");
+                } else {
+                    self.num_pending_request += 1;
                 }
             }
         }
-        if self.collector_in.try_send(CollectorMessageIn::Clear).is_err() {
+        /*if self.collector_in.try_send(CollectorMessageIn::Clear).is_err() {
             panic!("Error sending message CLEAR to collector");
-        }
+        }*/
 
-        // Receive
+        // Receive (All)
         let mut msgs = Vec::with_capacity(self.num_envs);
         for _ in 0..self.num_envs {
             match self.workers_out.recv() {
@@ -87,27 +89,32 @@ impl Envs {
                 _ => panic!("Error receiving message RESET from worker"),
             }
         }
+        let num_msgs = msgs.len();
+        self.num_pending_request -= num_msgs;
         msgs.sort_by_key(|m| m.eid);
 
         // Process
-        let mut obs = Vec::with_capacity(self.num_envs);
-        let mut pid = Vec::with_capacity(self.num_envs);
-        let mut legal_act = Vec::with_capacity(self.num_envs);
+        let mut obs = Vec::with_capacity(num_msgs);
+        let mut pid = Vec::with_capacity(num_msgs);
+        let mut eid = Vec::with_capacity(num_msgs);
+        let mut legal_act = Vec::with_capacity(num_msgs);
         for msg in msgs.into_iter() {
-            // Collect
-            if self.collector_in.try_send(CollectorMessageIn::Add { sample: msg.clone() }).is_err() {
-                panic!("Error sending message ADD to collector");
-            }
+            /* Collect
+            if self.collector_in.try_send(CollectorMessageIn::AddMsg {msg: msg.clone()}).is_err() {
+                panic!("Error sending message ADD Msg to collector");
+            }*/
 
             obs.push(msg.obs);
             pid.push(msg.info.pid);
+            eid.push(msg.eid);
             legal_act.push(msg.info.legal_act);
         }
+
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
 
         // Create info
         let pid = Array::from_vec(pid);
-        let eid = Array::from_iter(0..self.num_envs);
+        let eid = Array::from_vec(eid);
         let legal_act = stack(Axis(0), &legal_act.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
         let info = Infos{pid, eid, legal_act};
 
@@ -127,6 +134,11 @@ impl Envs {
             }
         }
 
+        /*  Collect Actions
+        if self.collector_in.try_send(CollectorMessageIn::AddAct { act: acts }).is_err() {
+            panic!("Error sending message ADD Action to collector");
+        }*/
+
         // Receive
         let num_wait = num_wait.min(self.num_pending_request);
         while self.workers_out.len() < num_wait { }
@@ -144,10 +156,10 @@ impl Envs {
         let mut legal_act = Vec::with_capacity(num_msgs);
 
         for msg in msgs.into_iter() {
-            // Collect
-            if self.collector_in.try_send(CollectorMessageIn::Add { sample: msg.clone() }).is_err() {
-                panic!("Error sending message ADD to collector");
-            }
+            /*  Collect
+            if self.collector_in.try_send(CollectorMessageIn::AddMsg {msg: msg.clone()}).is_err() {
+                panic!("Error sending message ADD MSG to collector");
+            }*/
 
             obs.push(msg.obs);
             rews.push(msg.rew.unwrap());
@@ -156,6 +168,7 @@ impl Envs {
             eid.push(msg.eid);
             legal_act.push(msg.info.legal_act);
         }
+
         // To ndarray
         let obs = stack(Axis(0), &obs.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
         let rews = Array::from_vec(rews);

@@ -77,9 +77,9 @@ pub struct PyEnvs(pub Envs);
 #[pymethods]
 impl PyEnvs {
     #[new]
-    #[args(num_workers="2", num_envs_per_worker = "2", core_pinning="false", size="9")]
-    pub fn new(num_workers: usize, num_envs_per_worker: usize, core_pinning: bool, size: u8) -> PyEnvs {
-        PyEnvs(Envs::new(num_workers, num_envs_per_worker, core_pinning, size))
+    #[args(num_workers="2", num_envs_per_worker = "2", core_pinning="false", max_len="81", size="9")]
+    pub fn new(num_workers: usize, num_envs_per_worker: usize, core_pinning: bool, max_len: usize, size: u8) -> PyEnvs {
+        PyEnvs(Envs::new(num_workers, num_envs_per_worker, core_pinning, max_len, size))
     }
 
     /// Reset the environment

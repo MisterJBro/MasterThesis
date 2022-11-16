@@ -2,7 +2,7 @@
 use std::thread;
 use core_affinity::CoreId;
 use crossbeam::channel::{Sender, Receiver};
-use crate::gym::{Action, Obs, Info, Env};
+use crate::gym::{Action, Obs, Info, Env, Episode};
 
 
 // Worker Messages
@@ -29,8 +29,9 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, core_id: Option<CoreId>, size: u8) -> Worker {
+    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, max_len: usize, core_id: Option<CoreId>, size: u8) -> Worker {
         let eid_start = id * num_envs_per_worker;
+        let mut episodes = vec![Some(Episode::new(max_len)); num_envs_per_worker];
 
         let thread = thread::spawn(move || {
             // Set core affinity
@@ -48,10 +49,10 @@ impl Worker {
                             let local_eid = eid - eid_start;
                             let (obs, info) = envs[local_eid].reset();
                             let msg = WorkerMessageOut{
-                                obs,
+                                obs: obs.clone(),
                                 rew: None,
                                 done: None,
-                                info,
+                                info: info.clone(),
                                 eid,
                             };
 
@@ -59,28 +60,66 @@ impl Worker {
                             if out_channel.try_send(msg).is_err() {
                                 panic!("Error sending message to master");
                             }
+
+                            // Collect
+                            let episode = episodes[local_eid].as_mut().expect("Reset episode is None, but should always be some");
+                            episode.clear();
+                            episode.obs.push(obs);
+                            episode.pid.push(info.pid);
+                            episode.legal_act.push(info.legal_act);
                         },
                         WorkerMessageIn::Step{eid, act} => {
                             // Step
                             let local_eid = eid - eid_start;
-                            let (mut obs, rew, done, mut info) = envs[local_eid].step(act);
+                            let (obs, rew, done, info) = envs[local_eid].step(act);
 
                             if done {
-                                let result = envs[local_eid].reset();
-                                obs = result.0;
-                                info = result.1;
-                            }
-                            let msg = WorkerMessageOut{
-                                obs,
-                                rew: Some(rew),
-                                done: Some(done),
-                                info,
-                                eid,
-                            };
+                                let (next_obs, next_info) = envs[local_eid].reset();
 
-                            // Send
-                            if out_channel.try_send(msg).is_err() {
-                                panic!("Error sending message to master");
+                                // Send
+                                if out_channel.try_send(WorkerMessageOut{
+                                    obs: next_obs.clone(),
+                                    rew: Some(rew.clone()),
+                                    done: Some(done.clone()),
+                                    info: next_info.clone(),
+                                    eid,
+                                }).is_err() {
+                                    panic!("Error sending message to master");
+                                }
+
+                                // Take episode, send to process and create new one
+                                let mut episode = episodes[local_eid].take().expect("Step episode is None, but should always be some");
+                                episode.obs.push(obs);
+                                episode.pid.push(info.pid);
+                                episode.act.push(act);
+                                episode.rew.push(rew);
+                                episode.done.push(done);
+                                episode.legal_act.push(info.legal_act);
+
+                                let mut new_episode = Episode::new(max_len);
+                                new_episode.obs.push(next_obs);
+                                new_episode.pid.push(next_info.pid);
+                                new_episode.legal_act.push(next_info.legal_act);
+                                episodes[local_eid] = Some(new_episode);
+                            } else {
+                                // Send
+                                if out_channel.try_send(WorkerMessageOut{
+                                    obs: obs.clone(),
+                                    rew: Some(rew.clone()),
+                                    done: Some(done.clone()),
+                                    info: info.clone(),
+                                    eid,
+                                }).is_err() {
+                                    panic!("Error sending message to master");
+                                }
+
+                                let episode = episodes[local_eid].as_mut().expect("Step episode is None, but should always be some");
+                                episode.obs.push(obs);
+                                episode.act.push(act);
+                                episode.rew.push(rew);
+                                episode.done.push(done);
+                                episode.pid.push(info.pid);
+                                episode.legal_act.push(info.legal_act);
                             }
                         },
                         WorkerMessageIn::Render{eid} => {

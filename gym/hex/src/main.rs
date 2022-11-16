@@ -6,7 +6,7 @@ fn main() {
     let num_cpus = 3;
     let num_envs_per_worker = 6;
     let size = 9;
-    let mut envs = Envs::new(num_cpus, num_envs_per_worker, false, size);
+    let mut envs = Envs::new(num_cpus, num_envs_per_worker, false, 10_000, size as u8);
     let start = Instant::now();
 
     let (obs, info) = envs.reset();
