@@ -90,11 +90,9 @@ impl Worker {
                                 // Take episode, send to process and create new one
                                 let mut episode = episodes[local_eid].take().expect("Step episode is None, but should always be some");
                                 episode.obs.push(obs);
-                                episode.pid.push(info.pid);
                                 episode.act.push(act);
                                 episode.rew.push(rew);
                                 episode.done.push(done);
-                                episode.legal_act.push(info.legal_act);
 
                                 episode.process(gamma);
                                 if eps_in.try_send(episode).is_err() {
