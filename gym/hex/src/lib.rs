@@ -91,7 +91,7 @@ pub use crate::edges::{CoordsOrEdge, Edge};
 pub use crate::errors::{InvalidBoard, InvalidMove};
 pub use crate::game::{Game, Status};
 pub use crate::serialize::Serialization;
-pub use crate::python::{PyEnv, PyEnvs};
+pub use crate::python::{PyEnv, PyEnvs, PyEpisode};
 use pyo3::prelude::*;
 
 /// Register rust translator functions
@@ -99,5 +99,6 @@ use pyo3::prelude::*;
 fn hexgame(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyEnv>()?;
     m.add_class::<PyEnvs>()?;
+    m.add_class::<PyEpisode>()?;
     Ok(())
 }

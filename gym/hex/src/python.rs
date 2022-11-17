@@ -1,9 +1,11 @@
-use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut};
+use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut, Episode};
 use numpy::ToPyArray;
-use numpy::{PyArray1, PyArray3, PyArray4};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArray4};
+use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict};
 use serde::{Deserialize, Serialize};
+
 
 /// Env Interface for use in Python
 #[pyclass(name = "RustEnv")]
@@ -77,9 +79,9 @@ pub struct PyEnvs(pub Envs);
 #[pymethods]
 impl PyEnvs {
     #[new]
-    #[args(num_workers="2", num_envs_per_worker = "2", core_pinning="false", max_len="81", size="9")]
-    pub fn new(num_workers: usize, num_envs_per_worker: usize, core_pinning: bool, max_len: usize, size: u8) -> PyEnvs {
-        PyEnvs(Envs::new(num_workers, num_envs_per_worker, core_pinning, max_len, size))
+    #[args(num_workers="2", num_envs_per_worker="2", core_pinning="false", gamma="1.0", max_len="81", size="9")]
+    pub fn new(num_workers: usize, num_envs_per_worker: usize, core_pinning: bool, gamma: f32, max_len: usize, size: u8) -> PyEnvs {
+        PyEnvs(Envs::new(num_workers, num_envs_per_worker, core_pinning, gamma, max_len, size))
     }
 
     /// Reset the environment
@@ -106,7 +108,68 @@ impl PyEnvs {
     }
 
     /// Get episodes
-    fn get_episodes(&self) -> Vec<usize> {
-        vec![]
+    fn get_episodes(&self) -> Vec<PyEpisode> {
+        let episodes = self.0.get_episodes();
+
+        episodes.into_iter().map(|eps| eps.to_python()).collect()
+    }
+}
+
+/// Python Episode Interface
+#[pyclass(name = "RustEpisode")]
+#[derive(Clone)]
+pub struct PyEpisode {
+    pub obs: Array<f32, Ix4>,
+    pub act: Array<u16, Ix1>,
+    pub rew: Array<f32, Ix1>,
+    pub done: Array<bool, Ix1>,
+    pub pid: Array<u8, Ix1>,
+    pub legal_act: Array<bool, Ix2>,
+    pub ret: Array<f32, Ix1>,
+}
+
+#[pymethods]
+impl PyEpisode {
+    #[getter]
+    fn obs<'py>(&self, py: Python<'py>) -> &'py PyArray4<f32> {
+        self.obs.to_pyarray(py)
+    }
+
+    #[getter]
+    fn act<'py>(&self, py: Python<'py>) -> &'py PyArray1<u16> {
+        self.act.to_pyarray(py)
+    }
+
+    #[getter]
+    fn rew<'py>(&self, py: Python<'py>) -> &'py PyArray1<f32> {
+        self.rew.to_pyarray(py)
+    }
+
+    #[getter]
+    fn done<'py>(&self, py: Python<'py>) -> &'py PyArray1<bool> {
+        self.done.to_pyarray(py)
+    }
+
+    #[getter]
+    fn pid<'py>(&self, py: Python<'py>) -> &'py PyArray1<u8> {
+        self.pid.to_pyarray(py)
+    }
+
+    #[getter]
+    fn legal_act<'py>(&self, py: Python<'py>) -> &'py PyArray2<bool> {
+        self.legal_act.to_pyarray(py)
+    }
+
+    #[getter]
+    fn ret<'py>(&self, py: Python<'py>) -> &'py PyArray1<f32> {
+        self.ret.to_pyarray(py)
+    }
+
+    fn __len__(&self) -> usize {
+        self.rew.shape()[0]
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Episode(steps={}, obs, act, rew, done, pid, legal_act, ret)", self.__len__())
     }
 }

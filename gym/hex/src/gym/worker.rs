@@ -29,7 +29,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, max_len: usize, core_id: Option<CoreId>, size: u8) -> Worker {
+    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, eps_in: Sender<Episode>, gamma: f32, max_len: usize, core_id: Option<CoreId>, size: u8) -> Worker {
         let eid_start = id * num_envs_per_worker;
         let mut episodes = vec![Some(Episode::new(max_len)); num_envs_per_worker];
 
@@ -95,6 +95,11 @@ impl Worker {
                                 episode.rew.push(rew);
                                 episode.done.push(done);
                                 episode.legal_act.push(info.legal_act);
+
+                                episode.process(gamma);
+                                if eps_in.try_send(episode).is_err() {
+                                    panic!("Error sending episode to master");
+                                }
 
                                 let mut new_episode = Episode::new(max_len);
                                 new_episode.obs.push(next_obs);
