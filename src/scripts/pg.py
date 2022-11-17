@@ -18,9 +18,10 @@ if __name__ == '__main__':
     config = create_config({
         "train_iters": 500,
         "env": env,
+        "max_len": size*size,
         "num_cpus": 3,
-        "num_envs": 30,
-        "sample_len": 1_000,
+        "num_envs": 3,
+        "sample_len": 100,
         "device": "cuda:0",
         "pi_lr": 6e-4,
         "pi_entropy": 0.0,

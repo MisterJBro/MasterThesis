@@ -20,8 +20,11 @@ fn main() {
         let (obs, rew, done, info) = envs.step(act, num_cpus*num_envs_per_worker);
         legal_act = info.legal_act;
     }
+    let eps = envs.get_episodes();
     let elapsed = start.elapsed();
     println!("Elapsed: {} ms", elapsed.as_millis());
+    println!("Num episodes: {}", eps.len());
+
 
     envs.close();
 }

@@ -36,10 +36,11 @@ class Trainer(ABC):
 
         self.config = config
         self.device = config["device"]
-        #self.envs = Envs(config)
         num_workers = config["num_cpus"]
         num_envs_per_worker = config["num_envs_per_worker"]
-        self.envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, size=config["env"].size)
+        size = config["env"].size
+        self.envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, gamma=config["gamma"], max_len=config["max_len"], size=size)
+        self.num_envs = config["num_envs"]
         self.policy = None
         self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
         self.save_paths = []
@@ -61,10 +62,10 @@ class Trainer(ABC):
             self.log("iter", iter)
 
             # Main
-            sample_batch, sample_time = measure_time(lambda: self.get_sample_batch())
+            eps, sample_time = measure_time(lambda: self.sample_sync())
             self.log("sample_time", sample_time)
 
-            _, update_time = measure_time(lambda: self.update(sample_batch))
+            _, update_time = measure_time(lambda: self.update(eps))
             self.log("update_time", update_time)
 
             # Self play test
@@ -75,7 +76,7 @@ class Trainer(ABC):
                 self.log("elo", elo)
 
             # Logging
-            self.log.update(sample_batch.metrics)
+            #self.log.update(eps.metrics)
             print(self.log)
             if self.config["log_to_file"]:
                 self.log.to_file()
@@ -84,7 +85,7 @@ class Trainer(ABC):
             self.checkpoint(iter)
 
     def checkpoint(self, iter):
-        last_path = f'{PROJECT_PATH}/checkpoints/policy_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_metric={self.log[self.config["log_main_metric"]]:.0f}.pt'
+        last_path = f'{PROJECT_PATH}/checkpoints/policy_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]]:.0f}.pt'
         self.save_paths.append(last_path)
         if len(self.save_paths) > self.config["num_checkpoints"]:
             path = self.save_paths.pop(0)
@@ -98,36 +99,38 @@ class Trainer(ABC):
     def update(self, sample_batch):
         pass
 
-    def get_sample_batch(self):
-        sample_batch = SampleBatch(self.config)
+    def sample_sync(self):
         obs, info = self.envs.reset()
-        pid = info["pid"]
-        legal_act = info["legal_act"]
 
         for _ in range(self.config["sample_len"]):
-            act, dist = self.get_action(obs, legal_actions=legal_act)
-            obs_next, rew, done, info = self.envs.step(act)
+            act, dist = self.get_action(self.policy, obs, info)
+            obs, rew, done, info = self.envs.step(act, num_waits=self.num_envs)
 
-            sample_batch.append(obs, act, rew, done, dist, pid, legal_act)
-            pid = info["pid"]
-            legal_act = info["legal_act"]
-            obs = obs_next
+        # Sync
+        self.envs.reset()
+        eps = self.envs.get_episodes()
 
-        sample_batch.set_last_obs(obs)
-        sample_batch = post_processing(self.policy, sample_batch, self.config)
-        return sample_batch
+        return eps
 
-    def get_action(self, obs, env_list=None, use_best=False, legal_actions=None):
+    def get_action(self, policy, obs, info, use_best=False):
         self.policy.eval()
+        legal_act = info["legal_act"]
+
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
-        with torch.no_grad():
-            dist = self.policy.get_dist(obs, legal_actions=legal_actions)
+        with torch.inference_mode():
+            dist = policy.get_dist(obs, legal_actions=legal_act)
         if use_best:
             act = dist.logits.argmax(-1)
         else:
             act = dist.sample()
+        act = act.cpu().numpy()
+        dist = dist.logits.cpu().numpy()
 
-        return act.cpu().numpy(), dist.logits.cpu().numpy()
+        if "eid" in info:
+            eid = info["eid"]
+            act = [(eid[i], act[i]) for i in range(len(act))]
+
+        return act, dist
 
     def test(self, render=True):
         if isinstance(self.config["env"], str):
@@ -164,7 +167,7 @@ class Trainer(ABC):
                 layer.reset_parameters()
 
         # Parameters
-        num_games = int(np.ceil(self.config["self_play_num_eval_games"]/self.config["num_envs"])) * self.config["num_envs"]
+        num_games = self.config["self_play_num_eval_games"]
 
         # Evaluate in parallel
         win_count = self.play_other(old_policy, num_games)
@@ -179,46 +182,49 @@ class Trainer(ABC):
         return win_rate, elo
 
     def play_other(self, other_policy, num_games):
-        curr_policy = deepcopy(self.policy)
         win_count = 0
 
-        for iter in range(int(num_games/self.config["num_envs"])):
+        for _ in range(int(num_games/self.config["num_envs"])):
             obs, info = self.envs.reset()
-            legal_act = info["legal_act"]
-            rews = np.zeros(self.config["num_envs"])
-            dones = np.full(self.config["num_envs"], False)
-            id = iter % 2
+            eid = info["eid"]
 
-            for i in range(self.config["eval_len"]):
-                # Set current policy
-                if i % 2 == id:
-                    self.policy = curr_policy
+            for i in range(self.config["max_len"]):
+                # Infos
+                pid = info["pid"]
+
+                # Current policy
+                if np.sum(pid == 0) == 0:
+                    act_self = []
                 else:
-                    self.policy = other_policy
+                    obs_self = obs[pid == 0]
+                    info_self = {k: v[pid == 0] for k, v in info.items()}
+                    act_self, _ = self.get_action(self.policy, obs_self, info_self)
 
-                # Get all current envs that are not done
-                env_list = self.envs.get_all_env()
-                env_list = [env_list[i] for i in range(len(env_list)) if not dones[i]]
+                #  Old policy
+                if np.sum(pid == 1) == 0:
+                    act_other = []
+                else:
+                    obs_other = obs[pid == 1]
+                    info_other = {k: v[pid == 1] for k, v in info.items()}
+                    act_other, _ = self.get_action(other_policy, obs_other, info_other)
+                act = act_self + act_other
 
-                # If envs finished -> action does not matter (less calculations)
-                act = np.zeros(self.config["num_envs"], dtype=np.int32)
-                act_calc, _ = self.get_action(obs[~dones], env_list=env_list, legal_actions=legal_act[~dones])
-                act[~dones] = act_calc
-                act_other = [np.arange(self.config["env"].size**2)[x][0] for x in list(compress(legal_act, dones))]
-                act[dones] = act_other
-                obs_next, rew, done, info = self.envs.step(act)
+                # Step
+                obs, rew, done, info = self.envs.step(act, num_waits=len(act))
 
-                # Add new information
-                legal_act = info["legal_act"]
-                if i % 2 == id:
-                    rews += rew * (1 - dones)
-                dones |= done
-                obs = obs_next
+                # Check winner
+                for i in range(len(done)):
+                    if done[i]:
+                        #eid[i]
+                        if pid[i] == 0:
+                            win_count += rew[i]
 
-                if dones.all():
+                # Remove all env that are finished
+                eid = info["eid"]
+                eid = eid[~done]
+                if len(eid) == 0:
                     break
 
-            win_count += np.sum(rews == 1)
         return win_count
 
     def save(self, path=None):

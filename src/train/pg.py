@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, ChainDataset, ConcatDataset, DataLoader
 import humanize
 import numpy as np
 from src.train.trainer import Trainer
 import os
+import time
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
@@ -61,57 +62,77 @@ class PGTrainer(Trainer):
 class PPOTrainer(PGTrainer):
     """ Train a policy using Proximal Policy Gradient."""
 
-    def update(self, sample_batch):
+    def update(self, eps):
         self.policy.train()
-        #self.policy.set_requires_grad(True)
-        data = sample_batch.to_tensor_dict()
-        obs = data["obs"]
-        act = data["act"]
-        ret = data["ret"]
-        val = data["val"]
-        legal_act = data["legal_act"]
-        adv = ret - val
-        data["adv"] = adv
+        start = time.time()
+
+        # Config
+        batch_size = 2048
+        device = self.config["device"]
+
+        # Get data
+        obs = torch.as_tensor(np.concatenate([e.obs for e in eps], 0))
+        act = torch.as_tensor(np.concatenate([e.act for e in eps], 0, dtype=np.int32))
+        ret = torch.as_tensor(np.concatenate([e.ret for e in eps], 0))
+        legal_act = torch.as_tensor(np.concatenate([e.legal_act for e in eps], 0))
+        num_batch_splits = np.ceil(obs.shape[0] / batch_size)
 
         # Policy loss
         trainset = TensorDataset(obs, act, legal_act)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
+        trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True)
 
-        # Get old log_p
+        # Get value and old log_p
         with torch.no_grad():
-            old_logp = []
-            for obs_batch, act_batch, legal_act_batch in trainloader:
-                old_logp_batch = self.policy.get_dist(obs_batch,  legal_actions=legal_act_batch).log_prob(act_batch)
-                old_logp.append(old_logp_batch)
-            old_logp = torch.cat(old_logp, 0)
+            logp = []
+            val = []
+            for obs_bt, act_bt, legal_act_bt in trainloader:
+                obs_bt = obs_bt.to(device)
+                act_bt = act_bt.to(device)
+                legal_act_bt = legal_act_bt.to(device)
 
-        trainset = TensorDataset(obs, act, adv, ret, old_logp, legal_act)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
+                dist_bt, val_bt = self.policy(obs_bt, legal_actions=legal_act_bt)
+                logp_bt = dist_bt.log_prob(act_bt)
+                logp.append(logp_bt)
+                val.append(val_bt)
+            old_logp = torch.cat(logp, 0).cpu()
+            val = torch.cat(val, 0).cpu()
+        #start = time.time()
+        #torch.cuda.synchronize()
+
+        # Advantage estimation
+        adv = ret - val
+
+        trainset = TensorDataset(obs, act, legal_act, ret, old_logp, adv)
+        trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True)
 
         # Minibatch training to fit on GPU memory
         for _ in range(self.config["ppo_iters"]):
             self.policy.optim.zero_grad(set_to_none=True)
-            for obs_batch, act_batch, adv_batch, ret_batch, old_logp_batch, legal_act_batch in trainloader:
+            for obs_bt, act_bt, legal_act_bt, ret_bt, old_logp_bt, adv_bt in trainloader:
+                obs_bt = obs_bt.to(device)
+                act_bt = act_bt.to(device)
+                legal_act_bt = legal_act_bt.to(device)
+                ret_bt = ret_bt.to(device)
+                old_logp_bt = old_logp_bt.to(device)
+                adv_bt = adv_bt.to(device)
+
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
-                    dist, val_batch = self.policy(obs_batch,  legal_actions=legal_act_batch)
+                    dist_bt, val_bt = self.policy(obs_bt, legal_actions=legal_act_bt)
 
                     # PPO loss
-                    logp = dist.log_prob(act_batch)
-                    ratio = torch.exp(logp - old_logp_batch)
-                    clipped = torch.clamp(ratio, 1-self.config["clip_ratio"], 1+self.config["clip_ratio"])*adv_batch
-                    loss_policy = -(torch.min(ratio*adv_batch, clipped)).mean()
-                    #kl_approx = (old_logp_batch - logp).mean().item()
-                    #if kl_approx > self.config["kl_approx_max"]:
-                    #    self.policy.set_requires_grad(False)
-                    loss_entropy = - dist.entropy().mean()
-                    loss_value = self.scalar_loss(val_batch, ret_batch)
+                    logp_bt = dist_bt.log_prob(act_bt)
+                    ratio = torch.exp(logp_bt - old_logp_bt)
+                    clipped = torch.clamp(ratio, 1-self.config["clip_ratio"], 1+self.config["clip_ratio"])*adv_bt
+                    loss_policy = -(torch.min(ratio*adv_bt, clipped)).mean()
+
+                    loss_entropy = - dist_bt.entropy().mean()
+                    loss_value = self.scalar_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
-                    loss /= self.config["num_batch_split"]
-                    #self.log("kl_approx", kl_approx)
-                    self.log("loss_entropy", loss_entropy.item())
+                    loss /= num_batch_splits
+
                     self.log("loss_policy", loss_policy.item())
+                    self.log("loss_entropy", loss_entropy.item())
                     self.log("loss_value", loss_value.item())
-                    #print("\t", np.round(loss_value.item(), 3))
 
                 # AMP loss backward
                 self.scaler.scale(loss).backward()

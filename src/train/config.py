@@ -13,11 +13,10 @@ DEFAULT_CONFIG = {
     "env": "CartPole-v1",
     "num_envs": 15,
     "sample_len": 1_000,
-    "eval_len": 81,
     "gamma": 1.0,
     "lam": 1.0,
     "seed": 0,
-    "test_len": 500,
+    "max_len": 81,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,
@@ -104,6 +103,7 @@ def compute_config(config):
     if num_envs != config["num_envs"]:
         print(f'Warning: Cannot equally distribute number of of envs: {config["num_envs"]} onto num_cpus: {config["num_cpus"]}. Setting num_envs to {num_envs}!')
         config["num_envs"] = num_envs
+    config["self_play_num_eval_games"] = int(np.ceil(config["self_play_num_eval_games"]/config["num_envs"])) * config["num_envs"]
 
     return config
 

@@ -83,8 +83,8 @@ impl Episode {
 
     /// Create new episodes by data augmenting the current one e.g. rotating the board
     pub fn create_augmented_eps(&self) -> Vec<Episode> {
-        /*let mut eps = Vec::new();
-        let mut obs = self.obs.clone();
+        let mut eps = Vec::new();
+        /*let mut obs = self.obs.clone();
         let mut act = self.act.clone();
         let mut rew = self.rew.clone();
         let mut done = self.done.clone();
@@ -121,8 +121,7 @@ impl Episode {
         act = act.iter().map(|x| x.flip_vert()).collect();
         legal_act = legal_act.iter().map(|x| x.flip_vert()).collect();
         eps.push(Episode{obs, act, rew, done, pid, legal_act, ret});
-
-        eps*/
-        vec![]
+        */
+        eps
     }
 }

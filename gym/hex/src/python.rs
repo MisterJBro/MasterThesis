@@ -170,6 +170,6 @@ impl PyEpisode {
     }
 
     fn __repr__(&self) -> String {
-        format!("RustEpisode(len={}, obs, act, rew, done, pid, legal_act, ret)", self.__len__())
+        format!("RustEpisode({})", self.__len__())
     }
 }

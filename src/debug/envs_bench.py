@@ -3,8 +3,6 @@ from src.env.hex import HexEnv
 from src.env.envs import Envs
 from hexgame import RustEnvs
 from src.train.config import create_config
-from src.env.sample_manager import SampleManager
-from torch.multiprocessing import Pipe
 import time
 import random
 import numpy as np
@@ -25,12 +23,7 @@ if __name__ == '__main__':
     num_workers = config["num_cpus"]
     num_envs_per_worker = config["num_envs_per_worker"]
     num_envs = config["num_envs"]
-    rust_envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, size=size)
-
-    # SampleManager
-    collector, channel = Pipe()
-    sample_manager = SampleManager(channel, config)
-    sample_manager.start()
+    rust_envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, gamma=config["gamma"], max_len=size*size, size=size)
 
     def python_mp():
         start = time.time()
@@ -58,23 +51,25 @@ if __name__ == '__main__':
 
         for _ in range(config["sample_len"]):
             act = [(eid[i], random.choice(np.arange(size*size)[legal_act[i]])) for i in range(len(legal_act))]
-            obs_next, rew, done, info = rust_envs.step(act, num_waits=1)
+            obs_next, rew, done, info = rust_envs.step(act, num_waits=config["num_cpus"]*config["num_envs_per_worker"])
 
-            #collector.send((obs_next, rew, done, info))
             pid = info["pid"]
             eid = info["eid"]
             legal_act = info["legal_act"]
             obs = obs_next
 
+        rust_envs.reset()
+        eps = rust_envs.get_episodes()
+        #print(eps)
+
         end = time.time()
         return end-start
 
     # Measure time
-    #time_needed = python_mp()
-    #print(f"Python time taken: {time_needed:.02f}s")
+    time_needed = python_mp()
+    print(f"Python time taken: {time_needed:.02f}s")
     time_needed = rust()
     print(f"Rust time taken: {time_needed:.02f}s")
 
     envs.close()
     rust_envs.close()
-    sample_manager.join()

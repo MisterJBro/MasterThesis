@@ -17,3 +17,12 @@ maturin develop --release
 
 # Ubuntu:
 # RUSTFLAGS="-Cprofile-generate=.\pgo-data" cargo build --release
+
+# from hexgame import RustEnvs
+# envs = RustEnvs(num_workers=2, num_envs_per_worker=1, max_len=4, size=2)
+# envs.reset()
+# envs.render()
+# envs.step([(0,0), (1,0)], num_waits=2)
+# envs.step([(0,1), (1,3)], num_waits=2)
+# envs.step([(0,2), (1,2)], num_waits=2)
+# eps = envs.get_episodes()
