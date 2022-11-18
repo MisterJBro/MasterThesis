@@ -19,7 +19,6 @@ class PGTrainer(Trainer):
         self.policy = policy
 
     def update(self, sample_batch):
-        self.policy.train()
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]
         act = data["act"]
@@ -63,7 +62,6 @@ class PPOTrainer(PGTrainer):
     """ Train a policy using Proximal Policy Gradient."""
 
     def update(self, eps):
-        self.policy.train()
         start = time.time()
 
         # Config
