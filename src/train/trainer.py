@@ -64,18 +64,18 @@ class Trainer(ABC):
 
             # Main
             eps, sample_time = measure_time(lambda: self.sample_sync())
-            self.log("sample_time", sample_time)
+            self.log("sample_t", sample_time, 's')
 
             self.pre_update()
             _, update_time = measure_time(lambda: self.update(eps))
-            self.log("update_time", update_time)
+            self.log("update_t", update_time, 's')
 
             # Self play test
             self.policy.eval()
             if self.config["num_players"] > 1:
                 (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
-                self.log("eval_time", eval_time)
-                self.log("win_rate", win_rate)
+                self.log("eval_t", eval_time, 's')
+                self.log("win_rate", win_rate, '%')
                 self.log("elo", elo)
 
             # Logging
@@ -89,15 +89,15 @@ class Trainer(ABC):
 
     def checkpoint(self, iter):
         dir_path = f'{PROJECT_PATH}/checkpoints/'
-        name = f'p_{iter}_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]]:.0f}.pt'
+        name = f'p_{iter}_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]][0]:.0f}.pt'
         next_path = dir_path + name
         self.save_paths.append(next_path)
-        #if len(self.save_paths) > self.config["num_checkpoints"]:
-        #    last_path = self.save_paths.pop(0)
-        #    if os.path.isfile(last_path):
-        #        os.remove(last_path)
-        #    else:
-        #        print("Warning: %s checkpoint not found" % last_path)
+        if len(self.save_paths) > self.config["num_checkpoints"]:
+            last_path = self.save_paths.pop(0)
+            if os.path.isfile(last_path):
+                os.remove(last_path)
+            else:
+                print("Warning: %s checkpoint not found" % last_path)
         self.save(path=next_path)
 
     def pre_update(self):
@@ -115,10 +115,9 @@ class Trainer(ABC):
 
     # Sample Policies for use in Self Play
     def sample_policies(self):
-        max_policies = 4
         if len(self.save_paths[:-1]) > 0:
             # Adding new policies
-            if len(self.policies) < max_policies:
+            if len(self.policies) < self.config["sp_sampled_policies"]:
                 new_policy = deepcopy(self.policy)
                 new_policy.eval()
                 self.policies.append(new_policy)
@@ -137,13 +136,13 @@ class Trainer(ABC):
         if len(self.policies) > 1:
             policy_mapping[::2, 1] = 1
             policy_mapping[1::2, 0] = 1
-        should_switch = self.num_envs % 2 == 0
 
         # Metrics
         num_games = 0
         num_wins = np.zeros(len(self.policies), dtype=np.int32)
         last_pol_id = np.zeros(self.num_envs, dtype=np.int32)
         game_hist = {}
+        game_rates = {}
 
         # Reset
         obs, info = self.envs.reset()
@@ -172,7 +171,9 @@ class Trainer(ABC):
                     if bool(random.getrandbits(1)):
                         policy_mapping[i] = policy_mapping[i][::-1]
                     game_hist[tuple(policy_mapping[i].tolist())] = game_hist.get(tuple(policy_mapping[i].tolist()), 0) + 1
+                    game_rates[tuple(policy_mapping[i].tolist())] = game_rates.get(tuple(policy_mapping[i].tolist()), 0) + rew[i]
 
+        #print(game_hist)
         # Sync
         self.envs.reset()
         eps = self.envs.get_episodes()
@@ -265,14 +266,14 @@ class Trainer(ABC):
                 layer.reset_parameters()
 
         # Parameters
-        num_games = self.config["self_play_num_eval_games"]
+        num_games = self.config["sp_num_eval_games"]
 
         # Evaluate in parallel
         win_count = self.play_other(old_policy, num_games)
         win_rate = win_count/num_games * 100.0
-        if win_rate > self.config["self_play_update_win_rate"]:
+        if win_rate > self.config["sp_update_win_rate"]:
             last_elo = self.elos[-1]
-            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["self_play_elo_k"])
+            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
             self.elos.append(elo)
         else:
             self.policy = old_policy

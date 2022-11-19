@@ -58,8 +58,6 @@ class PPOTrainer(PGTrainer):
     """ Train a policy using Proximal Policy Gradient."""
 
     def update(self, eps):
-        start = time.time()
-
         # Config
         batch_size = 2048
         device = self.config["device"]
@@ -131,9 +129,9 @@ class PPOTrainer(PGTrainer):
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= num_batch_splits
 
-                    self.log("loss_policy", loss_policy.item())
-                    self.log("loss_entropy", loss_entropy.item())
-                    self.log("loss_value", loss_value.item())
+                    self.log("loss_pi", loss_policy.item(), show=False)
+                    self.log("loss_entr", loss_entropy.item(), show=True)
+                    self.log("loss_v", loss_value.item(), show=False)
 
                 # AMP loss backward
                 self.scaler.scale(loss).backward()

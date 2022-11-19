@@ -13,7 +13,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 8
+    size = 9
     env = HexEnv(size)
     config = create_config({
         "train_iters": 500,
@@ -31,11 +31,11 @@ if __name__ == '__main__':
         "vf_scale": 1.0,
         "clip_ratio": 0.2,
         "num_batch_split": 4,
-        "self_play_num_eval_games": 100,
-        "self_play_update_win_rate": 0,
+        "sp_num_eval_games": 100,
+        "sp_update_win_rate": 0,
         "use_se": True,
         "log_main_metric": "win_rate",
-        "num_checkpoints": 10,
+        "num_checkpoints": 200,
     })
 
     # Import policy and model

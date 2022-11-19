@@ -101,14 +101,14 @@ class PythonTrainer(Trainer):
                 layer.reset_parameters()
 
         # Parameters
-        num_games = int(np.ceil(self.config["self_play_num_eval_games"]/self.config["num_envs"])) * self.config["num_envs"]
+        num_games = int(np.ceil(self.config["sp_num_eval_games"]/self.config["num_envs"])) * self.config["num_envs"]
 
         # Evaluate in parallel
         win_count = self.play_other(old_policy, num_games)
         win_rate = win_count/num_games * 100.0
-        if win_rate > self.config["self_play_update_win_rate"]:
+        if win_rate > self.config["sp_update_win_rate"]:
             last_elo = self.elos[-1]
-            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["self_play_elo_k"])
+            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
             self.elos.append(elo)
         else:
             self.policy = old_policy

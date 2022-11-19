@@ -57,9 +57,10 @@ DEFAULT_CONFIG = {
     "pgs_trunc_len": 10,
 
     # === Self play ===
-    "self_play_elo_k": 30,
-    "self_play_num_eval_games": 210,
-    "self_play_update_win_rate": 53,
+    "sp_elo_k": 30,
+    "sp_num_eval_games": 210,
+    "sp_update_win_rate": 53,
+    "sp_sampled_policies": 4,
 
     # === Policy Gradients ===
     "pg_iters": 4,
@@ -103,7 +104,7 @@ def compute_config(config):
     if num_envs != config["num_envs"]:
         print(f'Warning: Cannot equally distribute number of of envs: {config["num_envs"]} onto num_cpus: {config["num_cpus"]}. Setting num_envs to {num_envs}!')
         config["num_envs"] = num_envs
-    config["self_play_num_eval_games"] = int(np.ceil(config["self_play_num_eval_games"]/config["num_envs"])) * config["num_envs"]
+    config["sp_num_eval_games"] = int(np.ceil(config["sp_num_eval_games"]/config["num_envs"])) * config["num_envs"]
 
     return config
 

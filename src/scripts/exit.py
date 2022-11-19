@@ -34,7 +34,7 @@ if __name__ == '__main__':
         "sample_len": 100,
         "search_return_adv": True,
         "log_name": f"9x9exit_log.txt",
-        "self_play_num_eval_games": 100,
+        "sp_num_eval_games": 100,
     })
 
     # Import policy and model

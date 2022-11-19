@@ -28,7 +28,7 @@ def objective(params):
         "num_cpus": 15,
         "num_envs": 120,
         "device": "cuda:0",
-        "self_play_num_eval_games": 240,
+        "sp_num_eval_games": 240,
         "num_batch_split": num_batch_split,
         "grad_clip": 100.0,
         "log_to_writer": False,
