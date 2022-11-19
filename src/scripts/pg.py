@@ -21,7 +21,7 @@ if __name__ == '__main__':
         "max_len": size*size,
         "num_cpus": 3,
         "num_envs": 3,
-        "sample_len": 100,
+        "sample_len": 1_000,
         "device": "cuda:0",
         "pi_lr": 6e-4,
         "pi_entropy": 0.0,
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         "self_play_update_win_rate": 0,
         "use_se": True,
         "log_main_metric": "win_rate",
-        "num_checkpoints": 500,
+        "num_checkpoints": 10,
     })
 
     # Import policy and model

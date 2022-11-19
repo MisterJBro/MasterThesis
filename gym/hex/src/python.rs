@@ -92,8 +92,8 @@ impl PyEnvs {
 
     /// Execute the current actions and update the board
     #[args(num_waits="1")]
-    fn step<'py>(&mut self, py: Python<'py>, act: Vec<(usize, u16)>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
-        let (obs, rew, done, info) = self.0.step(act, num_waits);
+    fn step<'py>(&mut self, py: Python<'py>, act: Vec<Action>, eid: Vec<usize>, pol_id: Vec<usize>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
+        let (obs, rew, done, info) = self.0.step(act, eid, pol_id, num_waits);
         (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), info)
     }
 
@@ -125,6 +125,7 @@ pub struct PyEpisode {
     pub done: Array<bool, Ix1>,
     pub pid: Array<u8, Ix1>,
     pub legal_act: Array<bool, Ix2>,
+    pub pol_id: Array<usize, Ix1>,
     pub ret: Array<f32, Ix1>,
 }
 
@@ -158,6 +159,11 @@ impl PyEpisode {
     #[getter]
     fn legal_act<'py>(&self, py: Python<'py>) -> &'py PyArray2<bool> {
         self.legal_act.to_pyarray(py)
+    }
+
+    #[getter]
+    fn pol_id<'py>(&self, py: Python<'py>) -> &'py PyArray1<usize> {
+        self.pol_id.to_pyarray(py)
     }
 
     #[getter]

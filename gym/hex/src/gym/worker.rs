@@ -9,7 +9,7 @@ use crate::gym::{Action, Obs, Info, Env, Episode};
 #[derive(Debug)]
 pub enum WorkerMessageIn {
     Reset{eid: usize},
-    Step{eid: usize, act: Action},
+    Step{act: Action, eid: usize, pol_id: usize},
     Render{eid: usize},
     Close{eid: usize},
     Shutdown,
@@ -68,7 +68,7 @@ impl Worker {
                             episode.pid.push(info.pid);
                             episode.legal_act.push(info.legal_act);
                         },
-                        WorkerMessageIn::Step{eid, act} => {
+                        WorkerMessageIn::Step{act, eid, pol_id} => {
                             // Step
                             let local_eid = eid - eid_start;
                             let (obs, rew, done, info) = envs[local_eid].step(act);
@@ -89,10 +89,10 @@ impl Worker {
 
                                 // Take episode, send to process and create new one
                                 let mut episode = episodes[local_eid].take().expect("Step episode is None, but should always be some");
-                                //episode.obs.push(obs);
                                 episode.act.push(act);
                                 episode.rew.push(rew);
                                 episode.done.push(done);
+                                episode.pol_id.push(pol_id);
 
                                 episode.process(gamma);
                                 if eps_in.try_send(episode).is_err() {
@@ -121,6 +121,7 @@ impl Worker {
                                 episode.act.push(act);
                                 episode.rew.push(rew);
                                 episode.done.push(done);
+                                episode.pol_id.push(pol_id);
                                 episode.pid.push(info.pid);
                                 episode.legal_act.push(info.legal_act);
                             }

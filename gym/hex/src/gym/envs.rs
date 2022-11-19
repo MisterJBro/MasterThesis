@@ -1,6 +1,7 @@
 use crate::gym::{Action, Collector, Episode, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
 use numpy::ndarray::{Array, Ix1, stack, Axis};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
+use itertools::izip;
 
 /// The Environment
 #[derive()]
@@ -117,12 +118,12 @@ impl Envs {
     }
 
     /// Execute next action
-    pub fn step(&mut self, acts: Vec<(usize, Action)>, num_wait: usize) -> (Obss, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
+    pub fn step(&mut self, act: Vec<Action>, eid: Vec<usize>, pol_id: Vec<usize>, num_wait: usize) -> (Obss, Array<f32, Ix1>, Array<bool, Ix1>, Infos)  {
         // Send
-        for (eid, act) in acts {
-            let cid = eid / self.num_envs_per_worker;
+        for (a, e, p) in izip!(&act, &eid, &pol_id) {
+            let cid = e / self.num_envs_per_worker;
             let c = &self.workers_ins[cid];
-            if c.try_send(WorkerMessageIn::Step{eid: eid, act: act}).is_err() {
+            if c.try_send(WorkerMessageIn::Step{act: *a, eid: *e, pol_id: *p}).is_err() {
                 panic!("Error sending message STEP to worker");
             } else {
                 self.num_pending_request += 1;

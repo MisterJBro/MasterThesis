@@ -73,6 +73,13 @@ class PPOTrainer(PGTrainer):
         act = torch.as_tensor(np.concatenate([e.act for e in eps], 0, dtype=np.int32))
         ret = torch.as_tensor(np.concatenate([e.ret for e in eps], 0))
         legal_act = torch.as_tensor(np.concatenate([e.legal_act for e in eps], 0))
+
+        # Filter by policies
+        pol_id = torch.as_tensor(np.concatenate([e.pol_id for e in eps], 0, dtype=np.int32))
+        obs = obs[pol_id == 0]
+        act = act[pol_id == 0]
+        ret = ret[pol_id == 0]
+        legal_act = legal_act[pol_id == 0]
         num_batch_splits = np.ceil(obs.shape[0] / batch_size)
 
         # Policy loss

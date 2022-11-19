@@ -110,15 +110,16 @@ class Trainer(ABC):
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
         policies = [self.policy, old_policy]
-        policy_mapping = np.zeros((self.num_envs, 2))
+        policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
         #policy_mapping[::2, 1] = 1
         #policy_mapping[1::2, 0] = 1
         obs, info = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            #act, dist = self.get_action(self.policy, obs, info)
-            act = self.get_different_actions(policies, policy_mapping, obs, info)
-            next_obs, rew, done, next_info = self.envs.step(act, num_waits=self.num_envs)
+            act, eid, pol_id = self.get_different_actions(policies, policy_mapping, obs, info)
+            # possible act = self.get_different_actions(...)
+            # self.envs.step(*act) # python spread operator
+            next_obs, rew, done, next_info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
 
             # done
             info = next_info
@@ -144,8 +145,7 @@ class Trainer(ABC):
         dist = dist.logits.cpu().numpy()
 
         if "eid" in info:
-            eid = info["eid"]
-            act = [(eid[i], act[i]) for i in range(len(act))]
+            return act, dist, info["eid"]
 
         return act, dist
 
@@ -158,7 +158,7 @@ class Trainer(ABC):
         pol_id = mapping[eid, pid]
 
         # CUDA inference (async)
-        eids, dists = [], []
+        eids, dists, pol_ids = [], [], []
         for p, policy in enumerate(policies):
             is_p = pol_id == p
             if np.sum(is_p) > 0:
@@ -168,17 +168,22 @@ class Trainer(ABC):
                     dist_p = policy.get_dist(obs_p, legal_actions=legal_act_p)
                 dists.append(dist_p)
                 eids.append(eid[is_p])
+                pol_ids.append(np.full(np.sum(is_p), p))
 
         # Build actions
         act = []
-        for eid_p, dist_p in zip(eids, dists):
+        eid = []
+        pol_id = []
+        for eid_p, dist_p, pol_id_p in zip(eids, dists, pol_ids):
             if use_best:
                 act_p = dist_p.logits.argmax(-1)
             else:
                 act_p = dist_p.sample()
-            act_p = [(eid_p[i], act_p[i].cpu().numpy().item()) for i in range(len(act_p))]
+            act_p = [a.cpu().numpy().item() for a in act_p]
             act += act_p
-        return act
+            eid.append(eid_p)
+            pol_id.append(pol_id_p)
+        return act, np.concatenate(eid, 0), np.concatenate(pol_id, 0)
 
     def test(self, render=True):
         if isinstance(self.config["env"], str):
@@ -233,7 +238,7 @@ class Trainer(ABC):
         win_count = 0
         # Policy mapping
         policies = [self.policy, other_policy]
-        policy_mapping = np.zeros((self.num_envs, 2))
+        policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
         policy_mapping[::2, 1] = 1
         policy_mapping[1::2, 0] = 1
 
@@ -242,10 +247,10 @@ class Trainer(ABC):
 
             for i in range(self.config["max_len"]):
                 # Get actions
-                act = self.get_different_actions(policies, policy_mapping, obs, info, use_best=False)
+                act, eid, pol_id = self.get_different_actions(policies, policy_mapping, obs, info)
 
                 # Step
-                next_obs, rew, done, next_info = self.envs.step(act, num_waits=len(act))
+                next_obs, rew, done, next_info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
 
                 # Check winner
                 for i in range(len(done)):
