@@ -276,7 +276,7 @@ class Trainer(ABC):
             elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
             self.elos.append(elo)
         else:
-            self.policy = old_policy
+            self.policy.load_state_dict(deepcopy(self.last_policy.state_dict()))
             elo = self.elos[-1]
         return win_rate, elo
 
