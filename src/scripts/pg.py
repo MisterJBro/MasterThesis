@@ -13,7 +13,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 5
+    size = 8
     env = HexEnv(size)
     config = create_config({
         "train_iters": 500,

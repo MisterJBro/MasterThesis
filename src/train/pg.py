@@ -14,10 +14,6 @@ PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 class PGTrainer(Trainer):
     """ Train a policy using Policy Gradient with baseline."""
 
-    def __init__(self, config, policy):
-        super().__init__(config)
-        self.policy = policy
-
     def update(self, sample_batch):
         data = sample_batch.to_tensor_dict()
         obs = data["obs"]

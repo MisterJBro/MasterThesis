@@ -26,7 +26,7 @@ PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
 
 class Trainer(ABC):
-    def __init__(self, config):
+    def __init__(self, config, policy):
         # RNG seed
         seed = config["seed"]
         random.seed(seed)
@@ -41,12 +41,13 @@ class Trainer(ABC):
         size = config["env"].size
         self.envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, gamma=config["gamma"], max_len=config["max_len"], size=size)
         self.num_envs = config["num_envs"]
-        self.policy = None
+        self.policy = policy
         self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
         self.save_paths = []
         self.elos = [0]
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
         self.scalar_loss = nn.MSELoss()
+        self.policies = [self.policy]
 
         print(tabulate([
             ['Environment', config["env"]],
@@ -62,11 +63,10 @@ class Trainer(ABC):
             self.log("iter", iter)
 
             # Main
-            self.policy.eval()
             eps, sample_time = measure_time(lambda: self.sample_sync())
             self.log("sample_time", sample_time)
 
-            self.policy.train()
+            self.pre_update()
             _, update_time = measure_time(lambda: self.update(eps))
             self.log("update_time", update_time)
 
@@ -90,40 +90,88 @@ class Trainer(ABC):
     def checkpoint(self, iter):
         dir_path = f'{PROJECT_PATH}/checkpoints/'
         name = f'p_{iter}_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]]:.0f}.pt'
-        path = dir_path + name
-        self.save_paths.append(path)
-        if len(self.save_paths) > self.config["num_checkpoints"]:
-            path = self.save_paths.pop(0)
-            if os.path.isfile(path):
-                os.remove(path)
-            else:
-                print("Warning: %s checkpoint not found" % path)
-        self.save(path=path)
+        next_path = dir_path + name
+        self.save_paths.append(next_path)
+        #if len(self.save_paths) > self.config["num_checkpoints"]:
+        #    last_path = self.save_paths.pop(0)
+        #    if os.path.isfile(last_path):
+        #        os.remove(last_path)
+        #    else:
+        #        print("Warning: %s checkpoint not found" % last_path)
+        self.save(path=next_path)
+
+    def pre_update(self):
+        self.policy.train()
+        if len(self.policies) == 1:
+            self.last_policy = deepcopy(self.policy)
+            self.last_policy.eval()
+            self.policies.append(self.last_policy)
+        else:
+            self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
 
     @abstractmethod
     def update(self, sample_batch):
         pass
 
+    # Sample Policies for use in Self Play
+    def sample_policies(self):
+        max_policies = 4
+        if len(self.save_paths[:-1]) > 0:
+            # Adding new policies
+            if len(self.policies) < max_policies:
+                new_policy = deepcopy(self.policy)
+                new_policy.eval()
+                self.policies.append(new_policy)
+
+            # Sample
+            paths = random.sample(self.save_paths[:-1], max(0, len(self.policies) - 2))
+            for i in range(2, len(self.policies)):
+                path = paths[i-2]
+                self.policies[i].load(path=path)
+
     def sample_sync(self):
-        old_policy = deepcopy(self.policy)
-        for layer in old_policy.children():
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
-        policies = [self.policy, old_policy]
+        self.policy.eval()
+        self.sample_policies()
+
         policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
-        #policy_mapping[::2, 1] = 1
-        #policy_mapping[1::2, 0] = 1
+        if len(self.policies) > 1:
+            policy_mapping[::2, 1] = 1
+            policy_mapping[1::2, 0] = 1
+        should_switch = self.num_envs % 2 == 0
+
+        # Metrics
+        num_games = 0
+        num_wins = np.zeros(len(self.policies), dtype=np.int32)
+        last_pol_id = np.zeros(self.num_envs, dtype=np.int32)
+        game_hist = {}
+
+        # Reset
         obs, info = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, eid, pol_id = self.get_different_actions(policies, policy_mapping, obs, info)
+            act, eid, pol_id = self.get_different_actions(self.policies, policy_mapping, obs, info)
+            last_pol_id[eid] = pol_id
             # possible act = self.get_different_actions(...)
             # self.envs.step(*act) # python spread operator
-            next_obs, rew, done, next_info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
+            obs, rew, done, info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
 
-            # done
-            info = next_info
-            obs = next_obs
+            # Check dones
+            for i in info["eid"]:
+                if done[i]:
+                    num_games += 1
+                    wid = last_pol_id[i]
+                    num_wins[wid] += rew[i]
+
+                    # Change policy mapping
+                    if policy_mapping[i].sum() == 0:
+                        # Randomly insert to either index 0 or 1
+                        policy_mapping[i, random.randint(0, 1)] = 1 % len(self.policies)
+                    else:
+                        policy_mapping[i, policy_mapping[i] > 0] = (policy_mapping[i, policy_mapping[i] > 0] + 1 ) % len(self.policies)
+
+                    if bool(random.getrandbits(1)):
+                        policy_mapping[i] = policy_mapping[i][::-1]
+                    game_hist[tuple(policy_mapping[i].tolist())] = game_hist.get(tuple(policy_mapping[i].tolist()), 0) + 1
 
         # Sync
         self.envs.reset()
@@ -212,9 +260,6 @@ class Trainer(ABC):
     def evaluate(self):
         # Get last policy
         old_policy = deepcopy(self.policy)
-        # if len(self.save_paths) > 0:
-        #old_policy.load(self.save_paths[-1])
-        # else:
         for layer in old_policy.children():
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
