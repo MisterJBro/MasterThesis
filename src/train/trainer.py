@@ -175,6 +175,7 @@ class Trainer(ABC):
 
         #print(game_hist)
         # Sync
+        self.log("num_games", num_games)
         self.envs.reset()
         eps = self.envs.get_episodes()
 

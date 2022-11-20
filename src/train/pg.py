@@ -14,44 +14,81 @@ PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 class PGTrainer(Trainer):
     """ Train a policy using Policy Gradient with baseline."""
 
-    def update(self, sample_batch):
-        data = sample_batch.to_tensor_dict()
-        obs = data["obs"]
-        act = data["act"]
-        ret = data["ret"]
-        val = data["val"]
-        adv = ret
-        data["adv"] = adv
+    def update(self, eps):
+        # Config
+        batch_size = self.config["batch_size"]
+        device = self.config["device"]
 
-        trainset = TensorDataset(obs, act, adv, ret)
-        trainloader = DataLoader(trainset, batch_size=int(self.config["num_samples"]/self.config["num_batch_split"]))
+        # Get data
+        obs = torch.as_tensor(np.concatenate([e.obs for e in eps], 0))
+        act = torch.as_tensor(np.concatenate([e.act for e in eps], 0, dtype=np.int32))
+        ret = torch.as_tensor(np.concatenate([e.ret for e in eps], 0))
+        legal_act = torch.as_tensor(np.concatenate([e.legal_act for e in eps], 0))
+
+        # Filter by policies
+        pol_id = torch.as_tensor(np.concatenate([e.pol_id for e in eps], 0, dtype=np.int32))
+        obs = obs[pol_id == 0]
+        act = act[pol_id == 0]
+        ret = ret[pol_id == 0]
+        legal_act = legal_act[pol_id == 0]
+        num_batch_splits = np.ceil(obs.shape[0] / batch_size)
+
+        # Policy loss
+        trainset = TensorDataset(obs, act, legal_act)
+        trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True)
+
+        # Get value
+        with torch.no_grad():
+            val = []
+            for obs_bt, act_bt, legal_act_bt in trainloader:
+                obs_bt = obs_bt.to(device)
+                act_bt = act_bt.to(device)
+                legal_act_bt = legal_act_bt.to(device)
+
+                _, val_bt = self.policy(obs_bt, legal_actions=legal_act_bt)
+                val.append(val_bt)
+            val = torch.cat(val, 0).cpu()
+
+        # Advantage estimation
+        adv = ret - val
+
+        trainset = TensorDataset(obs, act, legal_act, ret, adv)
+        trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True)
 
         # Minibatch training to fit on GPU memory
         for _ in range(self.config["pg_iters"]):
             self.policy.optim.zero_grad(set_to_none=True)
-            for obs_batch, act_batch, adv_batch, ret_batch in trainloader:
+            for obs_bt, act_bt, legal_act_bt, ret_bt, adv_bt in trainloader:
+                obs_bt = obs_bt.to(device)
+                act_bt = act_bt.to(device)
+                legal_act_bt = legal_act_bt.to(device)
+                ret_bt = ret_bt.to(device)
+                adv_bt = adv_bt.to(device)
+
                 with torch.autocast(device_type=self.config["amp_device"], enabled=self.config["use_amp"]):
-                    dist, val_batch = self.policy(obs_batch)
+                    dist_bt, val_bt = self.policy(obs_bt, legal_actions=legal_act_bt)
 
                     # PG loss
-                    logp = dist.log_prob(act_batch)
-                    loss_policy = -(logp * adv_batch).mean()
-                    loss_entropy = - dist.entropy().mean()
-                    loss_value = self.scalar_loss(val_batch, ret_batch)
+                    logp = dist_bt.log_prob(act_bt)
+                    loss_policy = -(logp * adv_bt).mean()
+
+                    loss_entropy = - dist_bt.entropy().mean()
+                    loss_value = self.scalar_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
-                    loss /= self.config["num_batch_split"]
+                    loss /= num_batch_splits
+
+                    self.log("loss_pi", loss_policy.item(), show=False)
+                    self.log("loss_entr", loss_entropy.item(), show=True)
+                    self.log("loss_v", loss_value.item(), show=False)
 
                 # AMP loss backward
                 self.scaler.scale(loss).backward()
 
             # AMP Update
             self.scaler.unscale_(self.policy.optim)
-            nn.utils.clip_grad_norm_(self.policy.parameters(),  self.config["grad_clip"])
+            nn.utils.clip_grad_norm_(self.policy.parameters(), self.config["grad_clip"])
             self.scaler.step(self.policy.optim)
             self.scaler.update()
-
-            #mem = torch.cuda.mem_get_info()
-            #print(f"GPU Memory: {humanize.naturalsize(mem[0])} / {humanize.naturalsize(mem[1])}")
 
 
 class PPOTrainer(PGTrainer):
@@ -59,7 +96,7 @@ class PPOTrainer(PGTrainer):
 
     def update(self, eps):
         # Config
-        batch_size = 2048
+        batch_size = self.config["batch_size"]
         device = self.config["device"]
 
         # Get data

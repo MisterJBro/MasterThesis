@@ -27,7 +27,7 @@ class Logger(dict):
         current_time = time.time() - self.timer
         current_time = str(timedelta(seconds=int(current_time)))
         res = ''
-        for name, (val, unit_str, show) in self.items():
+        for name, (val, unit_str, show) in reversed(self.items()):
             if not show:
                 continue
 
