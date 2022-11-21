@@ -1,4 +1,4 @@
-import random as rand
+import random
 from src.networks.residual_model import ValueEquivalenceModel
 import torch
 import numpy as np
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 6
+    size = 9
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -34,17 +34,20 @@ if __name__ == '__main__':
         "pgs_trunc_len": 5,
         "device": "cpu",
         "search_return_adv": True,
+
+        "num_res_blocks": 16,
+        "num_filters": 128,
     })
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("checkpoints/policy_hex_6x6.pt")
+    policy1.load("checkpoints/policy_hex_9x9.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
-    policy2.load("checkpoints/policy_hex_6x6_1.pt")
+    policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    model.load("checkpoints/model_hex_ppomodel_iter=41_metric=100.pt")
+    #model.load("checkpoints/model_hex_ppomodel_iter=41_metric=100.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -52,7 +55,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=100)
+        result = mcts_obj.search(State(env, obs=obs), iters=10_000)
         act = np.argmax(result)
         return act
 
@@ -61,7 +64,7 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
-        result = az_obj.search(State(env, obs=obs), iters=100)
+        result = az_obj.search(State(env, obs=obs), iters=3000)
         act = np.argmax(result)
         return act
 
@@ -101,7 +104,7 @@ if __name__ == '__main__':
         return act
 
     def random(env, obs, info):
-        return rand.choice(np.arange(size**2)[env.legal_actions()])
+        return random.choice(np.arange(size**2)[env.legal_actions()])
 
     def pn1(env, obs, info):
         # obs (2, 9, 9, 1)
@@ -120,7 +123,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [pn1, pn2]
+    players = [pn1, mcts]
     num_games = 1
     render = True
     num_victories_first = 0

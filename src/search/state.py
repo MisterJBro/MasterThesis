@@ -33,9 +33,10 @@ class State:
         done = self.done
         ret = 0
         player = 0
+        size = env.size
         while not done:
             player = (player + 1) % num_players
-            act = random.choice(env.legal_actions())
+            act = random.choice(np.arange(size**2)[env.legal_actions()])
             _, rew, done, _ = env.step(act)
 
             # Return
