@@ -133,9 +133,9 @@ class Trainer(ABC):
         self.sample_policies()
 
         policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
-        if len(self.policies) > 1:
-            policy_mapping[::2, 1] = 1
-            policy_mapping[1::2, 0] = 1
+        #if len(self.policies) > 1:
+        #    policy_mapping[::2, 1] = 1
+        #    policy_mapping[1::2, 0] = 1
 
         # Metrics
         num_games = 0
