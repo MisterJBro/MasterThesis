@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, ChainDataset, ConcatDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader
 import humanize
 import numpy as np
 from src.train.trainer import Trainer
@@ -196,7 +196,7 @@ class PPOTrainerModel(Trainer):
         self.model.loss(eps)
 
     def checkpoint(self, iter):
-        last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"]).size}x{str(self.config["env"]).size}_{iter}.pt'
+        last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"].size)}x{str(self.config["env"].size)}_{iter}.pt'
         self.save_paths.append(last_path)
         if len(self.save_paths) > self.config["num_checkpoints"]:
             path = self.save_paths.pop(0)

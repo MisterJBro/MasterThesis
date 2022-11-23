@@ -46,6 +46,7 @@ DEFAULT_CONFIG = {
     "model_unroll_len": 5,
     "model_num_res_blocks": 10,
     "model_num_filters": 128,
+    "model_batch_size": 256,
 
     # === Search algorithms ===
     "search_num_workers": 4,

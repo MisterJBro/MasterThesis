@@ -296,10 +296,10 @@ class Trainer(ABC):
 
             for i in range(self.config["max_len"]):
                 # Get actions
-                act, eid, pol_id = self.get_different_actions(policies, policy_mapping, obs, info)
+                act, eid, dist, pol_id  = self.get_different_actions(policies, policy_mapping, obs, info)
 
                 # Step
-                next_obs, rew, done, next_info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
+                next_obs, rew, done, next_info = self.envs.step(act, eid, dist, pol_id, num_waits=self.num_envs)
 
                 # Check winner
                 for i in range(len(done)):

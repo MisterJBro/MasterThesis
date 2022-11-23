@@ -5,6 +5,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
+from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import pathlib
 
@@ -65,6 +66,7 @@ class ValueEquivalenceModel(nn.Module):
         self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
         self.num_acts = config["num_acts"]
         self.batch_size = config["batch_size"]
+        self.scalar_loss = nn.MSELoss()
 
         # Representation function h
         self.repr = nn.Sequential(
@@ -145,82 +147,78 @@ class ValueEquivalenceModel(nn.Module):
             ret_ep = []
             dist_ep = []
             act_ep = []
-            legal_act_ep = torch.as_tensor(e.legal_act)
+            rew_ep = []
 
             for i in range(self.config["model_unroll_len"]):
-                if i == 0:
-                    ret_ep.append(e.ret)
-                    dist_ep.append(e.dist)
-                else:
-                    r = np.concatenate([e.ret[:-i], np.random.randint(self.num_acts, size=i)])
-                    ret_ep.append(r)
-                    d = np.concatenate([e.dist[:-i], np.random.randint(self.num_acts, size=i)])
-                    dist_ep.append(d)
-                
-                act_ep.append(act_ep)
-                if i == 0:
-                    val_targets.append(ret[start+i:end])
-                    dist_targets.append(Categorical(logits=dist[start+i:end]))
-                else:
-                    val_targets.append(torch.concat((ret[start+i:end], torch.zeros(1, dtype=torch.float32, device=self.device)), 0))
-                    dist_targets.append(Categorical(logits=torch.concat((dist[start+i:end], dist[end-1].unsqueeze(0)), 0)))
+                v = np.concatenate([e.ret[i:], np.zeros((i), dtype=np.float32)], 0)
+                ret_ep.append(v)
+                d = np.concatenate([e.dist[i:], np.zeros((i, self.num_acts), dtype=np.float32)], 0)
+                dist_ep.append(d)
 
+                if i < self.config["model_unroll_len"] - 1:
+                    a = np.concatenate([e.act[i:], np.random.randint(self.num_acts, size=i)], 0, dtype=np.int64)
+                    act_ep.append(a)
+                    r = np.concatenate([e.rew[i:], np.zeros((i), dtype=np.float32)], 0)
+                    rew_ep.append(r)
+
+            # Add
+            val_target.append(np.stack(ret_ep, 1))
+            dist_target.append(np.stack(dist_ep, 1))
+            act.append(np.stack(act_ep, 1))
+            rew.append(np.stack(rew_ep, 1))
+
+        # To tensors
+        val_target = torch.as_tensor(np.concatenate(val_target, 0))
+        dist_target = torch.as_tensor(np.concatenate(dist_target, 0))
+        act = torch.as_tensor(np.concatenate(act, 0))
+        rew = torch.as_tensor(np.concatenate(rew, 0))
+
+        # Obs: (N, 2, size, size)  Val: (N, model_len)  Dist: (N, model_len, num_acts), Act: (N, model_len-1), Rew: (N, model_len-1)
         return {
             'obs': obs,
-            'act': act_ep,
-            'val_targets': val_targets,
-            'dist_targets': dist_targets,
+            'val_target': val_target,
+            'dist_target': dist_target,
+            'act': act,
+            'rew': rew,
         }
 
     def loss(self, eps):
         # Get data
+        batch_size = self.config["model_batch_size"]
         data = self.prepare_eps(eps)
-        batch_size = int(self.config["num_samples"]/self.config["model_minibatches"])
+        trainset = TensorDataset(data['obs'], data['val_target'], data['dist_target'], data['act'], data['rew'])
+        trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True, shuffle=True)
 
         # Train model
         for _ in range(self.config["model_iters"]):
-            losses = []
-            steps = 0
-            np.random.shuffle(episodes)
-            for ep in episodes:
-                start = ep["start"]
-                end = ep["end"]
-                act_ep = ep["act_ep"]
-                val_targets = ep["val_targets"]
-                dist_targets = ep["dist_targets"]
+            for obs, val_target, dist_target, act, rew in trainloader:
+                self.opt.zero_grad()
+                losses = []
+                obs = obs.to(self.device)
+                val_target = val_target.to(self.device)
+                dist_target = dist_target.to(self.device)
+                act = act.to(self.device)
+                rew = rew.to(self.device)
 
                 # Predictions
                 for i in range(self.config["model_unroll_len"]):
                     if i == 0:
-                        state = self.representation(obs[start:end])
+                        state = self.representation(obs)
                     else:
-                        if i != 1:
-                            state = state[:-1]
-                        state = self.dynamics(state, act_ep[i-1])
+                        state = self.dynamics(state, act[:, i-1])
                     dist, val = self.prediction(state)
 
-                    loss_val = scalar_loss(val, val_targets[i])
-                    loss_dist = kl_divergence(dist_targets[i], dist).mean()
+                    loss_val = self.scalar_loss(val, val_target[:, i])
+                    loss_dist = kl_divergence(Categorical(logits=dist_target[:, i]), dist).mean()
                     loss = loss_val + loss_dist
                     losses.append(loss)
 
-                # Minibatch update
-                steps += end - start
-                if steps >= batch_size:
-                    self.opt.zero_grad()
-                    loss = torch.mean(torch.stack(losses))
-                    print(loss)
-                    loss.backward()
-                    self.opt.step()
-                    steps = 0
-                    losses = []
-
-            if len(losses) != 0:
-                self.opt.zero_grad()
+                # Update
                 loss = torch.mean(torch.stack(losses))
+                print(loss)
                 loss.backward()
                 self.opt.step()
-        #self.scheduler.step()
+                #self.scheduler.step()
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({
