@@ -18,26 +18,35 @@ if __name__ == '__main__':
     config = create_config({
         "train_iters": 500,
         "env": env,
+        "max_len": size*size,
         "num_cpus": 3,
-        "num_envs": 15,
+        "num_envs": 3,
         "sample_len": 1_000,
         "device": "cuda:0",
-        "num_res_blocks": 12,
+        "pi_lr": 6e-4,
+        "pi_entropy": 0.0,
+        "num_res_blocks": 16,
         "num_filters": 128,
-        "sp_num_eval_games": 3,
+        "ppo_iters": 6,
+        "vf_scale": 1.0,
+        "clip_ratio": 0.2,
+        "num_batch_split": 4,
+        "sp_num_eval_games": 100,
         "sp_update_win_rate": 0,
         "use_se": True,
         "log_main_metric": "win_rate",
-        "num_checkpoints": 500,
+        "num_checkpoints": 200,
 
         "model_lr": 1e-3,
         "model_unroll_len": 5,
         "model_minibatches": 50,
+        "model_num_res_blocks": 10,
+        "model_num_filters": 128,
     })
 
     # Import policy and model
     policy = HexPolicy(config)
-    policy.load("checkpoints/policy_hex_6x6.pt")
+    #policy.load("checkpoints/policy_hex_6x6.pt")
     model = ValueEquivalenceModel(config)
 
     with PPOTrainerModel(config, policy, model) as tr:

@@ -57,13 +57,14 @@ class ValueEquivalenceModel(nn.Module):
     def __init__(self, config):
         super(ValueEquivalenceModel, self).__init__()
         self.config = config
-        self.num_filters = config["num_filters"]
+        self.num_filters = config["model_num_filters"]
         self.kernel_size = 3
         self.use_se = config["use_se"]
-        self.num_res_blocks = config["num_res_blocks"]
+        self.num_res_blocks = config["model_num_res_blocks"]
         self.size = config["obs_dim"][-1]
         self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
         self.num_acts = config["num_acts"]
+        self.batch_size = config["batch_size"]
 
         # Representation function h
         self.repr = nn.Sequential(
@@ -132,26 +133,31 @@ class ValueEquivalenceModel(nn.Module):
         val = self.pred_val(s).reshape(-1)
         return pi, val
 
-    def prepare_episodes(self, data):
-        # Prepare data for training (unrolling each episode)
-        act = data["act"]
-        done = data["done"]
-        ret = data["ret"]
-        dist = data["dist"]
-        sections = data["sections"]
+    def prepare_eps(self, eps):
+        obs = torch.as_tensor(np.concatenate([e.obs for e in eps], 0))
+        val_target = []
+        dist_target = []
+        act = []
+        rew = []
 
-        episodes = []
-        for (start, end) in sections:
+        for e in eps:
+            # Get data
+            ret_ep = []
+            dist_ep = []
             act_ep = []
-            val_targets = []
-            dist_targets = []
-            completed = done[end-1]
-
-            if not completed:
-                continue
+            legal_act_ep = torch.as_tensor(e.legal_act)
 
             for i in range(self.config["model_unroll_len"]):
-                act_ep.append(act[start+i:end])
+                if i == 0:
+                    ret_ep.append(e.ret)
+                    dist_ep.append(e.dist)
+                else:
+                    r = np.concatenate([e.ret[:-i], np.random.randint(self.num_acts, size=i)])
+                    ret_ep.append(r)
+                    d = np.concatenate([e.dist[:-i], np.random.randint(self.num_acts, size=i)])
+                    dist_ep.append(d)
+                
+                act_ep.append(act_ep)
                 if i == 0:
                     val_targets.append(ret[start+i:end])
                     dist_targets.append(Categorical(logits=dist[start+i:end]))
@@ -159,22 +165,16 @@ class ValueEquivalenceModel(nn.Module):
                     val_targets.append(torch.concat((ret[start+i:end], torch.zeros(1, dtype=torch.float32, device=self.device)), 0))
                     dist_targets.append(Categorical(logits=torch.concat((dist[start+i:end], dist[end-1].unsqueeze(0)), 0)))
 
-            episodes.append({
-                'start': start,
-                'end': end,
-                'act_ep': act_ep,
-                'val_targets': val_targets,
-                'dist_targets': dist_targets,
-            })
+        return {
+            'obs': obs,
+            'act': act_ep,
+            'val_targets': val_targets,
+            'dist_targets': dist_targets,
+        }
 
-        return episodes
-
-    def loss(self, data):
-        obs = data["obs"]
-        scalar_loss = nn.HuberLoss()
-
+    def loss(self, eps):
         # Get data
-        episodes = self.prepare_episodes(data)
+        data = self.prepare_eps(eps)
         batch_size = int(self.config["num_samples"]/self.config["model_minibatches"])
 
         # Train model

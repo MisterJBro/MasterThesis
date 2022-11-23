@@ -1,6 +1,6 @@
 use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut, Episode};
 use numpy::ToPyArray;
-use numpy::{PyArray1, PyArray2, PyArray3, PyArray4};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArray4, PyReadonlyArray2};
 use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict};
@@ -90,10 +90,11 @@ impl PyEnvs {
         (obs.to_pyarray(py), info)
     }
 
-    /// Execute the current actions and update the board
+    /// Execute the current actions and update the board   dist: Vec<Vec<f32>,
     #[args(num_waits="1")]
-    fn step<'py>(&mut self, py: Python<'py>, act: Vec<Action>, eid: Vec<usize>, pol_id: Vec<usize>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
-        let (obs, rew, done, info) = self.0.step(act, eid, pol_id, num_waits);
+    fn step<'py>(&mut self, py: Python<'py>, act: Vec<Action>, eid: Vec<usize>, dist: PyReadonlyArray2<f32>, pol_id: Vec<usize>, num_waits: usize) -> (&'py PyArray4<f32>, &'py PyArray1<f32>, &'py PyArray1<bool>, Infos) {
+        let dist = dist.as_array().into_owned();
+        let (obs, rew, done, info) = self.0.step(act, eid, dist, pol_id, num_waits);
         (obs.to_pyarray(py), rew.to_pyarray(py), done.to_pyarray(py), info)
     }
 
@@ -125,6 +126,7 @@ pub struct PyEpisode {
     pub done: Array<bool, Ix1>,
     pub pid: Array<u8, Ix1>,
     pub legal_act: Array<bool, Ix2>,
+    pub dist: Array<f32, Ix2>,
     pub pol_id: Array<usize, Ix1>,
     pub ret: Array<f32, Ix1>,
 }
@@ -159,6 +161,11 @@ impl PyEpisode {
     #[getter]
     fn legal_act<'py>(&self, py: Python<'py>) -> &'py PyArray2<bool> {
         self.legal_act.to_pyarray(py)
+    }
+
+    #[getter]
+    fn dist<'py>(&self, py: Python<'py>) -> &'py PyArray2<f32> {
+        self.dist.to_pyarray(py)
     }
 
     #[getter]

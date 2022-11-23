@@ -187,16 +187,16 @@ class PPOTrainerModel(Trainer):
     """ Train a policy using Proximal Policy Gradient."""
 
     def __init__(self, config, policy, model):
-        super().__init__(config)
-        self.policy = policy
+        super().__init__(config, policy)
         self.model = model
+        self.config["sp_sampled_policies"] = 1
 
-    def update(self, sample_batch):
-        data = sample_batch.to_tensor_dict()
-        self.model.loss(data)
+    def update(self, eps):
+        # Config
+        self.model.loss(eps)
 
     def checkpoint(self, iter):
-        last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"]).lower()}_{self.__class__.__name__.lower().replace("trainer","")}_iter={iter}_metric={self.log[self.config["log_main_metric"]]:.0f}.pt'
+        last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"]).size}x{str(self.config["env"]).size}_{iter}.pt'
         self.save_paths.append(last_path)
         if len(self.save_paths) > self.config["num_checkpoints"]:
             path = self.save_paths.pop(0)

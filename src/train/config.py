@@ -29,11 +29,6 @@ DEFAULT_CONFIG = {
     "vf_lr": 1e-3,
     "vf_iters": 5,
     "vf_minibatches": 10,
-    "model_lr": 1e-3,
-    "model_weight_decay": 1e-4,
-    "model_iters": 5,
-    "model_minibatches": 10,
-    "model_unroll_len": 5,
     "grad_clip": 100.0,
     "clip_ratio": 0.2,
     "num_batch_split": 20,
@@ -42,6 +37,15 @@ DEFAULT_CONFIG = {
     "batch_size": 2048,
     "use_se": True,
     "use_amp": False,
+
+    # === Model settings ===
+    "model_lr": 1e-3,
+    "model_weight_decay": 1e-4,
+    "model_iters": 5,
+    "model_minibatches": 10,
+    "model_unroll_len": 5,
+    "model_num_res_blocks": 10,
+    "model_num_filters": 128,
 
     # === Search algorithms ===
     "search_num_workers": 4,

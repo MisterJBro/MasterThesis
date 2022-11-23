@@ -148,11 +148,11 @@ class Trainer(ABC):
         obs, info = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, eid, pol_id = self.get_different_actions(self.policies, policy_mapping, obs, info)
+            act, eid, dist, pol_id = self.get_different_actions(self.policies, policy_mapping, obs, info)
             last_pol_id[eid] = pol_id
             # possible act = self.get_different_actions(...)
             # self.envs.step(*act) # python spread operator
-            obs, rew, done, info = self.envs.step(act, eid, pol_id, num_waits=self.num_envs)
+            obs, rew, done, info = self.envs.step(act, eid, dist, pol_id, num_waits=self.num_envs)
 
             # Check dones
             for i in info["eid"]:
@@ -224,6 +224,7 @@ class Trainer(ABC):
         act = []
         eid = []
         pol_id = []
+        dist = []
         for eid_p, dist_p, pol_id_p in zip(eids, dists, pol_ids):
             if use_best:
                 act_p = dist_p.logits.argmax(-1)
@@ -233,7 +234,8 @@ class Trainer(ABC):
             act += act_p
             eid.append(eid_p)
             pol_id.append(pol_id_p)
-        return act, np.concatenate(eid, 0), np.concatenate(pol_id, 0)
+            dist.append(dist_p.logits.cpu().numpy())
+        return act, np.concatenate(eid, 0), np.concatenate(dist, 0), np.concatenate(pol_id, 0)
 
     def test(self, render=True):
         if isinstance(self.config["env"], str):

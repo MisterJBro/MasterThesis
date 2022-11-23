@@ -11,6 +11,7 @@ pub struct Episode {
     pub done: Vec<bool>,
     pub pid: Vec<u8>,
     pub legal_act: Vec<Array<bool, Ix1>>,
+    pub dist: Vec<Array<f32, Ix1>>,
     pub pol_id: Vec<usize>,
     pub ret: Option<Vec<f32>>
 }
@@ -24,19 +25,21 @@ impl Episode {
             done: Vec::with_capacity(max_len),
             pid: Vec::with_capacity(max_len),
             legal_act: Vec::with_capacity(max_len),
+            dist: Vec::with_capacity(max_len),
             pol_id: Vec::with_capacity(max_len),
             ret: None,
         }
     }
 
     #[inline]
-    pub fn push(&mut self, obs: Obs, act: Action, rew: f32, done: bool, pid: u8, legal_act: Array<bool, Ix1>, pol_id: usize) {
+    pub fn push(&mut self, obs: Obs, act: Action, rew: f32, done: bool, pid: u8, legal_act: Array<bool, Ix1>, dist: Array<f32, Ix1>, pol_id: usize) {
         self.obs.push(obs);
         self.act.push(act);
         self.rew.push(rew);
         self.done.push(done);
         self.pid.push(pid);
         self.legal_act.push(legal_act);
+        self.dist.push(dist);
         self.pol_id.push(pol_id);
     }
 
@@ -49,6 +52,7 @@ impl Episode {
         self.done.clear();
         self.pid.clear();
         self.legal_act.clear();
+        self.dist.clear();
         self.pol_id.clear();
         self.ret = None;
     }
@@ -72,6 +76,7 @@ impl Episode {
         let done = Array::from_vec(self.done);
         let pid = Array::from_vec(self.pid);
         let legal_act = stack(Axis(0), &self.legal_act.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
+        let dist = stack(Axis(0), &self.dist.iter().map(|x| x.view()).collect::<Vec<_>>()[..]).unwrap();
         let pol_id = Array::from_vec(self.pol_id);
         let ret = Array::from_vec(self.ret.expect("Episode: Expected return to be already calculated before converting"));
 
@@ -82,6 +87,7 @@ impl Episode {
             done,
             pid,
             legal_act,
+            dist,
             pol_id,
             ret,
         }
