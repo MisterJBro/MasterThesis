@@ -12,12 +12,6 @@ from src.train.pg import PGTrainer, PPOTrainer
 def objective(params):
     print(f"Testing out params: {params}")
 
-    num_batch_split = 25
-    if params["sample_len"] == 2000:
-        num_batch_split = 50
-    elif params["sample_len"] == 4000:
-        num_batch_split = 75
-
     # Init for algos
     size = 9
     env = HexEnv(size)
@@ -29,7 +23,6 @@ def objective(params):
         "num_envs": 120,
         "device": "cuda:0",
         "sp_num_eval_games": 240,
-        "num_batch_split": num_batch_split,
         "grad_clip": 100.0,
         "log_to_writer": False,
         "log_to_file": True,

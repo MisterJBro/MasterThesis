@@ -25,28 +25,30 @@ if __name__ == '__main__':
         "device": "cuda:0",
         "pi_lr": 6e-4,
         "pi_entropy": 0.0,
-        "num_res_blocks": 16,
+        "num_res_blocks": 12,
         "num_filters": 128,
         "ppo_iters": 6,
         "vf_scale": 1.0,
         "clip_ratio": 0.2,
-        "num_batch_split": 4,
-        "sp_num_eval_games": 100,
-        "sp_update_win_rate": 0,
         "use_se": True,
         "log_main_metric": "win_rate",
         "num_checkpoints": 200,
+        "sp_num_eval_games": 0,
+        "sp_update_win_rate": 0,
+        "sp_sampled_policies": 1,
 
-        "model_lr": 1e-3,
+        "model_lr": 6e-4,
+        "model_weight_decay": 1e-5,
+        "model_iters": 3,
         "model_unroll_len": 5,
-        "model_minibatches": 50,
         "model_num_res_blocks": 10,
         "model_num_filters": 128,
+        "model_batch_size": 1024,
     })
 
     # Import policy and model
     policy = HexPolicy(config)
-    #policy.load("checkpoints/policy_hex_6x6.pt")
+    policy.load("checkpoints/p_6x6_128_12.pt")
     model = ValueEquivalenceModel(config)
 
     with PPOTrainerModel(config, policy, model) as tr:

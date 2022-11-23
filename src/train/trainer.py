@@ -270,11 +270,13 @@ class Trainer(ABC):
 
         # Parameters
         num_games = self.config["sp_num_eval_games"]
+        if num_games == 0:
+            return 0, 0
 
         # Evaluate in parallel
         win_count = self.play_other(old_policy, num_games)
-        win_rate = win_count/num_games * 100.0
-        if win_rate > self.config["sp_update_win_rate"]:
+        win_rate = win_count/(num_games+1e-9) * 100.0
+        if win_rate >= self.config["sp_update_win_rate"]:
             last_elo = self.elos[-1]
             elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
             self.elos.append(elo)

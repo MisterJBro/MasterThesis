@@ -66,7 +66,6 @@ class ValueEquivalenceModel(nn.Module):
         self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
         self.num_acts = config["num_acts"]
         self.batch_size = config["batch_size"]
-        self.scalar_loss = nn.MSELoss()
 
         # Representation function h
         self.repr = nn.Sequential(
@@ -102,6 +101,14 @@ class ValueEquivalenceModel(nn.Module):
             nn.Flatten(1, -1),
             nn.Linear(self.size*self.size*32, config["num_acts"])
         )
+        self.pred_rew = nn.Sequential(
+            nn.Conv2d(self.num_filters, 32, 1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Flatten(1, -1),
+            nn.Linear(self.size*self.size*32, 1),
+            nn.Tanh(),
+        )
 
         self.opt = optim.Adam(
             list(self.parameters()),
@@ -124,7 +131,8 @@ class ValueEquivalenceModel(nn.Module):
         a = F.one_hot(a, num_classes=self.config["num_acts"]).float().reshape(-1, 1, self.size, self.size)
         s = torch.concat((s, a), 1)
         s = self.dyna(s)
-        return s
+        rew = self.pred_rew(s)
+        return s, rew
 
     def prediction_hidden(self, s):
         return self.pred(s)
@@ -140,7 +148,7 @@ class ValueEquivalenceModel(nn.Module):
         val_target = []
         dist_target = []
         act = []
-        rew = []
+        rew_target = []
 
         for e in eps:
             # Get data
@@ -165,13 +173,13 @@ class ValueEquivalenceModel(nn.Module):
             val_target.append(np.stack(ret_ep, 1))
             dist_target.append(np.stack(dist_ep, 1))
             act.append(np.stack(act_ep, 1))
-            rew.append(np.stack(rew_ep, 1))
+            rew_target.append(np.stack(rew_ep, 1))
 
         # To tensors
         val_target = torch.as_tensor(np.concatenate(val_target, 0))
         dist_target = torch.as_tensor(np.concatenate(dist_target, 0))
         act = torch.as_tensor(np.concatenate(act, 0))
-        rew = torch.as_tensor(np.concatenate(rew, 0))
+        rew_target = torch.as_tensor(np.concatenate(rew_target, 0))
 
         # Obs: (N, 2, size, size)  Val: (N, model_len)  Dist: (N, model_len, num_acts), Act: (N, model_len-1), Rew: (N, model_len-1)
         return {
@@ -179,38 +187,40 @@ class ValueEquivalenceModel(nn.Module):
             'val_target': val_target,
             'dist_target': dist_target,
             'act': act,
-            'rew': rew,
+            'rew_target': rew_target,
         }
 
     def loss(self, eps):
         # Get data
         batch_size = self.config["model_batch_size"]
         data = self.prepare_eps(eps)
-        trainset = TensorDataset(data['obs'], data['val_target'], data['dist_target'], data['act'], data['rew'])
+        trainset = TensorDataset(data['obs'], data['val_target'], data['dist_target'], data['act'], data['rew_target'])
         trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True, shuffle=True)
 
         # Train model
         for _ in range(self.config["model_iters"]):
-            for obs, val_target, dist_target, act, rew in trainloader:
+            for obs, val_target, dist_target, act, rew_target in trainloader:
                 self.opt.zero_grad()
                 losses = []
                 obs = obs.to(self.device)
                 val_target = val_target.to(self.device)
                 dist_target = dist_target.to(self.device)
                 act = act.to(self.device)
-                rew = rew.to(self.device)
+                rew_target = rew_target.to(self.device)
 
                 # Predictions
                 for i in range(self.config["model_unroll_len"]):
                     if i == 0:
                         state = self.representation(obs)
+                        loss_rew = 0
                     else:
-                        state = self.dynamics(state, act[:, i-1])
+                        state, rew = self.dynamics(state, act[:, i-1])
+                        loss_rew = F.mse_loss(rew, rew_target[:, i-1])
                     dist, val = self.prediction(state)
 
-                    loss_val = self.scalar_loss(val, val_target[:, i])
+                    loss_val = F.mse_loss(val, val_target[:, i])
                     loss_dist = kl_divergence(Categorical(logits=dist_target[:, i]), dist).mean()
-                    loss = loss_val + loss_dist
+                    loss = loss_val + loss_dist + loss_rew
                     losses.append(loss)
 
                 # Update

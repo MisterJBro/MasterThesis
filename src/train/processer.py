@@ -93,7 +93,7 @@ def post_processing(policy, sample_batch, config):
     last_obs = torch.as_tensor(sample_batch.last_obs).to(policy.device)
 
     trainset = TensorDataset(obs)
-    trainloader = DataLoader(trainset, batch_size=int(obs.shape[0]/config["num_batch_split"]))
+    trainloader = DataLoader(trainset, batch_size=int(obs.shape[0]/4))
 
     with torch.no_grad():
         val = []
