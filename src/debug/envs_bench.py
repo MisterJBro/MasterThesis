@@ -15,12 +15,12 @@ if __name__ == '__main__':
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "num_cpus": 3,
+        "num_workers": 3,
         "num_envs": 12,
         "sample_len": 1_000,
     })
     envs = Envs(config)
-    num_workers = config["num_cpus"]
+    num_workers = config["num_workers"]
     num_envs_per_worker = config["num_envs_per_worker"]
     num_envs = config["num_envs"]
     rust_envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, gamma=config["gamma"], max_len=size*size, size=size)
@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
         for _ in range(config["sample_len"]):
             act = [(eid[i], random.choice(np.arange(size*size)[legal_act[i]])) for i in range(len(legal_act))]
-            obs_next, rew, done, info = rust_envs.step(act, num_waits=config["num_cpus"]*config["num_envs_per_worker"])
+            obs_next, rew, done, info = rust_envs.step(act, num_waits=config["num_workers"]*config["num_envs_per_worker"])
 
             pid = info["pid"]
             eid = info["eid"]

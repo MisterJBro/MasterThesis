@@ -32,13 +32,14 @@ class MZCore(AZCore):
         prob, next_abs, rew, val = self.eval_abs(node)
         node.state = ModelState(next_abs, rew=rew)
         node.priors = prob
-        return val
+        return -val
 
     def set_root(self, state):
         self.root = DirichletNode(state, eps=self.config["dirichlet_eps"], noise=self.config["dirichlet_noise"])
         if self.root.state is not None:
             prob, abs, val = self.eval_obs(self.root)
             self.root.priors = prob[self.root.get_legal_actions()]
+            #print(prob.reshape(6, 6).round(2))
             self.root.val = val
             self.root.state.abs = abs
 
@@ -57,4 +58,5 @@ class MZCore(AZCore):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
+        #print(node.action, msg["val"])
         return msg["prob"], msg["abs"], msg["rew"], msg["val"]

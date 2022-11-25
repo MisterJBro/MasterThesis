@@ -147,6 +147,9 @@ class HexPolicy(nn.Module):
         for param in self.body.parameters():
             param.requires_grad = requires_grad
 
+    def get_num_params(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
     def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         torch.save({
             'parameters': self.state_dict(),

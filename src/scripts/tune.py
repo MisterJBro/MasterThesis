@@ -19,7 +19,7 @@ def objective(params):
         "train_iters": 20,
         "log_main_metric": "win_rate",
         "env": env,
-        "num_cpus": 15,
+        "num_workers": 15,
         "num_envs": 120,
         "device": "cuda:0",
         "sp_num_eval_games": 240,

@@ -54,19 +54,20 @@ class MZEvaluator(Evaluator):
             } for a, v, p in zip(new_abs, val, prob)]
 
     def eval_abs(self, abs, act):
-        new_abs = self.model.dynamics(abs, act)
+        new_abs, rew = self.model.dynamics(abs, act)
         dist, val = self.model.prediction(new_abs)
 
         # Inference all and then transfer to cpu
+        rew = rew.cpu().numpy()
         val = val.cpu().numpy()
         prob = dist.probs.cpu().numpy()
 
         return [{
             "abs": a.unsqueeze(0),
-            "rew": np.zeros_like(v),
+            "rew": r,
             "val": v,
             "prob": p,
-            } for a, v, p in zip(abs, val, prob)]
+            } for a, r, v, p in zip(abs, rew, val, prob)]
 
     def update(self, msg):
         self.policy.load_state_dict(msg["policy_params"])

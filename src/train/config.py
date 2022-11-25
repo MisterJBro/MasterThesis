@@ -2,16 +2,19 @@ import gym
 import torch
 import numpy as np
 import argparse
+import pathlib
+
 
 # Default configuration of all algorithm. Ideas adopted from ray framework.
 DEFAULT_CONFIG = {
     # === Resource settings ===
-    "num_cpus": 3,
     "device": "cuda:0",
 
     # === Environments settings ===
     "env": "CartPole-v1",
+    "num_workers": 3,
     "num_envs": 15,
+    "core_pinning": False,
     "sample_len": 1_000,
     "gamma": 1.0,
     "lam": 1.0,
@@ -34,6 +37,7 @@ DEFAULT_CONFIG = {
     "num_filters": 128,
     "num_res_blocks": 12,
     "batch_size": 2048,
+    "acc_grads": 1,
     "use_se": True,
     "use_amp": False,
 
@@ -77,14 +81,14 @@ DEFAULT_CONFIG = {
     "log_name": "log.txt",
     "log_to_file": False,
     "log_to_writer": True,
+    "log_path": "",
     "num_checkpoints": 1,
-
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
 def check_config(config):
-    assert config["num_cpus"] > 0, f'CPU num: {config["num_envs"]} has to be greater 0!'
-    assert config["num_envs"] >= config["num_cpus"], f'Env num: {config["num_envs"]} has to be greater or equal to cpu num: {config["num_cpus"]}, so each cpu has atleast one env!'
+    assert config["num_workers"] > 0, f'CPU num: {config["num_envs"]} has to be greater 0!'
+    assert config["num_envs"] >= config["num_workers"], f'Env num: {config["num_envs"]} has to be greater or equal to cpu num: {config["num_workers"]}, so each cpu has atleast one env!'
     assert config["device"] == "cpu" or config["device"].startswith("cuda") and torch.cuda.is_available(), f'Using a device that is not supported: {config["device"]}!'
 
 # Computes missing configuration parameters
@@ -103,12 +107,17 @@ def compute_config(config):
     config["amp_device"] = "cpu" if config["device"] == "cpu" else "cuda"
 
     # Envs
-    config["num_envs_per_worker"] = config["num_envs"] // config["num_cpus"]
-    num_envs = config["num_envs_per_worker"] * config["num_cpus"]
+    config["num_envs_per_worker"] = config["num_envs"] // config["num_workers"]
+    num_envs = config["num_envs_per_worker"] * config["num_workers"]
     if num_envs != config["num_envs"]:
-        print(f'Warning: Cannot equally distribute number of of envs: {config["num_envs"]} onto num_cpus: {config["num_cpus"]}. Setting num_envs to {num_envs}!')
+        print(f'Warning: Cannot equally distribute number of of envs: {config["num_envs"]} onto num_workers: {config["num_workers"]}. Setting num_envs to {num_envs}!')
         config["num_envs"] = num_envs
     config["sp_num_eval_games"] = int(np.ceil(config["sp_num_eval_games"]/config["num_envs"])) * config["num_envs"]
+
+    # Paths
+    config["root_path"] = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
+    if config["log_path"] == "":
+        config["log_path"] = config["root_path"] + "/src/scripts/log/"
 
     return config
 

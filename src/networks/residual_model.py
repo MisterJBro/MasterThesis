@@ -66,6 +66,7 @@ class ValueEquivalenceModel(nn.Module):
         self.MASK_VALUE = -1e4 if config["use_amp"] else -10e8
         self.num_acts = config["num_acts"]
         self.batch_size = config["batch_size"]
+        self.zero_rew = True
 
         # Representation function h
         self.repr = nn.Sequential(
@@ -131,7 +132,10 @@ class ValueEquivalenceModel(nn.Module):
         a = F.one_hot(a, num_classes=self.config["num_acts"]).float().reshape(-1, 1, self.size, self.size)
         s = torch.concat((s, a), 1)
         s = self.dyna(s)
-        rew = self.pred_rew(s)
+        if self.zero_rew:
+            rew = torch.zeros(s.shape[0], dtype=torch.float32, device=self.device)
+        else:
+            rew = self.pred_rew(s).reshape(-1)
         return s, rew
 
     def prediction_hidden(self, s):
@@ -143,14 +147,14 @@ class ValueEquivalenceModel(nn.Module):
         val = self.pred_val(s).reshape(-1)
         return pi, val
 
-    def prepare_eps(self, eps):
+    def prepare_eps(self, eps, vals):
         obs = torch.as_tensor(np.concatenate([e.obs for e in eps], 0))
         val_target = []
         dist_target = []
         act = []
         rew_target = []
 
-        for e in eps:
+        for e, v_t in zip(eps, vals):
             # Get data
             ret_ep = []
             dist_ep = []
@@ -158,7 +162,7 @@ class ValueEquivalenceModel(nn.Module):
             rew_ep = []
 
             for i in range(self.config["model_unroll_len"]):
-                v = np.concatenate([e.ret[i:], np.zeros((i), dtype=np.float32)], 0)
+                v = np.concatenate([v_t[i:], np.full((i), v_t[-1], dtype=np.float32)], 0)
                 ret_ep.append(v)
                 d = np.concatenate([e.dist[i:], np.zeros((i, self.num_acts), dtype=np.float32)], 0)
                 dist_ep.append(d)
@@ -190,18 +194,18 @@ class ValueEquivalenceModel(nn.Module):
             'rew_target': rew_target,
         }
 
-    def loss(self, eps):
+    def loss(self, eps, vals):
         # Get data
         batch_size = self.config["model_batch_size"]
-        data = self.prepare_eps(eps)
+        data = self.prepare_eps(eps, vals)
         trainset = TensorDataset(data['obs'], data['val_target'], data['dist_target'], data['act'], data['rew_target'])
         trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True, shuffle=True)
 
         # Train model
+        iter = 0
+        losses = []
         for _ in range(self.config["model_iters"]):
             for obs, val_target, dist_target, act, rew_target in trainloader:
-                self.opt.zero_grad()
-                losses = []
                 obs = obs.to(self.device)
                 val_target = val_target.to(self.device)
                 dist_target = dist_target.to(self.device)
@@ -215,20 +219,24 @@ class ValueEquivalenceModel(nn.Module):
                         loss_rew = 0
                     else:
                         state, rew = self.dynamics(state, act[:, i-1])
-                        loss_rew = F.mse_loss(rew, rew_target[:, i-1])
+                        loss_rew = 0#F.mse_loss(rew, rew_target[:, i-1].reshape(-1))
                     dist, val = self.prediction(state)
 
-                    loss_val = F.mse_loss(val, val_target[:, i])
+                    loss_val = F.mse_loss(val, val_target[:, i].reshape(-1))
                     loss_dist = kl_divergence(Categorical(logits=dist_target[:, i]), dist).mean()
                     loss = loss_val + loss_dist + loss_rew
                     losses.append(loss)
 
                 # Update
-                loss = torch.mean(torch.stack(losses))
-                print(loss)
-                loss.backward()
-                self.opt.step()
-                #self.scheduler.step()
+                if (iter+1) % self.config["acc_grads"] == 0:
+                    loss = torch.mean(torch.stack(losses))
+                    print(loss)
+                    loss.backward()
+                    self.opt.step()
+                    #self.scheduler.step()
+                    self.opt.zero_grad()
+                    losses = []
+                iter += 1
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({

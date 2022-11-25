@@ -1,4 +1,4 @@
-import random
+import random as random_lib
 from src.networks.residual_model import ValueEquivalenceModel
 import torch
 import numpy as np
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 9
+    size = 6
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -35,19 +35,21 @@ if __name__ == '__main__':
         "device": "cpu",
         "search_return_adv": True,
 
-        "num_res_blocks": 16,
+        "num_res_blocks": 12,
         "num_filters": 128,
+        "model_num_res_blocks": 10,
+        "model_num_filters": 128,
     })
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("checkpoints/policy_hex_9x9.pt")
+    policy1.load("checkpoints/p_6x6_128_12.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
-    policy2.load("checkpoints/policy_hex_9x9_2.pt")
+    #policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    #model.load("checkpoints/model_hex_ppomodel_iter=41_metric=100.pt")
+    model.load("checkpoints/model_6x6_66.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -55,7 +57,7 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=10_000)
+        result = mcts_obj.search(State(env, obs=obs), iters=300)
         act = np.argmax(result)
         return act
 
@@ -64,7 +66,7 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
-        result = az_obj.search(State(env, obs=obs), iters=3000)
+        result = az_obj.search(State(env, obs=obs), iters=300)
         act = np.argmax(result)
         return act
 
@@ -78,11 +80,12 @@ if __name__ == '__main__':
         return act
 
     muzero_obj = None
-    def muzero(env, obs, info):
+    def mz(env, obs, info):
         global muzero_obj
         if muzero_obj is None:
             muzero_obj = MuZero(config, policy1, model)
-        result = muzero_obj.search(State(env, obs=obs), iters=100)
+        result = muzero_obj.search(State(env, obs=obs), iters=36)
+        #print(result.reshape(6, 6).round(2))
         act = np.argmax(result)
         return act
 
@@ -104,13 +107,15 @@ if __name__ == '__main__':
         return act
 
     def random(env, obs, info):
-        return random.choice(np.arange(size**2)[env.legal_actions()])
+        return random_lib.choice(np.arange(size**2)[env.legal_actions()])
 
     def pn1(env, obs, info):
         # obs (2, 9, 9, 1)
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy1.device)
         with torch.no_grad():
             dist, val = policy1(obs, legal_actions=info["legal_act"][np.newaxis])
+        # print dist
+        print("Probs:\n", dist.probs.cpu().numpy().reshape(6, 6).round(2))
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
@@ -123,7 +128,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [pn1, mcts]
+    players = [mz, random]
     num_games = 1
     render = True
     num_victories_first = 0

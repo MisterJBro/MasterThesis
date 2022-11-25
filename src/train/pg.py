@@ -6,6 +6,7 @@ import numpy as np
 from src.train.trainer import Trainer
 import os
 import time
+from copy import deepcopy
 import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
@@ -190,10 +191,23 @@ class PPOTrainerModel(Trainer):
         super().__init__(config, policy)
         self.model = model
         self.config["sp_sampled_policies"] = 1
+        old_policy = deepcopy(self.policy)
+        for layer in old_policy.children():
+            if hasattr(layer, 'reset_parameters'):
+                layer.reset_parameters()
+        self.policies = [old_policy]
 
     def update(self, eps):
+        # Iterate over eps and get eps.obs to device as torch tensor and then get val using self.policy and save as numpy array
+        vals = []
+        for e in eps:
+            obs = torch.as_tensor(e.obs, device=self.config["device"])
+            with torch.no_grad():
+                _, val = self.policy(obs)
+            vals.append(val.cpu().numpy())
+
         # Config
-        self.model.loss(eps)
+        self.model.loss(eps, vals)
 
     def checkpoint(self, iter):
         last_path = f'{PROJECT_PATH}/checkpoints/model_{str(self.config["env"].size)}x{str(self.config["env"].size)}_{iter}.pt'

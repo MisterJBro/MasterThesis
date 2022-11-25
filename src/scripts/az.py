@@ -23,7 +23,7 @@ if __name__ == '__main__':
         "search_num_workers": 3,
         "search_evaluator_batch_size": 3,
 
-        "num_cpus": 3,
+        "num_workers": 3,
         "num_envs": 3,
         "device": "cuda:0",
         "pi_lr": 1e-4,

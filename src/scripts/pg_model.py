@@ -19,8 +19,8 @@ if __name__ == '__main__':
         "train_iters": 500,
         "env": env,
         "max_len": size*size,
-        "num_cpus": 3,
-        "num_envs": 3,
+        "num_workers": 3,
+        "num_envs": 24,
         "sample_len": 1_000,
         "device": "cuda:0",
         "pi_lr": 6e-4,
@@ -36,6 +36,7 @@ if __name__ == '__main__':
         "sp_num_eval_games": 0,
         "sp_update_win_rate": 0,
         "sp_sampled_policies": 1,
+        "acc_grads": 1,
 
         "model_lr": 6e-4,
         "model_weight_decay": 1e-5,
@@ -43,7 +44,7 @@ if __name__ == '__main__':
         "model_unroll_len": 5,
         "model_num_res_blocks": 10,
         "model_num_filters": 128,
-        "model_batch_size": 1024,
+        "model_batch_size": 512,
     })
 
     # Import policy and model

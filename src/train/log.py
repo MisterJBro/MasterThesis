@@ -8,10 +8,10 @@ from torch.utils.tensorboard import SummaryWriter
 class Logger(dict):
     """Basic logger for metrics"""
 
-    def __init__(self, config, path=None, *args, **kwargs):
+    def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
-        self.log_path = path
+        self.log_path = config['log_path']
         self.main_metric = []
         self.timer = time.time()
         self.writer = None

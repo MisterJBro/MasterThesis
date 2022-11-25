@@ -9,18 +9,18 @@ class Envs:
     def __init__(self, config):
         # Get configuration parameter
         self.config = config
-        self.num_cpus = config["num_cpus"]
+        self.num_workers = config["num_workers"]
         self.num_envs = config["num_envs"]
         self.device = config["device"]
 
         # Create rollout worker
-        pipes = [Pipe() for _ in range(self.num_cpus)]
+        pipes = [Pipe() for _ in range(self.num_workers)]
         self.channels = [p[0] for p in pipes]
-        self.num_envs_worker = int(self.num_envs/self.num_cpus)
-        self.rest_env_num = (self.num_envs % self.num_cpus) + self.num_envs_worker
+        self.num_envs_worker = int(self.num_envs/self.num_workers)
+        self.rest_env_num = (self.num_envs % self.num_workers) + self.num_envs_worker
         self.workers = [
-            Worker(i, self.rest_env_num if i == self.num_cpus-1 else self.num_envs_worker, pipes[i][1], config)
-            for i in range(self.num_cpus)
+            Worker(i, self.rest_env_num if i == self.num_workers-1 else self.num_envs_worker, pipes[i][1], config)
+            for i in range(self.num_workers)
         ]
         for w in self.workers:
             w.start()
@@ -40,7 +40,7 @@ class Envs:
 
     def step(self, act):
         for i, c in enumerate(self.channels):
-            if i == self.num_cpus-1:
+            if i == self.num_workers-1:
                 c.send({
                     "command": "step",
                     "act": act[i*self.num_envs_worker:],

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     config = create_config({
         "env": env,
         "train_iters": 40,
-        "num_cpus": 3,
+        "num_workers": 3,
         "num_envs": 30,
         "device": "cpu",
         "pi_lr": 1e-3,

@@ -27,7 +27,7 @@ if __name__ == '__main__':
         "search_iters": 100,
         "search_num_workers": 15,
         "search_evaluator_batch_size": 15,
-        "num_cpus": 15,
+        "num_workers": 15,
         "num_envs": 15,
         "device": "cuda:0",
         "pi_lr": 1e-3,

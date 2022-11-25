@@ -1,59 +1,57 @@
+import os
+import random
+import time
+import humanize
+from abc import ABC, abstractmethod
+from copy import deepcopy
+
 import numpy as np
 import torch
 import torch.nn as nn
-from abc import ABC, abstractmethod
-from copy import deepcopy
-from itertools import compress
-
-import os
-import gym
-import time
-import random
-from src.debug.elo import update_ratings
-from src.debug.util import measure_time
-from src.env.envs import Envs
 from hexgame import RustEnvs
-from src.train.log import Logger
-
-from torch.multiprocessing import freeze_support
-from src.train.processer import post_processing
 from tabulate import tabulate
-from src.env.sample_batch import SampleBatch
-from multiprocessing import Pool
-import pathlib
+from torch.multiprocessing import freeze_support
 
-PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
+import gym
+from src.debug.elo import update_ratings
+from src.debug.util import measure_time, seed_all
+from src.train.log import Logger
+from src.train.menagerie import Menagerie
 
 
 class Trainer(ABC):
-    def __init__(self, config, policy):
-        # RNG seed
-        seed = config["seed"]
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+    """ Trainer Base Class """
 
+    def __init__(self, config, policy, **kwargs):
+        # Init attributes
+        seed_all(config["seed"])
         self.config = config
-        self.device = config["device"]
-        num_workers = config["num_cpus"]
-        num_envs_per_worker = config["num_envs_per_worker"]
-        size = config["env"].size
-        self.envs = RustEnvs(num_workers, num_envs_per_worker, core_pinning=False, gamma=config["gamma"], max_len=config["max_len"], size=size)
-        self.num_envs = config["num_envs"]
         self.policy = policy
-        self.log = Logger(config, path=f'{PROJECT_PATH}/src/scripts/log/')
-        self.save_paths = []
-        self.elos = [0]
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
-        self.scalar_loss = nn.MSELoss()
-        self.policies = [self.policy]
+        self.__dict__.update(kwargs)
 
+        # Init Envs
+        self.num_envs = config["num_envs"]
+        self.envs = RustEnvs(
+            config["num_workers"],
+            config["num_envs_per_worker"],
+            core_pinning=config["core_pinning"],
+            gamma=config["gamma"],
+            max_len=config["max_len"],
+            size=config["env"].size,
+        )
+
+        # Others
+        self.log = Logger(config)
+        self.menagerie = Menagerie(config)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
+
+        # Print information
         print(tabulate([
-            ['Environment', config["env"]],
+            ['Environment', config["env"].__class__.__name__],
+            ['Policy', humanize.intword(self.policy.get_num_params())],
             ['Obs shape', config["obs_dim"]],
-            ['Actions num', config["num_acts"]],
-            ['CPU count', config["num_cpus"]],
+            ['Actions', config["num_acts"]],
+            ['Workers', config["num_workers"]],
         ], colalign=("left", "right")))
         print()
 
@@ -102,12 +100,13 @@ class Trainer(ABC):
 
     def pre_update(self):
         self.policy.train()
-        if len(self.policies) == 1:
-            self.last_policy = deepcopy(self.policy)
-            self.last_policy.eval()
-            self.policies.append(self.last_policy)
-        else:
-            self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
+        if self.config["sp_sampled_policies"] > 1:
+            if len(self.policies) == 1:
+                self.last_policy = deepcopy(self.policy)
+                self.last_policy.eval()
+                self.policies.append(self.last_policy)
+            else:
+                self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
 
     @abstractmethod
     def update(self, sample_batch):
