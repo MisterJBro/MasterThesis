@@ -2,6 +2,7 @@ import os
 import random
 import numpy as np
 from copy import deepcopy
+from src.debug.elo import update_ratings
 
 
 class PolicyInfo:
@@ -50,9 +51,11 @@ class Menagerie:
         self.log = log
         self.policies = [self.policy]
         self.infos = []
+        self.last_sampled = []
 
     def sample(self):
         """ Sample policies for use in self-play """
+        self.last_sampled = []
         if len(self.infos[:-1]) > 0:
             # Adding new policies
             if len(self.policies) < self.config["sp_sampled_policies"]:
@@ -64,6 +67,8 @@ class Menagerie:
             infos = random.sample(self.infos[:-1], max(0, len(self.policies) - 2))
             for i in range(2, len(self.policies)):
                 self.policies[i].load(path=infos[i-2].path)
+                self.last_sampled.append(infos[i-2])
+            self.log("sampled_policies", [info.name for info in infos])
         return self.policies
 
     def update(self):
@@ -75,6 +80,7 @@ class Menagerie:
                 self.policies.append(self.last_policy)
             else:
                 self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
+        self.elo()
         self.checkpoint()
 
     def checkpoint(self):
@@ -91,5 +97,6 @@ class Menagerie:
         self.policy.save(path=path)
 
     def elo(self):
+        elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
         pass
 
