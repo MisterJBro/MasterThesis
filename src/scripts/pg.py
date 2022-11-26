@@ -20,7 +20,7 @@ if __name__ == '__main__':
         "env": env,
         "max_len": size*size,
         "num_workers": 3,
-        "num_envs": 24,
+        "num_envs": 3,
         "sample_len": 1_000,
         "device": "cuda:0",
         "pi_lr": 6e-4,

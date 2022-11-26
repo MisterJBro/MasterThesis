@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import argparse
 import pathlib
+import yaml
 
 
 # Default configuration of all algorithm. Ideas adopted from ray framework.
@@ -83,6 +84,7 @@ DEFAULT_CONFIG = {
     "log_to_writer": True,
     "log_path": "",
     "num_checkpoints": 1,
+    "experiment_path": "",
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
@@ -118,6 +120,8 @@ def compute_config(config):
     config["root_path"] = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
     if config["log_path"] == "":
         config["log_path"] = config["root_path"] + "/src/scripts/log/"
+    if config["experiment_path"] == "":
+        config["experiment_path"] = config["root_path"] + "/experiments/"
 
     return config
 
@@ -156,3 +160,12 @@ def create_config(new_config):
     config = compute_config(config)
     check_config(config)
     return config
+
+def to_yaml(config, path):
+    # Do not write "env" field to yaml
+    config = config.copy()
+    #del config["env"]
+    config = {k: str(v) for k, v in config.items()}
+
+    with open(path, "w") as f:
+        f.write(yaml.dump(config, default_flow_style=False))

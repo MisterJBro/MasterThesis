@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 import humanize
 import numpy as np
@@ -16,6 +17,7 @@ class PGTrainer(Trainer):
     """ Train a policy using Policy Gradient with baseline."""
 
     def update(self, eps):
+        self.policy.train()
         # Config
         batch_size = self.config["batch_size"]
         device = self.config["device"]
@@ -74,7 +76,7 @@ class PGTrainer(Trainer):
                     loss_policy = -(logp * adv_bt).mean()
 
                     loss_entropy = - dist_bt.entropy().mean()
-                    loss_value = self.scalar_loss(val_bt, ret_bt)
+                    loss_value = F.mse_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= num_batch_splits
 
@@ -96,6 +98,7 @@ class PPOTrainer(PGTrainer):
     """ Train a policy using Proximal Policy Gradient."""
 
     def update(self, eps):
+        self.policy.train()
         # Config
         batch_size = self.config["batch_size"]
         device = self.config["device"]
@@ -163,7 +166,7 @@ class PPOTrainer(PGTrainer):
                     loss_policy = -(torch.min(ratio*adv_bt, clipped)).mean()
 
                     loss_entropy = - dist_bt.entropy().mean()
-                    loss_value = self.scalar_loss(val_bt, ret_bt)
+                    loss_value = F.mse_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
                     loss /= num_batch_splits
 

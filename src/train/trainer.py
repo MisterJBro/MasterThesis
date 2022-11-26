@@ -16,7 +16,8 @@ import gym
 from src.debug.elo import update_ratings
 from src.debug.util import measure_time, seed_all
 from src.train.log import Logger
-from src.train.menagerie import Menagerie
+from src.train.menagerie import Menagerie, PolicyMapping
+from src.train.config import to_yaml
 
 
 class Trainer(ABC):
@@ -40,15 +41,27 @@ class Trainer(ABC):
             size=config["env"].size,
         )
 
+        # Under experiment path get all folder names
+        dir_names = [name for name in os.listdir(config["experiment_path"]) if os.path.isdir(config["experiment_path"] + name) and name.isdigit()]
+        print(dir_names)
+        if len(dir_names) > 0:
+            new_name = max([int(name) for name in dir_names ]) + 1
+        else:
+            new_name = 0
+        self.config["experiment_path"] = self.config["experiment_path"] + str(new_name) + '/'
+        os.makedirs(self.config["experiment_path"])
+        to_yaml(self.config, self.config["experiment_path"] + "config.yaml")
+
         # Others
+        self.device = config["device"]
         self.log = Logger(config)
-        self.menagerie = Menagerie(config)
+        self.menagerie = Menagerie(config, policy, self.log)
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.config["use_amp"])
 
         # Print information
         print(tabulate([
             ['Environment', config["env"].__class__.__name__],
-            ['Policy', humanize.intword(self.policy.get_num_params())],
+            ['Policy params', humanize.intword(self.policy.get_num_params())],
             ['Obs shape', config["obs_dim"]],
             ['Actions', config["num_acts"]],
             ['Workers', config["num_workers"]],
@@ -56,127 +69,85 @@ class Trainer(ABC):
         print()
 
     def train(self):
+        self.log("iter", 0)
+        eps, sample_time = measure_time(lambda: self.sample_sync())
+        self.log("sample_t", sample_time, 's', show=False)
+
         for iter in range(self.config["train_iters"]):
-            self.log.clear()
-            self.log("iter", iter)
+            self.log("iter", iter+1)
 
             # Main
-            eps, sample_time = measure_time(lambda: self.sample_sync())
-            self.log("sample_t", sample_time, 's')
-
-            self.pre_update()
+            #self.pre_update()
             _, update_time = measure_time(lambda: self.update(eps))
             self.log("update_t", update_time, 's')
 
+            eps, sample_time = measure_time(lambda: self.sample_sync())
+            self.log("sample_t", sample_time, 's')
+
             # Self play test
-            self.policy.eval()
-            if self.config["num_players"] > 1:
-                (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
-                self.log("eval_t", eval_time, 's')
-                self.log("win_rate", win_rate, '%')
-                self.log("elo", elo)
+            #self.policy.eval()
+            #if self.config["num_players"] > 1:
+            #    (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
+            #    self.log("eval_t", eval_time, 's')
+            #    self.log("win_rate", win_rate, '%')
+            #    self.log("elo", elo)
 
             # Logging
-            #self.log.update(eps.metrics)
             print(self.log)
             if self.config["log_to_file"]:
                 self.log.to_file()
             if self.config["log_to_writer"]:
-                self.log.to_writer(iter)
-            self.checkpoint(iter)
-
-    def checkpoint(self, iter):
-        dir_path = f'{PROJECT_PATH}/checkpoints/'
-        name = f'p_{iter}_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]][0]:.0f}.pt'
-        next_path = dir_path + name
-        self.save_paths.append(next_path)
-        if len(self.save_paths) > self.config["num_checkpoints"]:
-            last_path = self.save_paths.pop(0)
-            if os.path.isfile(last_path):
-                os.remove(last_path)
-            else:
-                print("Warning: %s checkpoint not found" % last_path)
-        self.save(path=next_path)
-
-    def pre_update(self):
-        self.policy.train()
-        if self.config["sp_sampled_policies"] > 1:
-            if len(self.policies) == 1:
-                self.last_policy = deepcopy(self.policy)
-                self.last_policy.eval()
-                self.policies.append(self.last_policy)
-            else:
-                self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
+                self.log.to_writer()
 
     @abstractmethod
-    def update(self, sample_batch):
+    def update(self, eps):
         pass
-
-    # Sample Policies for use in Self Play
-    def sample_policies(self):
-        if len(self.save_paths[:-1]) > 0:
-            # Adding new policies
-            if len(self.policies) < self.config["sp_sampled_policies"]:
-                new_policy = deepcopy(self.policy)
-                new_policy.eval()
-                self.policies.append(new_policy)
-
-            # Sample
-            paths = random.sample(self.save_paths[:-1], max(0, len(self.policies) - 2))
-            for i in range(2, len(self.policies)):
-                path = paths[i-2]
-                self.policies[i].load(path=path)
 
     def sample_sync(self):
         self.policy.eval()
-        self.sample_policies()
-
-        policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
-        #if len(self.policies) > 1:
-        #    policy_mapping[::2, 1] = 1
-        #    policy_mapping[1::2, 0] = 1
+        policies = self.menagerie.sample()
+        map = PolicyMapping(len(policies), self.num_envs)
 
         # Metrics
         num_games = 0
-        num_wins = np.zeros(len(self.policies), dtype=np.int32)
+        games = {}
         last_pol_id = np.zeros(self.num_envs, dtype=np.int32)
-        game_hist = {}
-        game_rates = {}
 
         # Reset
         obs, info = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, eid, dist, pol_id = self.get_different_actions(self.policies, policy_mapping, obs, info)
+            act, eid, dist, pol_id = self.get_different_actions(policies, map, obs, info)
             last_pol_id[eid] = pol_id
-            # possible act = self.get_different_actions(...)
-            # self.envs.step(*act) # python spread operator
             obs, rew, done, info = self.envs.step(act, eid, dist, pol_id, num_waits=self.num_envs)
 
             # Check dones
             for i in info["eid"]:
                 if done[i]:
                     num_games += 1
-                    wid = last_pol_id[i]
-                    num_wins[wid] += rew[i]
-
-                    # Change policy mapping
-                    if policy_mapping[i].sum() == 0:
-                        # Randomly insert to either index 0 or 1
-                        policy_mapping[i, random.randint(0, 1)] = 1 % len(self.policies)
+                    if last_pol_id[i] == 0:
+                        win_base = (rew[i] + 1) / 2
                     else:
-                        policy_mapping[i, policy_mapping[i] > 0] = (policy_mapping[i, policy_mapping[i] > 0] + 1 ) % len(self.policies)
+                        win_base = 1 - (rew[i] + 1) / 2
 
-                    if bool(random.getrandbits(1)):
-                        policy_mapping[i] = policy_mapping[i][::-1]
-                    game_hist[tuple(policy_mapping[i].tolist())] = game_hist.get(tuple(policy_mapping[i].tolist()), 0) + 1
-                    game_rates[tuple(policy_mapping[i].tolist())] = game_rates.get(tuple(policy_mapping[i].tolist()), 0) + rew[i]
+                    g = tuple(map[i])
+                    if g not in games:
+                        games[g] = {
+                            "num": 1,
+                            "win_base": win_base,
+                        }
+                    else:
+                        games[g]["num"] += 1
+                        games[g]["win_base"] += win_base
 
-        #print(game_hist)
+                    map.update(i)
+
         # Sync
+        self.log("games", games, show=False)
         self.log("num_games", num_games)
         self.envs.reset()
         eps = self.envs.get_episodes()
+        self.menagerie.update()
 
         return eps
 
@@ -319,20 +290,6 @@ class Trainer(ABC):
             policy_mapping = 1 - policy_mapping
 
         return win_count
-
-    def save(self, path=None):
-        if path is not None:
-            self.policy.save(path=path)
-        else:
-            path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}.pt'
-            self.policy.save(path=path)
-
-    def load(self, path=None):
-        if path is not None:
-            self.policy.load(path=path)
-        else:
-            path = f'{PROJECT_PATH}/checkpoints/policy_{self.config["env"]}_{self.__class__.__name__.lower()}.pt'
-            self.policy.load(path=path)
 
     def __enter__(self):
         freeze_support()
