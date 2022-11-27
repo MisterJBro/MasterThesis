@@ -104,12 +104,12 @@ class Menagerie:
 
         self.log("elo", self.curr_elo)
         for info in updated_infos:
-            new_path = info.path.split("_elo_")[0] + f"_elo_{info.elo}.pt"
+            new_path = info.path.split("_elo_")[0] + f"_elo_{info.elo:.01f}.pt"
             os.rename(info.path, new_path)
             info.path = new_path
 
     def checkpoint(self):
-        name = f'p_{self.log["iter"]["value"][-1]}_elo_{self.curr_elo}.pt'
+        name = f'p_{self.log["iter"]["value"][-1]}_elo_{self.curr_elo:.01f}.pt'
         path = self.config["experiment_path"] + name
         self.infos.append(PolicyInfo(path, self.curr_elo))
 
