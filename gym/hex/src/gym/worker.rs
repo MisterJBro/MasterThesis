@@ -13,6 +13,7 @@ pub enum WorkerMessageIn {
     Step{act: Action, eid: usize, dist: Array<f32, Ix1>, pol_id: usize},
     Render{eid: usize},
     Close{eid: usize},
+    GetEnv{eid: usize},
     Shutdown,
 }
 #[derive(Clone, Debug)]
@@ -30,7 +31,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, eps_in: Sender<Episode>, gamma: f32, max_len: usize, core_id: Option<CoreId>, size: u8) -> Worker {
+    pub fn new(id: usize, num_envs_per_worker: usize, in_channel: Receiver<WorkerMessageIn>, out_channel: Sender<WorkerMessageOut>, eps_in: Sender<Episode>, env_in: Sender<(usize, Env)>, gamma: f32, max_len: usize, core_id: Option<CoreId>, size: u8) -> Worker {
         let eid_start = id * num_envs_per_worker;
         let mut episodes = vec![Some(Episode::new(max_len)); num_envs_per_worker];
 
@@ -138,6 +139,14 @@ impl Worker {
                             // Close
                             let local_eid = eid - eid_start;
                             envs[local_eid].close();
+                        },
+                        WorkerMessageIn::GetEnv{eid} => {
+                            // Get Env
+                            let local_eid = eid - eid_start;
+                            let env = envs[local_eid].clone();
+                            if env_in.try_send((eid, env)).is_err() {
+                                panic!("Error sending env to master");
+                            }
                         },
                         WorkerMessageIn::Shutdown => {
                             for env in envs.iter_mut() {

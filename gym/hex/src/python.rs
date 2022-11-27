@@ -114,6 +114,11 @@ impl PyEnvs {
 
         episodes.into_iter().map(|eps| eps.to_python()).collect()
     }
+
+    fn get_envs(&self, eid: Vec<usize>) -> Vec<PyEnv> {
+        let envs = self.0.get_envs(eid);
+        envs.into_iter().map(|env| PyEnv(env)).collect()
+    }
 }
 
 /// Python Episode Interface

@@ -11,12 +11,12 @@ import numpy as np
 if __name__ == '__main__':
     # Init
     freeze_support()
-    size = 9
+    size = 4
     env = HexEnv(size)
     config = create_config({
         "env": env,
-        "num_workers": 3,
-        "num_envs": 12,
+        "num_workers": 2,
+        "num_envs": 4,
         "sample_len": 1_000,
     })
     envs = Envs(config)
@@ -50,8 +50,8 @@ if __name__ == '__main__':
         legal_act = info["legal_act"]
 
         for _ in range(config["sample_len"]):
-            act = [(eid[i], random.choice(np.arange(size*size)[legal_act[i]])) for i in range(len(legal_act))]
-            obs_next, rew, done, info = rust_envs.step(act, num_waits=config["num_workers"]*config["num_envs_per_worker"])
+            act = [random.choice(np.arange(size*size)[legal_act[i]]) for i in range(len(legal_act))]
+            obs_next, rew, done, info = rust_envs.step(act, eid, np.zeros((eid.shape[0], size* size), dtype=np.float32), np.zeros(eid.shape[0], dtype=np.int32), num_waits=config["num_workers"]*config["num_envs_per_worker"])
 
             pid = info["pid"]
             eid = info["eid"]
@@ -66,8 +66,8 @@ if __name__ == '__main__':
         return end-start
 
     # Measure time
-    time_needed = python_mp()
-    print(f"Python time taken: {time_needed:.02f}s")
+    #time_needed = python_mp()
+    #print(f"Python time taken: {time_needed:.02f}s")
     time_needed = rust()
     print(f"Rust time taken: {time_needed:.02f}s")
 
