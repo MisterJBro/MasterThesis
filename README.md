@@ -28,3 +28,7 @@ Upgrade packages:
 ```
 conda update --all
 ```
+
+```
+tensorboard --logdir experiments/ --samples_per_plugin images=200
+```
