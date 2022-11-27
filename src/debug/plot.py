@@ -76,12 +76,15 @@ if __name__ == '__main__':
     # Plot
     #plt.plot(x, mean0, label="PGS long horizon")
     #plt.fill_between(x, mean0+sigma0, mean0-sigma0, alpha=0.4)
+    plt.subplots_adjust(left=0.3, bottom=0.3, right=0.7, top=0.7)
     plt.plot(win_rate)
     #plt.fill_between(x, mean1+sigma1, mean1-sigma1, alpha=0.4)
     #plt.plot(x, mean2, label="PGS short horizon")
     #plt.fill_between(x, mean2+sigma2, mean2-sigma2, alpha=0.4)
     #plt.plot(x, mean3, label="PGS long horizon")
     #plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
+    plt.show()
+    quit()
 
     # Heat map
     #sns.heatmap(pgs_dist2, linewidth=0.5, annot=True, xticklabels=['a', 'b', 'c', 'd', 'e'], yticklabels=[1,2,3,4,5])

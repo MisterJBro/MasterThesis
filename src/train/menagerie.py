@@ -8,10 +8,12 @@ from src.debug.elo import update_ratings
 class PolicyInfo:
     """ Meta Information about a policy """
 
-    def __init__(self, path):
+    def __init__(self, path, elo):
         self.path = path
-        self.name = os.path.basename(path)
-        self.elo = 0
+        self.elo = elo
+
+    def get_name(self):
+        return os.path.basename(self.path)
 
     def __str__(self):
         return self.name
@@ -49,13 +51,14 @@ class Menagerie:
         self.config = config
         self.policy = policy
         self.log = log
+        self.curr_elo = config["sp_start_elo"]
         self.policies = [self.policy]
         self.infos = []
-        self.last_sampled = []
+        self.sampled_infos = []
 
     def sample(self):
         """ Sample policies for use in self-play """
-        self.last_sampled = []
+        self.sampled_infos = []
         if len(self.infos[:-1]) > 0:
             # Adding new policies
             if len(self.policies) < self.config["sp_sampled_policies"]:
@@ -64,29 +67,51 @@ class Menagerie:
                 self.policies.append(new_policy)
 
             # Sample and load
-            infos = random.sample(self.infos[:-1], max(0, len(self.policies) - 2))
+            indices = random.sample(list(np.arange(len(self.infos[:-1]))), max(0, len(self.policies) - 2))
             for i in range(2, len(self.policies)):
-                self.policies[i].load(path=infos[i-2].path)
-                self.last_sampled.append(infos[i-2])
-            self.log("sampled_policies", [info.name for info in infos])
+                self.policies[i].load(path=self.infos[indices[i-2]].path)
+                self.sampled_infos.append(indices[i-2])
+        self.log("sampled_policies", self.sampled_infos, show=False)
         return self.policies
 
     def update(self):
         """ Updates menagerie with last policy """
-        if self.config["sp_sampled_policies"] > 1:
-            if len(self.policies) == 1:
-                self.last_policy = deepcopy(self.policy)
-                self.last_policy.eval()
-                self.policies.append(self.last_policy)
-            else:
-                self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
         self.elo()
         self.checkpoint()
+        self.new_last()
+
+    def elo(self):
+        """ Calculates new elo ratings for policies which played games """
+        games = self.log["games"]["value"][-1]
+        updated_infos = []
+
+        for match_up, data in games.items():
+            num_games = data["num"]
+            num_wins = data["win_base"]
+            opponent = max(match_up)
+            if opponent == 0:
+                continue
+            elif opponent == 1:
+                self.curr_elo, self.infos[-1].elo = update_ratings(self.curr_elo, self.infos[-1].elo, num_games, num_wins, K=self.config["sp_elo_k"])
+                self.log["elo"]["value"][-1] = self.infos[-1].elo
+                updated_infos.append(self.infos[-1])
+            else:
+                index = self.sampled_infos[opponent-2]
+                info = self.infos[index]
+                self.curr_elo, info.elo = update_ratings(self.curr_elo, info.elo, num_games, num_wins, K=self.config["sp_elo_k"])
+                self.log["elo"]["value"][index] = self.infos[index].elo
+                updated_infos.append(info)
+
+        self.log("elo", self.curr_elo)
+        for info in updated_infos:
+            new_path = info.path.split("_elo_")[0] + f"_elo_{info.elo}.pt"
+            os.rename(info.path, new_path)
+            info.path = new_path
 
     def checkpoint(self):
-        name = f'p_{self.log["iter"]["value"][-1]}.pt'#_{self.config["log_main_metric"]}={self.log[self.config["log_main_metric"]]["value"][-1]:.0f}.pt'
+        name = f'p_{self.log["iter"]["value"][-1]}_elo_{self.curr_elo}.pt'
         path = self.config["experiment_path"] + name
-        self.infos.append(PolicyInfo(path))
+        self.infos.append(PolicyInfo(path, self.curr_elo))
 
         #if len(self.save_paths) > self.config["num_checkpoints"]:
         #    last_path = self.save_paths.pop(0)
@@ -96,7 +121,12 @@ class Menagerie:
         #        print("Warning: %s checkpoint not found" % last_path)
         self.policy.save(path=path)
 
-    def elo(self):
-        elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
-        pass
-
+    def new_last(self):
+        if self.config["sp_sampled_policies"] > 1:
+            if len(self.policies) == 1:
+                self.last_policy = deepcopy(self.policy)
+                self.last_policy.eval()
+                self.policies.append(self.last_policy)
+            else:
+                self.last_policy.load_state_dict(deepcopy(self.policy.state_dict()))
+        #self.curr_elo = self.config["sp_start_elo"]

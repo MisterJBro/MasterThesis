@@ -70,6 +70,7 @@ DEFAULT_CONFIG = {
     "sp_num_eval_games": 210,
     "sp_update_win_rate": 53,
     "sp_sampled_policies": 4,
+    "sp_start_elo": 0,
 
     # === Policy Gradients ===
     "pg_iters": 4,

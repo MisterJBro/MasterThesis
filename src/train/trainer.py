@@ -72,6 +72,7 @@ class Trainer(ABC):
         self.log("iter", 0)
         eps, sample_time = measure_time(lambda: self.sample_sync())
         self.log("sample_t", sample_time, 's', show=False)
+        self.log.show()
 
         for iter in range(self.config["train_iters"]):
             self.log("iter", iter+1)
@@ -83,6 +84,7 @@ class Trainer(ABC):
 
             eps, sample_time = measure_time(lambda: self.sample_sync())
             self.log("sample_t", sample_time, 's')
+            self.log.show()
 
             # Self play test
             #self.policy.eval()
@@ -92,12 +94,6 @@ class Trainer(ABC):
             #    self.log("win_rate", win_rate, '%')
             #    self.log("elo", elo)
 
-            # Logging
-            print(self.log)
-            if self.config["log_to_file"]:
-                self.log.to_file()
-            if self.config["log_to_writer"]:
-                self.log.to_writer()
 
     @abstractmethod
     def update(self, eps):

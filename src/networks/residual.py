@@ -152,11 +152,15 @@ class HexPolicy(nn.Module):
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         torch.save({
+            'architecture': str(self),
             'parameters': self.state_dict(),
             'optimizer': self.optim.state_dict(),
         }, path)
 
     def load(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
         checkpoint = torch.load(path)
-        self.load_state_dict(checkpoint['parameters'])
-        self.optim.load_state_dict(checkpoint['optimizer'])
+        try:
+            self.load_state_dict(checkpoint['parameters'])
+            self.optim.load_state_dict(checkpoint['optimizer'])
+        except:
+            print(f"Failed to load checkpoint. Architecture mismatch. Is: \n{str(self)}\nbut should be:\n{checkpoint['architecture']}")
