@@ -83,7 +83,7 @@ if __name__ == '__main__':
     def mz(env, obs, info):
         global muzero_obj
         if muzero_obj is None:
-            muzero_obj = MuZero(config, policy1, model)
+            muzero_obj = MuZero(config, model)
         result = muzero_obj.search(State(env, obs=obs), iters=36)
         #print(result.reshape(6, 6).round(2))
         act = np.argmax(result)

@@ -40,6 +40,21 @@ class MZEvaluator(Evaluator):
         wids = wids0 + wids1
         return wids, reply
 
+    def run(self):
+        self.model.to(self.model.device)
+        while True:
+            if not self.master_channel.poll():
+                self.serve_requests()
+            else:
+                msg = self.master_channel.recv()
+
+                if msg["command"] == "close":
+                    break
+                elif msg["command"] == "update":
+                    self.update(msg)
+                elif msg["command"] == "clear cache":
+                    self.cache.clear()
+
     def eval_obs(self, obs):
         # Representation network
         new_abs = self.model.representation(obs)
@@ -70,5 +85,4 @@ class MZEvaluator(Evaluator):
             } for a, r, v, p in zip(abs, rew, val, prob)]
 
     def update(self, msg):
-        self.policy.load_state_dict(msg["policy_params"])
         self.model.load_state_dict(msg["model_params"])
