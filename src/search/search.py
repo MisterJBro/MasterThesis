@@ -20,7 +20,7 @@ class ParallelSearchAlgorithm(ABC):
         if not isinstance(states, list):
             states = [states]
         i = 0
-        dists = []
+        results = []
         num_states = len(states)
         while i < num_states:
             max_c_idx = self.num_workers
@@ -35,8 +35,15 @@ class ParallelSearchAlgorithm(ABC):
                     max_c_idx = c_idx+1
                     break
             msg = [c.recv() for c in self.channels[:max_c_idx]]
-            dists.extend(msg)
-        return np.array(dists)
+            results.extend(msg)
+
+        # Combine results
+        keys = results[0].keys()
+        res = {}
+        for k in keys:
+            res[k] = np.array([r[k] for r in results])
+
+        return res
 
     def close(self):
         for c in self.channels:

@@ -147,7 +147,7 @@ if __name__ == '__main__':
             else:
                 act = players[1](env, obs, info)
 
-            obs, reward, done, info = env.step(act)
+            obs, rew, done, info = env.step(act)
 
             black_turn = not black_turn
 
@@ -155,7 +155,7 @@ if __name__ == '__main__':
             env.render()
         black_turn = not black_turn
         if black_turn:
-            num_victories_first += 1
+            num_victories_first += rew
 
     print(f"Winrate {players[0].__name__.upper()}: {num_victories_first / num_games :.02f}")
 

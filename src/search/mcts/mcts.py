@@ -26,7 +26,10 @@ class MCTS(ParallelSearchAlgorithm):
                 "state": deepcopy(state),
                 "iters": iters,
             })
-        msg = np.stack([c.recv() for c in self.channels])
-
-        qvals = np.mean(msg, axis=0)
-        return qvals
+        msg = [c.recv() for c in self.channels]
+        qvals = np.mean([m["Q"] for m in msg], axis=0)
+        vals = np.mean([m["V"] for m in msg], axis=0)
+        return {
+            "Q": qvals,
+            "V": vals,
+        }

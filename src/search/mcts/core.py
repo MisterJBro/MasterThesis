@@ -23,7 +23,11 @@ class MCTSCore:
             iter += 1
 
         qvals = self.root.get_action_values(self.config["num_acts"], default=default)
-        return qvals
+        val = -self.root.qvalue()
+        return {
+            "Q": qvals,
+            "V": val,
+        }
 
     def select(self):
         node = self.root
