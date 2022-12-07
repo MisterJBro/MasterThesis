@@ -33,42 +33,58 @@ class MZEvaluator(Evaluator):
                 reply.extend(self.eval_obs(obs))
 
             if len(abs) > 0 and len(act) == len(abs):
-                abs = torch.concat(abs, 0).to(self.device)
+                abs = torch.as_tensor(np.concatenate(abs, 0)).to(self.device)
                 act = torch.as_tensor(act).long().to(self.device)
                 reply.extend(self.eval_abs(abs, act))
 
         wids = wids0 + wids1
         return wids, reply
 
+    def run(self):
+        self.model.to(self.model.device)
+        while True:
+            if not self.master_channel.poll():
+                self.serve_requests()
+            else:
+                msg = self.master_channel.recv()
+
+                if msg["command"] == "close":
+                    break
+                elif msg["command"] == "update":
+                    self.update(msg)
+                elif msg["command"] == "clear cache":
+                    self.cache.clear()
+
     def eval_obs(self, obs):
         # Representation network
         new_abs = self.model.representation(obs)
         dist, val = self.model.prediction(new_abs)
+        new_abs = new_abs.cpu().numpy()
         prob = dist.probs.cpu().numpy()
         val = val.cpu().numpy()
 
         return [{
-            "abs": a.unsqueeze(0),
+            "abs": a[np.newaxis, :],
             "val": v,
             "prob": p,
             } for a, v, p in zip(new_abs, val, prob)]
 
     def eval_abs(self, abs, act):
-        new_abs, rew = self.model.dynamics(abs, act)
+        new_abs, rew = self.model.dynamics(abs.to(self.model.device), act)
         dist, val = self.model.prediction(new_abs)
 
         # Inference all and then transfer to cpu
+        new_abs = new_abs.cpu().numpy()
         rew = rew.cpu().numpy()
         val = val.cpu().numpy()
         prob = dist.probs.cpu().numpy()
 
         return [{
-            "abs": a.unsqueeze(0),
+            "abs": a[np.newaxis, :],
             "rew": r,
             "val": v,
             "prob": p,
-            } for a, r, v, p in zip(abs, rew, val, prob)]
+            } for a, r, v, p in zip(new_abs, rew, val, prob)]
 
     def update(self, msg):
-        self.policy.load_state_dict(msg["policy_params"])
         self.model.load_state_dict(msg["model_params"])

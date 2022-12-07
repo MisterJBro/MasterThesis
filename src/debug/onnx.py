@@ -88,7 +88,7 @@ if __name__ == '__main__':
     trainloader = DataLoader(trainset, batch_size=1000, shuffle=True, num_workers=1)
 
     # Training
-    for epoch in range(0):
+    for epoch in range(10):
         for img, label in trainloader:
             optimizer.zero_grad(set_to_none=True)
             label = label.to(device)
@@ -101,7 +101,7 @@ if __name__ == '__main__':
             print(f"Epoch {epoch} Loss {loss.item():.03f} Loss1 {loss1.item():.02f} Loss2 {loss2.item():.02f}")
 
     # Save & load net
-    #torch.save(net.state_dict(), 'net.pt')
+    torch.save(net.state_dict(), 'net.pt')
     net.load_state_dict(torch.load('net.pt'))
 
     # Model to TorchScript

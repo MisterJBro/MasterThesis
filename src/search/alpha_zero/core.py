@@ -16,13 +16,23 @@ class AZCore(MCTSCore):
         self.set_root(state)
 
     def search(self, iters):
-        qvals = super().search(iters)
+        result = super().search(iters)
+        qvals = result["Q"]
+        vals = result["V"]
+
         if self.config["search_return_adv"]:
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
             adv = adv / (np.abs(np.max(adv)) + 1e-8)
-            return (100 + max_visits) * 0.005 * adv
-        return self.root.get_normalized_visit_counts(self.config["num_acts"])
+            pi = (100 + max_visits) * 0.005 * adv
+        else:
+            pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
+
+        return {
+            "Q": qvals,
+            "V": vals,
+            "pi": pi,
+        }
 
     def simulate(self, node):
         # Terminals have zero value

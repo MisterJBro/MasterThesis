@@ -3,12 +3,13 @@ from src.search.mu_zero.worker import MZWorker
 from src.search.mu_zero.evaluator import MZEvaluator
 from src.search.search import ParallelSearchAlgorithm
 from src.search.alpha_zero.alpha_zero import AlphaZero
+from copy import deepcopy
 
 
 class MuZero(AlphaZero):
     """ Alpha Zero with Value Equivalent Model."""
 
-    def __init__(self, config, policy, model):
+    def __init__(self, config, model):
         ParallelSearchAlgorithm.__init__(self, config)
         self.num_acts = config["num_acts"]
 
@@ -24,13 +25,12 @@ class MuZero(AlphaZero):
         eval_master_pipe = Pipe()
         eval_channels = [p[0] for p in eval_pipes]
         self.eval_channel = eval_master_pipe[0]
-        self.evaluator = MZEvaluator(config, policy, model, eval_channels, eval_master_pipe[1])
+        self.evaluator = MZEvaluator(config, None, deepcopy(model).cpu(), eval_channels, eval_master_pipe[1])
         self.evaluator.start()
 
-    def update(self, policy_params, model_params):
+    def update(self, model_params):
         self.eval_channel.send({
             "command": "update",
-            "policy_params": policy_params,
             "model_params": model_params,
         })
 

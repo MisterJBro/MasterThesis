@@ -1,19 +1,13 @@
 import os
-import random
-import time
 import humanize
 from abc import ABC, abstractmethod
-from copy import deepcopy
 
 import numpy as np
 import torch
-import torch.nn as nn
 from hexgame import RustEnvs
 from tabulate import tabulate
 from torch.multiprocessing import freeze_support
 
-import gym
-from src.debug.elo import update_ratings
 from src.debug.util import measure_time, seed_all
 from src.train.log import Logger
 from src.train.menagerie import Menagerie, PolicyMapping
@@ -78,22 +72,12 @@ class Trainer(ABC):
             self.log("iter", iter+1)
 
             # Main
-            #self.pre_update()
             _, update_time = measure_time(lambda: self.update(eps))
             self.log("update_t", update_time, 's')
 
             eps, sample_time = measure_time(lambda: self.sample_sync())
             self.log("sample_t", sample_time, 's')
             self.log.show()
-
-            # Self play test
-            #self.policy.eval()
-            #if self.config["num_players"] > 1:
-            #    (win_rate, elo), eval_time = measure_time(lambda: self.evaluate())
-            #    self.log("eval_t", eval_time, 's')
-            #    self.log("win_rate", win_rate, '%')
-            #    self.log("elo", elo)
-
 
     @abstractmethod
     def update(self, eps):
@@ -113,7 +97,7 @@ class Trainer(ABC):
         obs, info = self.envs.reset()
 
         for _ in range(self.config["sample_len"]):
-            act, eid, dist, pol_id = self.get_different_actions(policies, map, obs, info)
+            act, eid, dist, pol_id = self.get_self_play_actions(policies, map, obs, info)
             last_pol_id[eid] = pol_id
             obs, rew, done, info = self.envs.step(act, eid, dist, pol_id, num_waits=self.num_envs)
 
@@ -147,26 +131,8 @@ class Trainer(ABC):
 
         return eps
 
-    def get_action(self, policy, obs, info, use_best=False):
-        legal_act = info["legal_act"]
-
-        obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
-        with torch.inference_mode():
-            dist = policy.get_dist(obs, legal_actions=legal_act)
-            if use_best:
-                act = dist.logits.argmax(-1)
-            else:
-                act = dist.sample()
-        act = act.cpu().numpy()
-        dist = dist.logits.cpu().numpy()
-
-        if "eid" in info:
-            return act, dist, info["eid"]
-
-        return act, dist
-
     # Get actions from different policies according to some mapping of policy to env
-    def get_different_actions(self, policies, mapping, obs, info, use_best=False):
+    def get_self_play_actions(self, policies, mapping, obs, info, use_best=False):
         obs = torch.as_tensor(obs, dtype=torch.float32).to(self.device)
         legal_act = info["legal_act"]
         eid = info["eid"]
@@ -202,90 +168,6 @@ class Trainer(ABC):
             pol_id.append(pol_id_p)
             dist.append(dist_p.logits.cpu().numpy())
         return act, np.concatenate(eid, 0), np.concatenate(dist, 0), np.concatenate(pol_id, 0)
-
-    def test(self, render=True):
-        if isinstance(self.config["env"], str):
-            env = gym.make(self.config["env"])
-        else:
-            env = self.config["env"]
-        rews = []
-        if render:
-            input('Press any key to continue...')
-
-        obs = env.reset()
-        for _ in range(self.config["max_len"]):
-            if render:
-                deepcopy(env).render()
-                time.sleep(0.1)
-            act, _ = self.get_action(obs[np.newaxis], envs=[deepcopy(env)], use_best=True, legal_actions=[env.legal_actions()])
-            obs, rew, done, _ = env.step(act[0])
-            rews.append(rew)
-
-            if done:
-                obs = env.reset()
-                break
-        print(f'Undiscounted return: {np.sum(rews)}')
-        env.close()
-
-    def evaluate(self):
-        # Get last policy
-        old_policy = deepcopy(self.policy)
-        for layer in old_policy.children():
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
-
-        # Parameters
-        num_games = self.config["sp_num_eval_games"]
-        if num_games == 0:
-            return 0, 0
-
-        # Evaluate in parallel
-        win_count = self.play_other(old_policy, num_games)
-        win_rate = win_count/(num_games+1e-9) * 100.0
-        if win_rate >= self.config["sp_update_win_rate"]:
-            last_elo = self.elos[-1]
-            elo, _ = update_ratings(last_elo, last_elo, num_games, win_count, K=self.config["sp_elo_k"])
-            self.elos.append(elo)
-        else:
-            self.policy.load_state_dict(deepcopy(self.last_policy.state_dict()))
-            elo = self.elos[-1]
-        return win_rate, elo
-
-    def play_other(self, other_policy, num_games):
-        win_count = 0
-        # Policy mapping
-        policies = [self.policy, other_policy]
-        policy_mapping = np.zeros((self.num_envs, 2), dtype=np.int32)
-        policy_mapping[::2, 1] = 1
-        policy_mapping[1::2, 0] = 1
-
-        for _ in range(int(num_games/self.num_envs)):
-            obs, info = self.envs.reset()
-
-            for i in range(self.config["max_len"]):
-                # Get actions
-                act, eid, dist, pol_id  = self.get_different_actions(policies, policy_mapping, obs, info)
-
-                # Step
-                next_obs, rew, done, next_info = self.envs.step(act, eid, dist, pol_id, num_waits=self.num_envs)
-
-                # Check winner
-                for i in range(len(done)):
-                    if done[i]:
-                        if policy_mapping[info["eid"][i], info["pid"][i]] == 0:
-                            win_count += rew[i]
-
-                # Remove all env that are finished
-                info = next_info
-                obs = next_obs[~done]
-                info = {k: v[~done] for k, v in info.items()}
-                if len(info["eid"]) == 0:
-                    break
-
-            # Change mapping
-            policy_mapping = 1 - policy_mapping
-
-        return win_count
 
     def __enter__(self):
         freeze_support()

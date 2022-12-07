@@ -34,7 +34,6 @@ class PGTrainer(Trainer):
         act = act[pol_id == 0]
         ret = ret[pol_id == 0]
         legal_act = legal_act[pol_id == 0]
-        num_batch_splits = np.ceil(obs.shape[0] / batch_size)
 
         # Policy loss
         trainset = TensorDataset(obs, act, legal_act)
@@ -78,7 +77,6 @@ class PGTrainer(Trainer):
                     loss_entropy = - dist_bt.entropy().mean()
                     loss_value = F.mse_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
-                    loss /= num_batch_splits
 
                     self.log("loss_pi", loss_policy.item(), show=False)
                     self.log("loss_entr", loss_entropy.item(), show=True)
@@ -115,7 +113,6 @@ class PPOTrainer(PGTrainer):
         act = act[pol_id == 0]
         ret = ret[pol_id == 0]
         legal_act = legal_act[pol_id == 0]
-        num_batch_splits = np.ceil(obs.shape[0] / batch_size)
 
         # Policy loss
         trainset = TensorDataset(obs, act, legal_act)
@@ -168,7 +165,6 @@ class PPOTrainer(PGTrainer):
                     loss_entropy = - dist_bt.entropy().mean()
                     loss_value = F.mse_loss(val_bt, ret_bt)
                     loss = loss_policy + self.config["pi_entropy"] * loss_entropy + self.config["vf_scale"] * loss_value
-                    loss /= num_batch_splits
 
                     self.log("loss_pi", loss_policy.item(), show=False)
                     self.log("loss_entr", loss_entropy.item(), show=True)

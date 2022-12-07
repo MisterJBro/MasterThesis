@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "lam": 1.0,
     "seed": 0,
     "max_len": 81,
+    "replay_buffer_capacity": 10_000_000,
 
     "obs_dtype": np.float32,
     "act_dtype": np.float32,

@@ -1,4 +1,4 @@
-use crate::gym::{Action, Collector, Episode, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
+use crate::gym::{Action, Collector, Episode, Env, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
 use numpy::ndarray::{Array, Ix1, Ix2, stack, Axis};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
 use itertools::izip;
@@ -16,6 +16,7 @@ pub struct Envs {
     collector_in: Sender<CollectorMessageIn>,
     collector_out: Receiver<CollectorMessageOut>,
     eps_out: Receiver<Episode>,
+    env_out: Receiver<(usize, Env)>,
 }
 
 impl Envs {
@@ -25,6 +26,7 @@ impl Envs {
         let mut workers_ins = Vec::with_capacity(num_workers);
         let (master_sender, workers_out) = bounded(num_envs*4);
         let (eps_in, eps_out) = unbounded();
+        let (env_in, env_out) = bounded(num_envs);
         let core_ids = core_affinity::get_core_ids().unwrap();
         let num_cores = core_ids.len();
         if num_workers > num_cores {
@@ -44,7 +46,7 @@ impl Envs {
                 None
             };
 
-            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), eps_in.clone(), gamma, max_len, core_id, size));
+            workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), eps_in.clone(), env_in.clone(), gamma, max_len, core_id, size));
         }
 
         // Collector
@@ -63,6 +65,7 @@ impl Envs {
             collector_in,
             collector_out,
             eps_out,
+            env_out,
         }
     }
 
@@ -203,5 +206,28 @@ impl Envs {
     /// Get episodes
     pub fn get_episodes(&self) -> Vec<Episode> {
         self.eps_out.try_iter().collect()
+    }
+
+    /// Get envs
+    pub fn get_envs(&self, eid: Vec<usize>) -> Vec<Env> {
+        // Send
+        for e in eid.iter() {
+            let cid = e / self.num_envs_per_worker;
+            let c = &self.workers_ins[cid];
+            if c.try_send(WorkerMessageIn::GetEnv{eid: *e}).is_err() {
+                panic!("Error sending message GET ENV to worker");
+            }
+        }
+
+        // Receive
+        let num_eid = eid.len();
+        let mut msgs = Vec::with_capacity(num_eid);
+        for _ in 0..num_eid {
+            let mut msg = self.env_out.recv().unwrap();
+            msg.0 = eid.iter().position(|x| *x == msg.0).expect("Received env from not requested env!");
+            msgs.push(msg);
+        }
+        msgs.sort_by_key(|m| m.0);
+        msgs.into_iter().map(|m| m.1).collect()
     }
 }

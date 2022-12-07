@@ -111,17 +111,6 @@ class ValueEquivalenceModel(nn.Module):
             nn.Tanh(),
         )
 
-        self.opt = optim.Adam(
-            list(self.parameters()),
-            lr=config["model_lr"],
-            weight_decay=config['model_weight_decay']
-        )
-        #self.scheduler = lr_scheduler.StepLR(
-        #    self.opt,
-        #    step_size=10,
-        #    gamma=0.5,
-        #)
-
         self.device = config["device"]
         self.to(self.device)
 
@@ -195,6 +184,18 @@ class ValueEquivalenceModel(nn.Module):
         }
 
     def loss(self, eps, vals):
+        # Init optimizer and scheduler
+        self.opt = optim.Adam(
+            list(self.parameters()),
+            lr=self.config["model_lr"],
+            weight_decay=self.config['model_weight_decay']
+        )
+        self.scheduler = lr_scheduler.StepLR(
+            self.opt,
+            step_size=300,
+            gamma=0.5,
+        )
+
         # Get data
         batch_size = self.config["model_batch_size"]
         data = self.prepare_eps(eps, vals)
@@ -230,13 +231,47 @@ class ValueEquivalenceModel(nn.Module):
                 # Update
                 if (iter+1) % self.config["acc_grads"] == 0:
                     loss = torch.mean(torch.stack(losses))
-                    print(loss)
+                    print(f"Iter {iter}  Loss: {loss.item():.04f}")
                     loss.backward()
                     self.opt.step()
-                    #self.scheduler.step()
+                    self.scheduler.step()
                     self.opt.zero_grad()
                     losses = []
                 iter += 1
+
+    def test(self, eps, vals):
+        with torch.inference_mode():
+            # Get data
+            batch_size = self.config["model_batch_size"]
+            data = self.prepare_eps(eps, vals)
+            trainset = TensorDataset(data['obs'], data['val_target'], data['dist_target'], data['act'], data['rew_target'])
+            trainloader = DataLoader(trainset, batch_size=batch_size, pin_memory=True)
+
+            # Train model
+            losses = []
+            for obs, val_target, dist_target, act, rew_target in trainloader:
+                obs = obs.to(self.device)
+                val_target = val_target.to(self.device)
+                dist_target = dist_target.to(self.device)
+                act = act.to(self.device)
+                rew_target = rew_target.to(self.device)
+
+                # Predictions
+                for i in range(self.config["model_unroll_len"]):
+                    if i == 0:
+                        state = self.representation(obs)
+                        loss_rew = 0
+                    else:
+                        state, rew = self.dynamics(state, act[:, i-1])
+                        loss_rew = 0#F.mse_loss(rew, rew_target[:, i-1].reshape(-1))
+                    dist, val = self.prediction(state)
+
+                    loss_val = F.mse_loss(val, val_target[:, i].reshape(-1))
+                    loss_dist = kl_divergence(Categorical(logits=dist_target[:, i]), dist).mean()
+                    loss = loss_val + loss_dist + loss_rew
+                    losses.append(loss)
+            loss = torch.mean(torch.stack(losses)).item()
+        return loss
 
     def save(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         torch.save({
@@ -247,4 +282,9 @@ class ValueEquivalenceModel(nn.Module):
     def load(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
+        self.opt = optim.Adam(
+            list(self.parameters()),
+            lr=self.config["model_lr"],
+            weight_decay=self.config['model_weight_decay']
+        )
         self.opt.load_state_dict(checkpoint['optimizer'])

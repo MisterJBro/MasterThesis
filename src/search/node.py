@@ -37,7 +37,6 @@ class Node(ABC):
         all_qvals = np.full(num_acts, -10e8)
         qvals = np.array([child.total_rews/(child.num_visits+1e-12) if child.num_visits > 0 else default for child in self.children])
         all_qvals[legal_act] = qvals
-        print("TEST:\n", all_qvals.reshape(6,6).round(2))
         return all_qvals
 
     def get_normalized_visit_counts(self, num_acts, temp=1.0):
@@ -48,6 +47,8 @@ class Node(ABC):
         normalized_visits = all_visits ** (1 / temp) / self.num_visits ** (1 / temp)
         return normalized_visits
 
+    def qvalue(self):
+        pass
 
 class UCTNode(Node):
     """ Tree Node using Upper Confidence bound1 for Trees (UCT). """

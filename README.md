@@ -6,6 +6,7 @@ Create an conda environment with all dependencies via:
 ```
 conda env create -f environment.yml
 conda activate rl
+
 ```
 
 Then install the hex rust environment via:
