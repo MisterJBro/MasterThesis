@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
         "model_lr": 1e-3,
         "model_weight_decay": 1e-5,
-        "model_iters": 30,
+        "model_iters": 200,
         "model_unroll_len": 5,
         "model_num_res_blocks": 10,
         "model_num_filters": 128,

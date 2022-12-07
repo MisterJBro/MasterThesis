@@ -129,7 +129,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [az, random]
+    players = [mz, random]
     num_games = 1
     render = True
     num_victories_first = 0

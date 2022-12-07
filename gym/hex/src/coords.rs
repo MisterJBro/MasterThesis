@@ -49,10 +49,15 @@ impl Coords {
         Self { row, column }
     }
 
-    pub fn from_u16(val: u16, size: u16) -> Self {
+    pub fn from_u16(val: u16, size: u16, is_black: bool) -> Self {
         let row = val / size;
         let column = val % size;
-        Self::new(row as CoordValue, column as CoordValue)
+
+        if is_black {
+            Self::new(row as CoordValue, column as CoordValue)
+        } else {
+            Self::new(column as CoordValue, row as CoordValue)
+        }
     }
 
     /// Return whether this coordinate exist on a board of the given size.

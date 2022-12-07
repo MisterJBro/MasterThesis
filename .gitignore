@@ -41,3 +41,4 @@ data/
 net.onnx
 net.pt
 hall_of_fame/
+eps.pkl

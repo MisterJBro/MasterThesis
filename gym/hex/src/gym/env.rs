@@ -34,7 +34,9 @@ impl Env {
 
         match self.game.get_status() {
             Status::Ongoing(_current_player) => {
-                let coords = Coords::from_u16(action, self.size as u16);
+                let current_player = self.game.get_current_player();
+                let is_black = if let Some(player) = current_player { player } else { Color::Black } == Color::Black;
+                let coords = Coords::from_u16(action, self.size as u16, is_black);
                 self.game.play(coords).expect("Invalid action");
 
                 if let Status::Finished(_winner) = self.game.get_status() {
@@ -85,13 +87,19 @@ impl Env {
     /// Get legal actions
     #[inline]
     pub fn legal_actions(&self) -> Array<bool, Ix1> {
+        let current_player = self.game.get_current_player();
+        let is_black = if let Some(player) = current_player { player } else { Color::Black } == Color::Black;
         let mut actions = vec![false; self.size as usize * self.size as usize];
         for x in 0..self.size {
             for y in 0..self.size {
                 let color = self.game.get_board().get_color(Coords::new(x as u8, y as u8));
 
                 if color.is_none() {
-                    let index = y + self.size * x;
+                    let index = if is_black {
+                        y + self.size * x
+                    } else {
+                        x + self.size * y
+                    };
                     actions[index as usize] = true;
                 }
             }
