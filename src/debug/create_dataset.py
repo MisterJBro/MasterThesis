@@ -13,6 +13,9 @@ from tqdm import trange
 from copy import deepcopy
 import pickle
 
+# import pickle
+# with open('trajs.pkl', 'rb') as fp:
+#   data = pickle.load(fp)
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
@@ -45,12 +48,11 @@ if __name__ == '__main__':
     policy1.eval()
     az = AlphaZero(config, policy1)
 
-    def sample_traj():
-        print("Sample!")
+    def sample_traj(num_games):
+        print("SAMPLING:")
         trajs = []
 
         # Simulate
-        num_games = 1
         for _ in trange(num_games):
             obss = []
             acts = []
@@ -75,7 +77,7 @@ if __name__ == '__main__':
 
             # Get search results
             res = az.search(states, iters=1_000)
-            vals = np.concatenate([res["V"], [rew if black_turn else -rew]], 0)
+            vals = np.concatenate([res["V"], [-rew if black_turn else rew]], 0)
             vs.append(vals)
 
             # Create new traj
@@ -84,13 +86,11 @@ if __name__ == '__main__':
                 "act": np.stack(acts, 0).astype(np.int64),
                 "v": np.concatenate(vs).astype(np.float32),
             })
-            print(trajs["obs"].shape, trajs["v"], trajs["v"].shape, trajs["act"].shape)
-            quit()
         return trajs
 
     # Sample and save
-    trajs = sample_traj()
-    with open('eps.pkl', 'wb') as handle:
+    trajs = sample_traj(400)
+    with open('trajs.pkl', 'wb') as handle:
         pickle.dump(trajs, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     az.close()
