@@ -14,7 +14,7 @@ from copy import deepcopy
 import pickle
 
 # import pickle
-# with open('trajs.pkl', 'rb') as fp:
+# with open('epss.pkl', 'rb') as fp:
 #   data = pickle.load(fp)
 
 if __name__ == '__main__':
@@ -48,9 +48,9 @@ if __name__ == '__main__':
     policy1.eval()
     az = AlphaZero(config, policy1)
 
-    def sample_traj(num_games):
+    def sample_eps(num_games):
         print("SAMPLING:")
-        trajs = []
+        epss = []
 
         # Simulate
         for _ in trange(num_games):
@@ -80,17 +80,17 @@ if __name__ == '__main__':
             vals = np.concatenate([res["V"], [-rew if black_turn else rew]], 0)
             vs.append(vals)
 
-            # Create new traj
-            trajs.append({
+            # Create new eps
+            epss.append({
                 "obs": np.stack(obss, 0).astype(np.float32),
                 "act": np.stack(acts, 0).astype(np.int64),
                 "v": np.concatenate(vs).astype(np.float32),
             })
-        return trajs
+        return epss
 
     # Sample and save
-    trajs = sample_traj(400)
-    with open('trajs.pkl', 'wb') as handle:
-        pickle.dump(trajs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    eps = sample_eps(400)
+    with open('eps.pkl', 'wb') as handle:
+        pickle.dump(eps, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     az.close()

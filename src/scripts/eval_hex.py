@@ -49,7 +49,7 @@ if __name__ == '__main__':
     #policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    model.load("checkpoints/model_6x6_66.pt")
+    model.load("checkpoints/model.pt")
 
     # Algorithms /Players
     mcts_obj = None
