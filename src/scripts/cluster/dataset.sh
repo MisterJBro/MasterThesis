@@ -2,11 +2,11 @@
 #SBATCH -A project01854
 #SBATCH -J hex_pg
 #SBATCH --mail-type=NONE
-#SBATCH -a 1-6%6
+#SBATCH -a 1-20%20
 #SBATCH -n 1
-#SBATCH -c 3
+#SBATCH -c 4
 #SBATCH --mem-per-cpu=3800
-#SBATCH -t 23:58:00
+#SBATCH -t 23:59:00
 #SBATCH -o /home/jb66zuhe/MasterThesis/src/scripts/log/HEX_DATA_%A_%a-out.txt
 #SBATCH -e /home/jb66zuhe/MasterThesis/src/scripts/log/error/%A_%a-err.txt
 ###############################################################################
@@ -32,4 +32,4 @@ THESIS_DIR="$HOME/MasterThesis"
 cd "$THESIS_DIR"
 
 # Start script
-python -m src.scripts.pg --log_to_writer True --log_to_file True --log_name ppo_train.txt
+python -m src.debug.create_dataset --job_id=$SLURM_ARRAY_TASK_ID

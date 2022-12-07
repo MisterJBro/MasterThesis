@@ -158,7 +158,7 @@ class HexPolicy(nn.Module):
         }, path)
 
     def load(self, path=f'{PROJECT_PATH}/checkpoints/policy.pt'):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=torch.device(self.config["device"]))
         try:
             self.load_state_dict(checkpoint['parameters'])
             self.optim.load_state_dict(checkpoint['optimizer'])

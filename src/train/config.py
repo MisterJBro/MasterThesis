@@ -87,6 +87,7 @@ DEFAULT_CONFIG = {
     "log_path": "",
     "num_checkpoints": 1,
     "experiment_path": "",
+    "job_id": 0,
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
