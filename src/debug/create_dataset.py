@@ -12,14 +12,21 @@ from src.env.hex import HexEnv
 from tqdm import trange
 from copy import deepcopy
 import pickle
+import argparse
 
 # import pickle
 # with open('epss.pkl', 'rb') as fp:
 #   data = pickle.load(fp)
+parser = argparse.ArgumentParser(description='File to evaluate methods')
+
+# Parser arguments
+parser.add_argument('--job_id', type=int, default=0)
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
     freeze_support()
+    args = parser.parse_args()
+    job_id = args.job_id
 
     # Init for algos
     size = 6
@@ -28,12 +35,12 @@ if __name__ == '__main__':
         "env": env,
         "puct_c": np.sqrt(2),
         "uct_c": np.sqrt(2),
-        "search_num_workers": 8,
-        "search_evaluator_batch_size": 8,
+        "search_num_workers": 3,
+        "search_evaluator_batch_size": 3,
         "dirichlet_eps": 0.0,
         "pgs_lr": 1e-1,
         "pgs_trunc_len": 5,
-        "device": "cuda:0",
+        "device": "cpu",
         "search_return_adv": True,
 
         "num_res_blocks": 12,
@@ -58,6 +65,7 @@ if __name__ == '__main__':
             acts = []
             vs = []
             states = []
+            dists = []
             obs, info = env.reset()
 
             done = False
@@ -79,18 +87,20 @@ if __name__ == '__main__':
             res = az.search(states, iters=1_000)
             vals = np.concatenate([res["V"], [-rew if black_turn else rew]], 0)
             vs.append(vals)
+            dists.append(np.concatenate([res["P"], np.zeros((1, size**2))], 0))
 
             # Create new eps
             epss.append({
                 "obs": np.stack(obss, 0).astype(np.float32),
                 "act": np.stack(acts, 0).astype(np.int64),
                 "v": np.concatenate(vs).astype(np.float32),
+                "pi": np.concatenate(dists).astype(np.float32),
             })
         return epss
 
     # Sample and save
-    eps = sample_eps(400)
-    with open('eps.pkl', 'wb') as handle:
+    eps = sample_eps(1)
+    with open(f'eps_{job_id}.pkl', 'wb') as handle:
         pickle.dump(eps, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     az.close()

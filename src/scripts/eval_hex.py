@@ -58,7 +58,7 @@ if __name__ == '__main__':
         if mcts_obj is None:
             mcts_obj = MCTS(config)
         result = mcts_obj.search(State(env, obs=obs), iters=300)
-        act = np.argmax(result)
+        act = np.argmax(result["pi"])
         return act
 
     az_obj = None
@@ -66,8 +66,9 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
-        result = az_obj.search(State(env, obs=obs), iters=300)
-        act = np.argmax(result)
+        result = az_obj.search(State(env, obs=obs), iters=1_000)
+        print(result["pi"].reshape(6, 6).round(2))
+        act = np.argmax(result["pi"])
         return act
 
     pgs_obj = None
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         if pgs_obj is None:
             pgs_obj = PGS(config, policy1)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
-        act = np.argmax(result)
+        act = np.argmax(result["pi"])
         return act
 
     muzero_obj = None
@@ -84,9 +85,9 @@ if __name__ == '__main__':
         global muzero_obj
         if muzero_obj is None:
             muzero_obj = MuZero(config, model)
-        result = muzero_obj.search(State(env, obs=obs), iters=36)
-        #print(result.reshape(6, 6).round(2))
-        act = np.argmax(result)
+        result = muzero_obj.search(State(env, obs=obs), iters=500)
+        print(result["pi"].reshape(6, 6).round(2))
+        act = np.argmax(result["pi"])
         return act
 
     vepgs_obj = None
@@ -95,7 +96,7 @@ if __name__ == '__main__':
         if vepgs_obj is None:
             vepgs_obj = VEPGS(config, policy1, model)
         result = vepgs_obj.search(State(env, obs=obs), iters=100)
-        act = np.argmax(result)
+        act = np.argmax(result["pi"])
         return act
 
     def human(env, obs, info):
@@ -128,7 +129,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [mz, random]
+    players = [az, random]
     num_games = 1
     render = True
     num_victories_first = 0

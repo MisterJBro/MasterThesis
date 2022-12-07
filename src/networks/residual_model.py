@@ -111,17 +111,6 @@ class ValueEquivalenceModel(nn.Module):
             nn.Tanh(),
         )
 
-        self.opt = optim.Adam(
-            list(self.parameters()),
-            lr=config["model_lr"],
-            weight_decay=config['model_weight_decay']
-        )
-        #self.scheduler = lr_scheduler.StepLR(
-        #    self.opt,
-        #    step_size=10,
-        #    gamma=0.5,
-        #)
-
         self.device = config["device"]
         self.to(self.device)
 
@@ -195,6 +184,18 @@ class ValueEquivalenceModel(nn.Module):
         }
 
     def loss(self, eps, vals):
+        # Init optimizer and scheduler
+        self.opt = optim.Adam(
+            list(self.parameters()),
+            lr=self.config["model_lr"],
+            weight_decay=self.config['model_weight_decay']
+        )
+        self.scheduler = lr_scheduler.StepLR(
+            self.opt,
+            step_size=300,
+            gamma=0.5,
+        )
+
         # Get data
         batch_size = self.config["model_batch_size"]
         data = self.prepare_eps(eps, vals)
@@ -233,7 +234,7 @@ class ValueEquivalenceModel(nn.Module):
                     print(f"Iter {iter}  Loss: {loss.item():.04f}")
                     loss.backward()
                     self.opt.step()
-                    #self.scheduler.step()
+                    self.scheduler.step()
                     self.opt.zero_grad()
                     losses = []
                 iter += 1
@@ -281,4 +282,9 @@ class ValueEquivalenceModel(nn.Module):
     def load(self, path=f'{PROJECT_PATH}/checkpoints/ve_model.pt'):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['parameters'])
+        self.opt = optim.Adam(
+            list(self.parameters()),
+            lr=self.config["model_lr"],
+            weight_decay=self.config['model_weight_decay']
+        )
         self.opt.load_state_dict(checkpoint['optimizer'])
