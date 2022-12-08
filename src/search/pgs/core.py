@@ -59,7 +59,7 @@ class PGSCore(MCTSCore):
             rets.append(ret)
             self.iter += 1
 
-            qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
+            #qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
             #print(qvals.reshape(5,5).round(5))
 
         def plot():
@@ -75,8 +75,10 @@ class PGSCore(MCTSCore):
             plt.show()
         #plot()
 
+        qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
+        vals = -self.root.qvalue()
+
         if self.config["search_return_adv"]:
-            qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
             #print("Normal visit counts:")
             #print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
             #print("QVALS:")
@@ -85,8 +87,15 @@ class PGSCore(MCTSCore):
             max_visits = np.max([child.num_visits for child in self.root.children])
             adv = qvals - self.root.val
             adv = adv / (np.abs(np.max(adv)) + 1e-8)
-            return (100 + max_visits) * 0.005 * adv
-        return self.root.get_normalized_visit_counts(self.config["num_acts"])
+            pi = (100 + max_visits) * 0.005 * adv
+        else:
+            pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
+
+        return {
+            "Q": qvals,
+            "V": vals,
+            "pi": pi,
+        }
 
     def expand(self, node):
         if node.state is None:

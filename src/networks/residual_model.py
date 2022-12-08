@@ -192,7 +192,7 @@ class ValueEquivalenceModel(nn.Module):
         )
         self.scheduler = lr_scheduler.StepLR(
             self.opt,
-            step_size=300,
+            step_size=800,
             gamma=0.5,
         )
 

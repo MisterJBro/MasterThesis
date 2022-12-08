@@ -13,19 +13,19 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 6
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "train_iters": 200,
         "env": env,
         "max_len": size*size,
         "num_workers": 3,
-        "num_envs": 3,
+        "num_envs": 12,
         "sample_len": 1_000,
         "device": "cuda:0",
         "pi_lr": 6e-4,
         "pi_entropy": 0.0,
-        "num_res_blocks": 12,
+        "num_res_blocks": 10,
         "num_filters": 128,
         "ppo_iters": 6,
         "vf_scale": 1.0,

@@ -21,7 +21,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 6
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         "device": "cpu",
         "search_return_adv": True,
 
-        "num_res_blocks": 12,
+        "num_res_blocks": 10,
         "num_filters": 128,
         "model_num_res_blocks": 10,
         "model_num_filters": 128,
@@ -43,13 +43,13 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("checkpoints/p_6x6_128_12.pt")
+    policy1.load("checkpoints/p_53_elo_1027.4.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
     #policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    model.load("checkpoints/model.pt")
+    model.load("checkpoints/m_5x5_10_128.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
         result = az_obj.search(State(env, obs=obs), iters=1_000)
-        print(result["pi"].reshape(6, 6).round(2))
+        print(result["pi"].reshape(size, size).round(2))
         act = np.argmax(result["pi"])
         return act
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         if muzero_obj is None:
             muzero_obj = MuZero(config, model)
         result = muzero_obj.search(State(env, obs=obs), iters=500)
-        print(result["pi"].reshape(6, 6).round(2))
+        print(result["pi"].reshape(size, size).round(2))
         act = np.argmax(result["pi"])
         return act
 
@@ -116,7 +116,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             dist, val = policy1(obs, legal_actions=info["legal_act"][np.newaxis])
         # print dist
-        print("Probs:\n", dist.probs.cpu().numpy().reshape(6, 6).round(2))
+        print("Probs:\n", dist.probs.cpu().numpy().reshape(size, size).round(2))
         act = dist.logits.argmax(-1).cpu().numpy()[0]
         return act
 
@@ -129,7 +129,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [mz, random]
+    players = [vepgs, random]
     num_games = 1
     render = True
     num_victories_first = 0

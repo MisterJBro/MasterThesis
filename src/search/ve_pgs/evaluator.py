@@ -12,15 +12,14 @@ class VEPGSEvaluator(MZEvaluator):
         self.model = model
 
     def eval_abs(self, abs, act):
-        new_abs = self.dynamics(abs, act)
-        hidden = self.prediction_hidden(new_abs)
-
+        new_abs, rew = self.model.dynamics(abs, act)
+        hidden = self.model.prediction_hidden(new_abs)
 
         return [{
-            "abs": a,
-            "rew": np.zeros_like(h),
-            "hidden": h,
-            } for a, h in zip(abs, hidden)]
+            "abs": a.unsqueeze(0),
+            "rew": np.zeros(len(abs)),
+            "hidden": h.unsqueeze(0),
+            } for a, h in zip(new_abs, hidden)]
 
     def update(self, msg):
         self.policy.load_state_dict(msg["policy_params"])

@@ -44,7 +44,7 @@ class VEPGSCore(PGSCore):
             return node
         if node == self.root:
             # Create new child nodes, lazy init
-            actions = np.eye(self.num_acts)
+            actions = np.arange(self.num_acts)
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
@@ -72,11 +72,11 @@ class VEPGSCore(PGSCore):
         for _ in range(self.trunc_len):
             player = (player + 1) % self.num_players
             hs.append(hidden)
-
             with torch.no_grad():
                 act = Categorical(logits=self.sim_policy(hidden)).sample().item()
             acts.append(act)
-            abs, rew, hidden = self.eval_abs(abs, np.eye(self.num_acts)[act])
+
+            abs, rew, hidden = self.eval_abs(abs, act)
 
             # Add reward
             if self.num_players == 2:
@@ -113,15 +113,17 @@ class VEPGSCore(PGSCore):
         hidden = traj["hidden"].to(self.device)
 
         # Get ret, vals and adv
-        ret = discount_cumsum(rew, self.config["gamma"])[:-1]
-        total_ret = ret[0]
-        ret = torch.as_tensor(ret).to(self.device)
+        #ret = discount_cumsum(rew, self.config["gamma"])[:-1]
+        #total_ret = ret[0]
+        #ret = torch.as_tensor(ret).to(self.device)
 
         with torch.no_grad():
-            val = self.sim_value(hidden).reshape(-1)
-            val = np.concatenate((val.numpy(), [rew[-1]]))
-        adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
-        adv = torch.as_tensor(adv).to(self.device)
+            val = self.base_value(hidden).reshape(-1)
+            #val = np.concatenate((val.numpy(), [rew[-1]]))
+        total_ret = val[-1]
+        val = torch.as_tensor(val).to(self.device)
+        #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
+        #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(hidden))
 
@@ -130,7 +132,7 @@ class VEPGSCore(PGSCore):
         self.optim_pol.zero_grad()
         dist = Categorical(logits=self.sim_policy(hidden))
         logp = dist.log_prob(act)
-        loss_policy = -(logp * adv).mean()
+        loss_policy = -(logp * val).mean()
         loss_dist = kl_divergence(base_dist, dist).mean()
         #loss_entropy = -dist.entropy().mean()
         #print(dist.entropy().mean())
@@ -139,10 +141,10 @@ class VEPGSCore(PGSCore):
         self.optim_pol.step()
 
         # Value function
-        self.optim_val.step()
-        loss_value = F.huber_loss(self.sim_value(hidden).reshape(-1), ret)
-        loss_value.backward()
-        self.optim_val.zero_grad()
+        #self.optim_val.step()
+        #loss_value = F.huber_loss(self.sim_value(hidden).reshape(-1), ret)
+        #loss_value.backward()
+        #self.optim_val.zero_grad()
 
         return total_ret
 
@@ -170,4 +172,4 @@ class VEPGSCore(PGSCore):
             "ind": self.idx,
         })
         msg = self.eval_channel.recv()
-        return msg["abs"], msg["rew"], msg["hidden"]
+        return msg["abs"], msg["rew"][0], msg["hidden"]

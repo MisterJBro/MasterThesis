@@ -17,7 +17,7 @@ class VEPGS(PGS):
         pipes = [Pipe() for _ in range(self.num_workers)]
         eval_pipes = [Pipe() for _ in range(self.num_workers)]
         self.channels = [p[0] for p in pipes]
-        self.workers = [VEPGSWorker(config, self.num_acts, eval_pipes[i][1], deepcopy(model.pre_pi), deepcopy(model.pre_val), i, pipes[i][1]) for i in range(self.num_workers)]
+        self.workers = [VEPGSWorker(config, self.num_acts, eval_pipes[i][1], deepcopy(model.pred_pi), deepcopy(model.pred_val), i, pipes[i][1]) for i in range(self.num_workers)]
         for w in self.workers:
             w.start()
 

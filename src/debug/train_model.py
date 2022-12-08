@@ -19,7 +19,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 6
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
         "model_lr": 1e-3,
         "model_weight_decay": 1e-5,
-        "model_iters": 200,
+        "model_iters": 10,
         "model_unroll_len": 5,
         "model_num_res_blocks": 10,
         "model_num_filters": 128,
@@ -39,11 +39,11 @@ if __name__ == '__main__':
             self.obs = eps["obs"]
             self.act = np.concatenate((eps["act"], np.random.randint(0, size*size, 1)))
             self.rew = np.zeros(len(self.act))
-            self.dist = np.zeros((len(self.act), size*size))
+            self.dist = eps["pi"]
 
     # Import data and model
     model = ValueEquivalenceModel(config)
-    with open('eps.pkl', 'rb') as fp:
+    with open('checkpoints/eps.pkl', 'rb') as fp:
         data = pickle.load(fp)
 
     # Prepare data
@@ -71,4 +71,4 @@ if __name__ == '__main__':
     print(start_val.item())
 
     # Save model
-    model.save("checkpoints/model.pt")
+    model.save("checkpoints/m_5x5_10_128.pt")

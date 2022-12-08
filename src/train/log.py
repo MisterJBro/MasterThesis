@@ -71,7 +71,7 @@ class Logger(dict):
                 opponents = self["sampled_policies"]["value"][-1]
                 for k, v in val.items():
                     if k == (0,0):
-                        data[-2] = [[v['win_base']/4, v['num']/2], [v['win_base']/4, v['num']/2]]
+                        data[float("inf")] = [[v['win_base']/4, v['num']/2], [v['win_base']/4, v['num']/2]]
                     else:
                         m = max(k)
                         m = iter-1 if m==1 else opponents[m-2]
@@ -98,7 +98,7 @@ class Logger(dict):
                     i += 1
                 ax.set_xlabel('Win Rate (%)')
                 ax.set_title('Sampled games')
-                ax.set_yticks(x, [f'Policy vs P{"olicy" if k==-2 else k}' for k in data.keys()])
+                ax.set_yticks(x, [f'Policy vs P{"olicy" if k==float("inf") else k}' for k in data.keys()])
                 num_bars = len(data)
                 plt.subplots_adjust(left=0.25, bottom=max(-0.0333*num_bars+0.2666, 0.1), right=0.9, top=min(0.025*num_bars + 0.8, 0.93))
                 self.writer.add_figure(name, fig, iter)
