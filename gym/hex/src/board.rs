@@ -144,7 +144,7 @@ impl Board {
         self.cells.get_color_at_index(index)
     }
 
-    pub fn is_in_same_set<S: Into<CoordsOrEdge>, T: Into<CoordsOrEdge>>(&self, s: S, t: T) -> bool {
+    pub fn is_in_same_set<S: Into<CoordsOrEdge>, T: Into<CoordsOrEdge>>(&mut self, s: S, t: T) -> bool {
         self.cells.is_in_same_set(
             self.cells.index_from_coords_or_edge(s.into()),
             self.cells.index_from_coords_or_edge(t.into()),

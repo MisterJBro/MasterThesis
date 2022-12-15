@@ -16,13 +16,14 @@ pub trait UnionFind<T: Copy + PartialOrd + Eq> {
     // Methods like is_in_same_set may need to change the parents ("path compression").
     // But semantically, they are not mutating the datastructure.
     // Implementors are expected to use interior mutability to store the parents.
-    fn set_parent(&self, item: T, parent: T);
+    // Changed to mut, interior mutability can get tricky with parallelizing
+    fn set_parent(&mut self, item: T, parent: T);
 
-    fn is_in_same_set(&self, item1: T, item2: T) -> bool {
+    fn is_in_same_set(&mut self, item1: T, item2: T) -> bool {
         self.find_root(item1) == self.find_root(item2)
     }
 
-    fn find_root(&self, item: T) -> T {
+    fn find_root(&mut self, item: T) -> T {
         let mut item = item;
         let mut root = item;
 
@@ -84,7 +85,7 @@ mod test {
             self.parents[item as usize].get()
         }
 
-        fn set_parent(&self, item: Item, parent: Item) {
+        fn set_parent(&mut self, item: Item, parent: Item) {
             self.parents[item as usize].set(Some(parent));
         }
     }

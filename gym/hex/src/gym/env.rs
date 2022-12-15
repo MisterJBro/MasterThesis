@@ -2,6 +2,7 @@ use crate::{Coords, Color, Game, Status};
 use crate::gym::{Action, Obs, Info};
 use serde::{Deserialize, Serialize};
 use numpy::ndarray::{Array, Ix1};
+use std::fmt::{Debug, Formatter, Result};
 
 
 /// The Environment
@@ -118,5 +119,11 @@ impl Env {
 
     /// Close environment
     pub fn close(&self) { }
+}
+
+impl Debug for Env {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 

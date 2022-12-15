@@ -1,4 +1,4 @@
-use crate::gym::{Action, Collector, Episode, Env, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut, CollectorMessageIn, CollectorMessageOut};
+use crate::gym::{Action, Episode, Env, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut};
 use numpy::ndarray::{Array, Ix1, Ix2, stack, Axis};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
 use itertools::izip;
@@ -12,9 +12,6 @@ pub struct Envs {
     workers: Vec<Worker>,
     workers_ins: Vec<Sender<WorkerMessageIn>>,
     workers_out: Receiver<WorkerMessageOut>,
-    collector: Collector,
-    collector_in: Sender<CollectorMessageIn>,
-    collector_out: Receiver<CollectorMessageOut>,
     eps_out: Receiver<Episode>,
     env_out: Receiver<(usize, Env)>,
 }
@@ -49,11 +46,6 @@ impl Envs {
             workers.push(Worker::new(id, num_envs_per_worker, r, master_sender.clone(), eps_in.clone(), env_in.clone(), gamma, max_len, core_id, size));
         }
 
-        // Collector
-        let (collector_in, master_out) = bounded(num_envs*4);
-        let (master_in, collector_out) = bounded(num_envs);
-        let collector = Collector::new(num_envs, max_len, master_out, master_in);
-
         Envs {
             num_envs,
             num_envs_per_worker,
@@ -61,9 +53,6 @@ impl Envs {
             workers,
             workers_ins,
             workers_out,
-            collector,
-            collector_in,
-            collector_out,
             eps_out,
             env_out,
         }

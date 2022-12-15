@@ -1,4 +1,4 @@
-use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut, Episode};
+use crate::gym::{Env, Envs, Action, Obs, Info, Infos, Episode};
 use numpy::ToPyArray;
 use numpy::{PyArray1, PyArray2, PyArray3, PyArray4, PyReadonlyArray2};
 use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};

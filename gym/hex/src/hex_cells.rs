@@ -15,7 +15,7 @@ pub type Index = u16;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 struct HexCell {
     color: Option<Color>,
-    parent: Cell<Option<Index>>,
+    parent: Option<Index>,
 }
 
 const EDGES: [Edge; 4] = [Edge::Left, Edge::Top, Edge::Right, Edge::Bottom];
@@ -106,11 +106,11 @@ impl HexCells {
     }
 
     fn get_parent_at_index(&self, index: Index) -> Option<Index> {
-        self.vector[index as usize].parent.get()
+        self.vector[index as usize].parent
     }
 
-    fn set_parent_at_index(&self, index: Index, parent: Index) {
-        self.vector[index as usize].parent.set(Some(parent));
+    fn set_parent_at_index(&mut self, index: Index, parent: Index) {
+        self.vector[index as usize].parent = Some(parent);
     }
 }
 
@@ -119,7 +119,7 @@ impl UnionFind<Index> for HexCells {
         self.get_parent_at_index(item)
     }
 
-    fn set_parent(&self, index: Index, parent: Index) {
+    fn set_parent(&mut self, index: Index, parent: Index) {
         self.set_parent_at_index(index, parent);
     }
 }
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn test_set_parent_at_index() {
         let parent: Index = 127;
-        let cells = HexCells::new(3);
+        let mut cells = HexCells::new(3);
         cells.set_parent_at_index(5, parent);
         assert_eq!(cells.get_parent_at_index(5), Some(parent));
     }

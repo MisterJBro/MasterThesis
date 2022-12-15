@@ -11,6 +11,7 @@ import pathlib
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent.absolute().as_posix()
 
+
 class SEBlock(nn.Module):
     """Squeeze and Excitation Block from https://github.com/moskomule/senet.pytorch/blob/master/senet/se_module.py"""
     def __init__(self, channel, reduction=16):

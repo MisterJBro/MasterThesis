@@ -75,7 +75,7 @@ impl Game {
             Status::Ongoing(current_player) => {
                 self.board.play(coords, current_player)?;
 
-                if Self::is_finished_after_player(&self.board, current_player) {
+                if Self::is_finished_after_player(&mut self.board, current_player) {
                     self.status = Status::Finished(current_player);
                 } else {
                     self.status = Status::Ongoing(current_player.opponent_color());
@@ -103,7 +103,7 @@ impl Game {
         }
     }
 
-    fn is_finished_after_player(board: &Board, current_player: Color) -> bool {
+    fn is_finished_after_player(board: &mut Board, current_player: Color) -> bool {
         let edges = get_edges_of_color(current_player);
         board.is_in_same_set(edges[0], edges[1])
     }

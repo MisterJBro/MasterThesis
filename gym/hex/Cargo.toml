@@ -31,5 +31,6 @@ pyo3 = { version = "0.17", features = ["extension-module"] }
 numpy = "0.17"
 crossbeam = "0.8"
 rand = "0.8"
-core_affinity = "0.5"
+core_affinity = "0.7.*"
 itertools = "0.10"
+indextree = "4.5.0"
