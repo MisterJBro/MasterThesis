@@ -5,6 +5,9 @@ use std::fmt::{Debug, Formatter, Result};
 use numpy::ndarray::{Array, Ix1};
 use hexgame::gym::{Env, Envs, Action, Obs, Info, Infos, Episode};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
+use atomic_array::{AtomicOptionRefArray, AtomicUsizeArray, AtomicRefArray};
+use atomic_float::AtomicF32;
+
 
 // Worker Messages
 #[derive(Debug)]
@@ -81,13 +84,6 @@ impl MCTSWorker {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct State {
-    pub obs: Obs,
-    pub info: Info,
-    pub env: Env,
-}
-
 pub struct SearchResult {
     Q: Array<f32, Ix1>,
     V: f32,
@@ -123,11 +119,12 @@ impl MCTSCore {
     }
 
     pub fn select(&self) -> NodeID {
-        let mut node = 0;
+        /*let mut node = 0;
         while !node.is_leaf() {
             node = node.select_child(self.expl_coeff);
         }
-        node
+        node*/
+        0
     }
 
     pub fn expand(&self, leaf: NodeID) -> NodeID {
@@ -153,29 +150,87 @@ impl MCTSCore {
 
 /// Node of Tree.
 #[derive(Clone, Debug)]
-pub struct Node<T> where T : Clone + Debug {
-    pub data: T,
-    pub children: Vec<usize>,
+pub struct Node {
+    pub num_visits: AtomicUsize,
+    pub sum_returns: AtomicF32,
+    pub num_acts: usize,
+    pub state: State,
+    pub children: AtomicRefArray<NodeChild>,
 }
-
-pub type NodeID = usize;
-
-/// Arena for managing nodes in a tree. Used for MCTS and its variants, so no delete operation. Specialized for sharing between threads
-pub struct Arena<T> where T : Clone + Debug {
-    nodes: RwLock<Vec<RwLock<Option<Node<T>>>>>,
-    idx: AtomicUsize,
-    capacity: AtomicUsize,
-}
-
-impl<T> Arena<T> where T : Clone + Debug {
-    /// Creates a new empty `Arena`.
-    pub fn new(capacity: usize) -> Arena<T> {
-        Arena {
-            nodes: RwLock::new((0..capacity).into_iter().map(|_| RwLock::new(None)).collect()),
-            idx: AtomicUsize::new(0),
-            capacity : AtomicUsize::new(capacity),
+impl Node {
+    pub fn new(state: State) -> Node {
+        let num_acts = state.num_actions();
+        Node {
+            num_visits: AtomicUsize::new(0),
+            sum_returns: AtomicF32::new(0.0),
+            num_acts,
+            state,
+            children: AtomicRefArray::new(num_acts),
         }
     }
+}
+
+
+/// Reference for nodes within arena, just an index
+pub type NodeID = usize;
+
+/// Representation of child of node.
+#[derive(Clone, Debug)]
+pub struct NodeChild {
+    pub action: Action,
+    pub child: NodeID,
+}
+
+impl Default for NodeChild {
+    fn default() -> NodeChild {
+        NodeChild {
+            action: Action::new(0),
+            child: 0,
+        }
+    }
+}
+
+/// State description
+#[derive(Clone, Debug)]
+pub struct State {
+    pub obs: Obs,
+    pub info: Info,
+    pub env: Env,
+}
+
+impl State {
+    pub fn new(obs: Obs, info: Info, env: Env) -> State {
+        State {
+            obs,
+            info,
+            env,
+        }
+    }
+
+    /// Get number of legal actions
+    pub fn num_actions(&self) -> usize {
+        self.info.legal_act.len()
+    }
+
+}
+
+/// Arena for managing nodes in a tree. Used for MCTS and its variants, so no delete operation. Specialized for sharing between threads
+pub struct Arena {
+    nodes: AtomicOptionRefArray<Node>,
+    idx: AtomicUsize,
+    capacity: usize,
+}
+
+impl Arena {
+    /// Creates a new empty `Arena`.
+    pub fn new(capacity: usize) -> Arena {
+        Arena {
+            nodes: AtomicOptionRefArray::new(capacity),
+            idx: AtomicUsize::new(0),
+            capacity,
+        }
+    }
+
 
     /// Checks if empty
     #[inline]
@@ -183,35 +238,19 @@ impl<T> Arena<T> where T : Clone + Debug {
         self.idx.load(Ordering::Acquire) == 0
     }
 
-    /// Add a new node to the arena
+    /// Add a new node to the arena, if capacity is reached, return Err
     #[inline]
-    pub fn add_node(&self, data: T) -> NodeID {
+    pub fn add_node(&self, state: State) -> Result<NodeID, &'static str> {
         let curr_idx = self.idx.fetch_add(1, Ordering::AcqRel);
 
-        if curr_idx < self.capacity.load(Ordering::Acquire) {
-            let nodes = self.nodes.read().unwrap();
+        if curr_idx < self.capacity {
+            let new_node = Some(Node::new(state));
+            self.nodes.store(curr_idx, new_node);
 
-            let mut new_node = nodes[curr_idx].write().unwrap();
-            *new_node = Some(Node {
-               data,
-               children: vec![],
-            });
+            Ok(curr_idx)
+        } else {
+            Err("Arena is full!")
         }
-        else {
-            // Add more capacity
-            let mut nodes = self.nodes.write().unwrap();
-            let capacity = self.capacity.load(Ordering::Acquire);
-            nodes.append(&mut (0..capacity).into_iter().map(|_| RwLock::new(None)).collect());
-            self.capacity.fetch_add(capacity, Ordering::AcqRel);
-
-            let mut new_node = nodes[curr_idx].write().unwrap();
-            *new_node = Some(Node {
-               data,
-               children: vec![],
-            });
-        }
-
-        return curr_idx;
   }
 
     /// Add child node to parent
@@ -245,12 +284,12 @@ fn main () {
     let (mut obs, mut info) = env.reset();
 
     // MCTS
-    let mcts = MCTS::new(1);
-    let state = State { obs, info, env };
-    mcts.search(state, 1);
+    //let mcts = MCTS::new(1);
+    //let state = State { obs, info, env };
+    //mcts.search(state, 1);
 
     // Create a new arena
-    //let arena = Arc::new(Arena::new(4));
+    let arena = Arc::new(Arena::new(4));
 
     // Add some new nodes to the arena
     //let root = arena.add_node(Node1 {num_visits: 12});
@@ -268,3 +307,17 @@ fn main () {
     //thread::sleep(std::time::Duration::from_secs(1));
     //println!("{:?}", arena);
 }
+
+/**
+ * // Add more capacity
+            let mut nodes = self.nodes.write().unwrap();
+            let capacity = self.capacity.load(Ordering::Acquire);
+            nodes.append(&mut (0..capacity).into_iter().map(|_| RwLock::new(None)).collect());
+            self.capacity.fetch_add(capacity, Ordering::AcqRel);
+
+            let mut new_node = nodes[curr_idx].write().unwrap();
+            *new_node = Some(Node {
+               data,
+               children: vec![],
+            });
+ */
