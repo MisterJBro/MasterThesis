@@ -28,7 +28,7 @@ pub fn to_stats(num_visits: u32, sum_returns: f32) -> usize {
 
 fn main() {
     let a = to_stats(2, 13.4);
-    let b = to_stats(4, -14.2);
+    let b = to_stats(4, 1000000004.2);
     let c = a + b;
 
     println!("flags: {:#066b} = {}", c, c);
