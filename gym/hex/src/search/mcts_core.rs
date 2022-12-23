@@ -198,9 +198,10 @@ impl MCTSCore {
         let root = self.get_root();
         let num_acts = root.num_acts.load(Ordering::Acquire);
 
+        let size = root.state.borrow().unwrap().env.size as usize;
         let v = root.get_v();
-        let mut q = Array::zeros(num_acts);
-        let mut pi = Array::zeros(num_acts);
+        let mut q = Array::from_elem(size*size, -1_000_000f32);
+        let mut pi = Array::from_elem(size*size, -1_000_000f32);
         for child_id in root.children.borrow().unwrap().iter() {
             let child = self.arena.get_node(child_id.load(Ordering::Acquire));
             let act = child.action.borrow().unwrap().unwrap();
@@ -213,6 +214,7 @@ impl MCTSCore {
         pi = pi.mapv(|x| x.exp());
         let pi_sum = pi.sum();
         pi = pi / pi_sum;
+
 
         SearchResult { pi, q, v }
     }
