@@ -82,6 +82,7 @@ mod neighbors;
 mod serialize;
 mod union_find;
 pub mod gym;
+pub mod search;
 mod python;
 
 pub use crate::board::{Board, StoneMatrix, MAX_BOARD_SIZE, MIN_BOARD_SIZE};

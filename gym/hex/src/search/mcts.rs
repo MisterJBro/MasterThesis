@@ -1,52 +1,93 @@
-use crate::gym::{Env, Envs, Action, Obs, Info, Infos, CollectorMessageOut, Episode};
+use std::thread;
+use std::sync::{Arc};
+use std::fmt::{Debug};
+use numpy::ndarray::{Array, Ix1};
+use crossbeam::channel::{bounded, Sender, Receiver};
+use crate::search::{State, MCTSCore};
 
-struct MCTS {
-    env: Env,
-    root: Node,
-    n: usize,
-    c: f32,
+
+// Worker Messages
+#[derive(Debug)]
+pub enum MCTSWorkerMessageIn {
+    Search {mcts: Arc<MCTSCore>, iters: usize},
+}
+
+#[derive(Clone, Debug)]
+pub struct MCTSWorkerMessageOut {
+    result: SearchResult,
+}
+
+/// MCTS
+pub struct MCTS {
+    workers_ins: Vec<Sender<MCTSWorkerMessageIn>>,
+    workers_out: Receiver<MCTSWorkerMessageOut>,
 }
 
 impl MCTS {
-    fn new(env: Env, n: usize, c: f32) -> MCTS {
+    pub fn new(num_threads: usize) -> MCTS {
+        // Create Worker threads
+        let mut workers = Vec::with_capacity(num_threads);
+        let mut workers_ins = Vec::with_capacity(num_threads);
+        let (master_sender, workers_out) = bounded(num_threads);
+        for id in 0..num_threads {
+            let (s, r) = bounded(1);
+            workers_ins.push(s);
+            workers.push(MCTSWorker::new(id, r, master_sender.clone()));
+        }
+
         MCTS {
-            env,
-            root: Node::new(),
-            n,
-            c,
+            workers_ins,
+            workers_out,
         }
     }
 
-    fn search(&mut self) {
-        for _ in 0..self.n {
-            let mut env = self.env.clone();
-            let mut node = &mut self.root;
-            let mut path = vec![];
+    pub fn search(&self, state: State, iters: usize) -> SearchResult {
+        let mcts = Arc::new(MCTSCore::new(state, iters+1));
 
-            // Selection
-            while !node.is_leaf() {
-                let (child, action) = node.select(self.c);
-                path.push((node, action));
-                node = child;
-                env.step(action);
+        // Search
+        for worker in &self.workers_ins {
+            worker.send(MCTSWorkerMessageIn::Search{mcts: Arc::clone(&mcts), iters}).unwrap();
+        }
+
+        mcts.wait_for_result()
+    }
+}
+
+/// Worker thread for Envs
+pub struct MCTSWorker {
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl MCTSWorker {
+    pub fn new(id: usize, in_channel: Receiver<MCTSWorkerMessageIn>, out_channel: Sender<MCTSWorkerMessageOut>) -> MCTSWorker {
+
+        let thread = thread::spawn(move || {
+            loop {
+                if let Ok(message) = in_channel.recv() {
+                    match message {
+                        MCTSWorkerMessageIn::Search{mcts, iters} => {
+                            mcts.search(iters);
+                        }
+                    }
+                }
             }
+        });
 
-            // Expansion
-            if !node.is_expanded() {
-                node.expand(&env);
-            }
-
-            // Simulation
-            let (rew, info) = node.simulate(&env);
-
-            // Backpropagation
-            for (node, action) in path {
-                node.update(action, rew, info);
-            }
+        MCTSWorker {
+            thread: Some(thread),
         }
     }
 
-    fn get_action(&self) -> Action {
-        self.root.select_best()
+    pub fn close(&mut self) {
+        if let Some(handle) = self.thread.take() {
+            handle.join().expect("Could not join mcts worker thread!");
+        }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct SearchResult {
+    pub pi: Array<f32, Ix1>,
+    pub q: Array<f32, Ix1>,
+    pub v: f32,
 }

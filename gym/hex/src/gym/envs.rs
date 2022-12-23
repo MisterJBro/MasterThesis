@@ -1,4 +1,4 @@
-use crate::gym::{Action, Episode, Env, Obs, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut};
+use crate::gym::{Action, Episode, Env, Obss, Infos, Worker, WorkerMessageIn, WorkerMessageOut};
 use numpy::ndarray::{Array, Ix1, Ix2, stack, Axis};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
 use itertools::izip;
