@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::thread;
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
@@ -6,9 +5,6 @@ use std::fmt::{Debug, Formatter};
 use numpy::ndarray::{Array, Ix1};
 use hexgame::gym::{Env, Envs, Action, Obs, Info, Infos, Episode};
 use crossbeam::channel::{unbounded, bounded, Sender, Receiver};
-use atomic_array::{AtomicOptionRefArray, AtomicUsizeArray, AtomicRefArray};
-use atomic_float::AtomicF32;
-use atomic_ref::AtomicRef;
 use rand::Rng;
 use rand::seq::SliceRandom;
 use lazycell::AtomicLazyCell;
@@ -51,7 +47,7 @@ impl MCTS {
     }
 
     pub fn search(&self, state: State, iters: usize) {
-        let mcts = Arc::new(MCTSCore::new(state));
+        let mcts = Arc::new(MCTSCore::new(state, 10_000));
 
         for worker in &self.workers_ins {
             worker.send(MCTSWorkerMessageIn::Search{mcts: Arc::clone(&mcts), iters}).unwrap();
@@ -103,42 +99,56 @@ pub struct MCTSCore {
     discount_factor: f32,
     num_players: u32,
     arena: Arena,
+    iters: AtomicUsize,
 }
 
 impl MCTSCore {
-    pub fn new(state: State) -> MCTSCore {
-        let mut arena = Arena::new(1000);
-        arena.add_node(state);
+    pub fn new(state: State, capacity: usize) -> MCTSCore {
+        let arena = Arena::new(capacity);
+        let legal_acts = MCTSCore::get_legal_actions(&state);
+        arena.add_node(state, None, legal_acts, None).expect("Could not add root node!");
 
         MCTSCore {
             expl_coeff: 2.0,
             discount_factor: 1.0,
             num_players: 2,
             arena,
+            iters: AtomicUsize::new(0),
         }
     }
 
     pub fn search(&self, iters: usize) {
         for i in 0..iters {
+            println!("Iter {}", i);
+
+            let root = self.get_root();
+            let (num_visits, _) = root.from_stats();
+            println!("Num visits {}", num_visits);
+
             let leaf = self.select();
+            println!("\tSelected leaf: {:?}", leaf.arena_id);
             let new_leaf = self.expand(leaf);
 
             if new_leaf.is_err() {
+                println!("\tLeaf Error: {:?}", new_leaf.err());
                 continue;
             }
+            let new_leaf = new_leaf.unwrap();
+            println!("\tExpanded leaf: {:?}, act: {:?}", new_leaf.arena_id, new_leaf.action.borrow().unwrap());
 
-            let ret = self.simulate(new_leaf.unwrap());
-            self.backpropagate(new_leaf.unwrap(), ret);
+            let ret = self.simulate(&new_leaf);
+            println!("\tRet: {:?}", ret);
+            self.backpropagate(&new_leaf, ret);
         }
 
         //self.get_search_result()
     }
 
-    pub fn get_root(&self) -> Node {
-        self.arena.nodes[0]
+    pub fn get_root(&self) -> &Node {
+        &(self.arena.nodes[0])
     }
 
-    pub fn select(&self) -> Node {
+    pub fn select(&self) -> &Node {
         let mut node = self.get_root();
 
         while node.is_fully_expanded() {
@@ -147,7 +157,7 @@ impl MCTSCore {
         node
     }
 
-    pub fn expand(&self, node: Node) -> Result<Node, &'static str> {
+    pub fn expand<'a>(&'a self, node: &'a Node) -> Result<&'a Node, &'static str> {
         if node.is_terminal() {
             return Ok(node);
         }
@@ -162,8 +172,8 @@ impl MCTSCore {
         let action = node.get_unexpanded_action(act_idx);
         let state = node.state.borrow().unwrap();
         let next_state = state.transition(action);
-        let next_legal_acts = self.get_legal_actions(&next_state);
-        let new_node = self.arena.add_node(next_state, action, next_legal_acts, Some(node)).expect("Arena is full!");
+        let next_legal_acts = MCTSCore::get_legal_actions(&next_state);
+        let new_node = self.arena.add_node(next_state, Some(action), next_legal_acts, Some(node)).expect("Arena is full!");
 
         // Finalize by adding child to parent
         self.arena.add_child(node, new_node, act_idx);
@@ -171,7 +181,7 @@ impl MCTSCore {
         Ok(new_node)
     }
 
-    pub fn simulate(&self, node: Node) -> f32 {
+    pub fn simulate(&self, node: &Node) -> f32 {
         if node.is_terminal() {
             return 0.0;
         }
@@ -179,11 +189,28 @@ impl MCTSCore {
         node.rollout(self.discount_factor, self.num_players)
     }
 
-    pub fn backpropagate(&self, mut node: Node, ret: f32) {
-        let curr_ret = ret;
+    pub fn backpropagate(&self, node: &Node, ret: f32) {
+        let mut node = node;
+        let mut curr_ret = ret;
 
-        while node.parent_id.borrow().unwrap().is_some() {
-            
+        loop {
+            println!("\tBackprop: {:?}", node.arena_id.load(Ordering::Acquire));
+            // Add current return
+            let rew = node.state.borrow().unwrap().rew;
+            curr_ret = rew + self.discount_factor * curr_ret;
+            node.add_stats(curr_ret, 1);
+
+            // Flip for next player
+            let flip = if self.num_players == 2 { -1.0f32 } else { 1.0f32 };
+            curr_ret *= flip;
+
+            // Switch to parent
+            let parent_id = node.parent_id.borrow().unwrap();
+            if let Some(id) = parent_id {
+                node = &(self.arena.nodes[*id]);
+            } else {
+                break;
+            }
         }
     }
 
@@ -197,8 +224,8 @@ impl MCTSCore {
 
     /// Get legal actions of state, the order is important! Children are added based on order. Random shuffle for MCTS
     #[inline]
-    pub fn get_legal_actions(&self, state: &State) -> Vec<Action> {
-        let legal_act = state.info.legal_act;
+    pub fn get_legal_actions(state: &State) -> Vec<Action> {
+        let legal_act = &state.info.legal_act;
         let mut acts = legal_act.iter().enumerate().filter(|(_, &x)| x).map(|(i, _)| i as Action).collect::<Vec<Action>>();
         let mut rng = rand::thread_rng();
         acts.shuffle(&mut rng);
@@ -213,7 +240,7 @@ pub struct Node {
     /// Stores both, sum_returns (lower 40 bits as fixed point float) and num_visits (upper 24 bits as u32). So both are updated atomically
     pub stats: AtomicUsize,
     pub num_acts: AtomicUsize,
-    pub action: AtomicLazyCell<Action>,
+    pub action: AtomicLazyCell<Option<Action>>,
     pub state: AtomicLazyCell<State>,
     pub legal_acts: AtomicLazyCell<Vec<Action>>,
     pub act_idx: AtomicUsize,
@@ -262,7 +289,7 @@ impl Node {
 
     /// Combine sum_returns and num_visits to stats atomic
     #[inline]
-    pub fn to_stats(num_visits: u32, sum_returns: f32) -> usize {
+    pub fn to_stats(sum_returns: f32, num_visits: u32) -> usize {
         let num_visits = (num_visits as usize) << 40;
 
         // Get sum returns from ieee float to fixed point float
@@ -274,27 +301,32 @@ impl Node {
         stats
     }
 
+    pub fn add_stats(&self, sum_returns: f32, num_visits: u32) {
+        let to_add = Node::to_stats(sum_returns, num_visits);
+        self.stats.fetch_add(to_add, Ordering::AcqRel);
+    }
+
     /// Select one of the child by using uct
     #[inline]
-    pub fn select_child(&self, c: f32, arena: &Arena) -> Node {
+    pub fn select_child<'a>(&self, c: f32, arena: &'a Arena) -> &'a Node {
         let (num_visits, _) = self.from_stats();
 
         // Get child ids
-        let mut children = self.children.borrow().unwrap();
+        let children = self.children.borrow().unwrap();
         let child_ids = children
             .iter()
             .map(|child| child.load(Ordering::Acquire))
             .collect::<Vec<_>>();
 
         // Get uct values
-        let mut ucts = child_ids.iter().map(|childID| {
-            let child = arena.nodes[*childID];
+        let ucts = child_ids.iter().map(|child_id| {
+            let child = &arena.nodes[*child_id];
             child.uct(c, num_visits as f32)
         }).collect::<Vec<_>>();
 
         // Get max
         let max = ucts.iter()
-            .max_by(|x, y| x.abs().partial_cmp(&y.abs()).unwrap())
+            .max_by(|x, y| x.total_cmp(y))
             .unwrap();
 
         // Get indices of max
@@ -314,7 +346,7 @@ impl Node {
         };
         let idx = child_ids[idx];
 
-        arena.nodes[idx]
+        &arena.nodes[idx]
     }
 
     /// Upper Confidence Bound for Trees
@@ -330,7 +362,7 @@ impl Node {
 
     /// Value function
     #[inline]
-    pub fn get_V(&self) -> f32 {
+    pub fn get_v(&self) -> f32 {
         let (num_visits, sum_returns) = self.from_stats();
         if num_visits == 0 {
             return 0.0;
@@ -362,7 +394,8 @@ impl Node {
     pub fn rollout(&self, discount_factor: f32, num_players: u32) -> f32 {
         let state = self.state.borrow().unwrap();
         let mut env = state.env.clone();
-        let (mut obs, mut rew, mut done, mut info) = (state.obs, state.rew, state.done, state.info);
+        let mut _obs;
+        let (mut rew, mut done, mut info) = (state.rew, state.done, state.info.clone());
         let mut rng = rand::thread_rng();
         let mut ret = 0f32;
         let mut player = 0u32;
@@ -376,7 +409,7 @@ impl Node {
             let act = *acts.choose(&mut rng).unwrap();
 
             // Step
-            (obs, rew, done, info) = env.step(act);
+            (_obs, rew, done, info) = env.step(act);
 
             // Return
             if num_players == 2 {
@@ -428,7 +461,7 @@ impl State {
     /// Transition to the next state with the given action
     #[inline]
     pub fn transition(&self, action: Action) -> State {
-        let next_env = self.env.clone();
+        let mut next_env = self.env.clone();
         let (obs, rew, done, info) = next_env.step(action);
         State::new(obs, rew, done, info, next_env)
     }
@@ -466,17 +499,17 @@ impl Arena {
 
     /// Add a new node to the arena, if capacity is reached, return Err
     #[inline]
-    pub fn add_node(&self, state: State, action: Action, next_legal_act: Vec<Action>, parent: Option<Node>) -> Result<Node, &'static str> {
+    pub fn add_node<'a>(&'a self, state: State, action: Option<Action>, next_legal_act: Vec<Action>, parent: Option<&'a Node>) -> Result<&'a Node, &'static str> {
         let curr_idx = self.idx.fetch_add(1, Ordering::AcqRel);
 
         if curr_idx < self.capacity {
-            let node = self.nodes[curr_idx];
+            let node = &self.nodes[curr_idx];
             let num_acts = state.num_actions();
+            node.is_terminal.store(state.done, Ordering::Release);
             node.action.fill(action).unwrap();
             node.state.fill(state).unwrap();
             node.children.fill((0..num_acts).into_iter().map(|_| AtomicUsize::new(0)).collect()).unwrap();
             node.num_acts.store(num_acts, Ordering::Release);
-            node.is_terminal.store(state.done, Ordering::Release);
             node.legal_acts.fill(next_legal_act).unwrap();
             node.arena_id.store(curr_idx, Ordering::Release);
 
@@ -494,8 +527,8 @@ impl Arena {
 
     /// Add child node to parent, then increment num of children
     #[inline]
-    pub fn add_child(&self, parent: Node, child: Node, act_idx: usize) {
-        let mut children = parent.children.borrow().unwrap();
+    pub fn add_child(&self, parent: &Node, child: &Node, act_idx: usize) {
+        let children = parent.children.borrow().unwrap();
         let child_id = child.arena_id.load(Ordering::Acquire);
         children[act_idx].store(child_id, Ordering::Release);
         parent.num_children.fetch_add(1, Ordering::AcqRel);
@@ -511,16 +544,18 @@ impl Debug for Arena {
 
 fn main () {
     // Env
-    let mut env = Env::new(5);
+    let mut env = Env::new(2);
     let (mut obs, mut info) = env.reset();
 
     // MCTS
-    //let mcts = MCTS::new(1);
-    //let state = State { obs, info, env };
-    //mcts.search(state, 1);
+    let mcts = MCTS::new(1);
+    let state = State { obs, rew: 0.0, done: false, info, env  };
+    mcts.search(state, 6);
+
+    thread::sleep(std::time::Duration::from_secs(2));
 
     // Create a new arena
-    let arena = Arc::new(Arena::new(4));
+    //let arena = Arc::new(Arena::new(4));
 
     // Add some new nodes to the arena
     //let root = arena.add_node(Node1 {num_visits: 12});
