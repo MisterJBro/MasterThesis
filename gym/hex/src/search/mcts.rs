@@ -1,9 +1,8 @@
 use std::thread;
 use std::sync::{Arc};
 use std::fmt::{Debug};
-use numpy::ndarray::{Array, Ix1};
 use crossbeam::channel::{bounded, Sender, Receiver};
-use crate::search::{State, MCTSCore};
+use crate::search::{State, MCTSCore, SearchResult};
 
 
 // Worker Messages
@@ -83,11 +82,4 @@ impl MCTSWorker {
             handle.join().expect("Could not join mcts worker thread!");
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct SearchResult {
-    pub pi: Array<f32, Ix1>,
-    pub q: Array<f32, Ix1>,
-    pub v: f32,
 }

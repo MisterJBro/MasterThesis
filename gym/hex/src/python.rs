@@ -1,10 +1,13 @@
 use crate::gym::{Env, Envs, Action, Obs, Info, Infos, Episode};
-use numpy::ToPyArray;
-use numpy::{PyArray1, PyArray2, PyArray3, PyArray4, PyReadonlyArray2};
+use crate::search::{MCTS, State, SearchResult};
+use numpy::{ToPyArray, PyArray};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArray4, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3};
 use numpy::ndarray::{Array, Ix1, Ix2, Ix3, Ix4, stack, Axis};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use pyo3::ffi::PyByteArrayObject;
 
 
 /// Env Interface for use in Python
@@ -73,7 +76,6 @@ impl PyEnv {
 
 /// (Multiple) Envs Interface for use in Python
 #[pyclass(name = "RustEnvs")]
-#[derive()]
 pub struct PyEnvs(pub Envs);
 
 #[pymethods]
@@ -191,3 +193,42 @@ impl PyEpisode {
         format!("RustEpisode({})", self.__len__())
     }
 }
+
+
+/// MCTS Interface for Python
+#[pyclass(name = "RustMCTS")]
+pub struct PyMCTS(pub MCTS);
+
+#[pymethods]
+impl PyMCTS {
+    #[new]
+    #[args(num_threads="2")]
+    pub fn new(num_threads: usize) -> PyMCTS {
+        PyMCTS(MCTS::new(num_threads))
+    }
+
+    /// Search
+    fn search(&self, state: PyState, iters: usize) -> SearchResult {
+        self.0.search(state.0, iters)
+    }
+}
+
+/// State Interface for Python
+#[pyclass(name = "RustState")]
+#[derive(Clone)]
+pub struct PyState(pub State);
+
+#[pymethods]
+impl PyState {
+    #[new]
+    pub fn new(obs: PyReadonlyArray3<f32>, rew: f32, done: bool, pid: u8, legal_act: PyReadonlyArray1<bool>, env: PyEnv) -> PyState {
+        let obs = obs.as_array().into_owned();
+        let info = Info {
+            pid,
+            legal_act: legal_act.as_array().into_owned(),
+        };
+
+        PyState(State::new(obs, rew, done, info, env.0))
+    }
+}
+
