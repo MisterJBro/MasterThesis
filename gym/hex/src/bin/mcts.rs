@@ -97,6 +97,7 @@ pub struct SearchResult {
 pub struct MCTSCore {
     expl_coeff: f32,
     discount_factor: f32,
+    use_virtual_loss: bool,
     num_players: u32,
     arena: Arena,
     iters: AtomicUsize,
@@ -111,18 +112,17 @@ impl MCTSCore {
         MCTSCore {
             expl_coeff: 2.0,
             discount_factor: 1.0,
+            use_virtual_loss: true,
             num_players: 2,
             arena,
             iters: AtomicUsize::new(0),
         }
     }
 
-    pub fn search(&self, iters: usize) {
-        loop {
-            if self.iters.fetch_add(1, Ordering::AcqRel) >= iters {
-                break;
-            }
+    pub fn search(&self, num_iters: usize) {
+        let mut iter = self.iters.fetch_add(1, Ordering::AcqRel);
 
+        while iter < num_iters {
             let leaf = self.select();
             println!("\tSelected leaf: {:?}", leaf.arena_id);
             let new_leaf = self.expand(leaf);
@@ -136,20 +136,24 @@ impl MCTSCore {
 
             let ret = self.simulate(&new_leaf);
             self.backpropagate(&new_leaf, ret);
+
+            iter = self.iters.fetch_add(1, Ordering::AcqRel);
         }
 
         //self.get_search_result()
     }
 
     pub fn get_root(&self) -> &Node {
-        &(self.arena.nodes[0])
+        let root = &(self.arena.nodes[0]);
+        root.virtual_loss.fetch_add(1, Ordering::AcqRel);
+        root
     }
 
     pub fn select(&self) -> &Node {
         let mut node = self.get_root();
 
         while node.is_fully_expanded() {
-            node = node.select_child(self.expl_coeff, &self.arena);
+            node = node.select_child(self.expl_coeff, &self.arena, self.use_virtual_loss);
         }
         node
     }
@@ -191,6 +195,9 @@ impl MCTSCore {
         let mut curr_ret = ret;
 
         loop {
+            // Remove virtual loss
+            node.virtual_loss.fetch_sub(1, Ordering::AcqRel);
+
             // Add current return
             let rew = node.state.borrow().unwrap().rew;
             curr_ret = rew + self.discount_factor * curr_ret;
@@ -245,6 +252,7 @@ pub struct Node {
     pub is_terminal: AtomicBool,
     pub parent_id: AtomicLazyCell<Option<usize>>,
     pub arena_id: AtomicUsize,
+    pub virtual_loss: AtomicUsize,
 }
 impl Node {
     pub fn new() -> Node {
@@ -260,6 +268,7 @@ impl Node {
             is_terminal: AtomicBool::new(false),
             parent_id: AtomicLazyCell::new(),
             arena_id: AtomicUsize::new(0),
+            virtual_loss: AtomicUsize::new(0),
         }
     }
 
@@ -303,8 +312,9 @@ impl Node {
 
     /// Select one of the child by using uct
     #[inline]
-    pub fn select_child<'a>(&self, c: f32, arena: &'a Arena) -> &'a Node {
+    pub fn select_child<'a>(&self, c: f32, arena: &'a Arena, use_virtual_loss: bool) -> &'a Node {
         let (_, num_visits) = self.from_stats();
+        let virtual_loss = if use_virtual_loss { self.virtual_loss.load(Ordering::Acquire) as f32 } else { 0f32 };
 
         // Get child ids
         let children = self.children.borrow().unwrap();
@@ -316,7 +326,7 @@ impl Node {
         // Get uct values
         let ucts = child_ids.iter().map(|child_id| {
             let child = &arena.nodes[*child_id];
-            child.uct(c, num_visits as f32)
+            child.uct(c, num_visits as f32, virtual_loss)
         }).collect::<Vec<_>>();
 
         // Get max
@@ -341,18 +351,21 @@ impl Node {
         };
         let idx = child_ids[idx];
 
-        &arena.nodes[idx]
+        // Get node
+        let next_node = &arena.nodes[idx];
+        next_node.virtual_loss.fetch_add(1, Ordering::AcqRel);
+        next_node
     }
 
     /// Upper Confidence Bound for Trees
     #[inline]
-    pub fn uct(&self, c: f32, parent_visits: f32) -> f32 {
+    pub fn uct(&self, c: f32, parent_visits: f32, virtual_loss: f32) -> f32 {
         let (sum_returns, num_visits) = self.from_stats();
         if num_visits == 0 {
             return f32::INFINITY;
         }
 
-        sum_returns / num_visits as f32 + c * (parent_visits.ln() / num_visits as f32).sqrt()
+        (sum_returns - virtual_loss) / (num_visits as f32 + virtual_loss) + c * (parent_visits.ln() / (num_visits as f32 + virtual_loss)).sqrt()
     }
 
     /// Value function
