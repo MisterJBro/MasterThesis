@@ -118,12 +118,10 @@ impl MCTSCore {
     }
 
     pub fn search(&self, iters: usize) {
-        for i in 0..iters {
-            println!("Iter {}", i);
-
-            let root = self.get_root();
-            let (num_visits, _) = root.from_stats();
-            println!("Num visits {}", num_visits);
+        loop {
+            if self.iters.fetch_add(1, Ordering::AcqRel) >= iters {
+                break;
+            }
 
             let leaf = self.select();
             println!("\tSelected leaf: {:?}", leaf.arena_id);
@@ -137,7 +135,6 @@ impl MCTSCore {
             println!("\tExpanded leaf: {:?}, act: {:?}", new_leaf.arena_id, new_leaf.action.borrow().unwrap());
 
             let ret = self.simulate(&new_leaf);
-            println!("\tRet: {:?}", ret);
             self.backpropagate(&new_leaf, ret);
         }
 
@@ -194,7 +191,6 @@ impl MCTSCore {
         let mut curr_ret = ret;
 
         loop {
-            println!("\tBackprop: {:?}", node.arena_id.load(Ordering::Acquire));
             // Add current return
             let rew = node.state.borrow().unwrap().rew;
             curr_ret = rew + self.discount_factor * curr_ret;
@@ -275,27 +271,26 @@ impl Node {
 
     /// Get sum_returns as fixed point float and num_visits from stats atomic
     #[inline]
-    pub fn from_stats(&self) -> (u32, f32) {
+    pub fn from_stats(&self) -> (f32, u32) {
         let stats = self.stats.load(Ordering::Acquire);
-        let num_visits = (stats >> 40) as u32;
-
         // Get sum returns from fixed point float to ieee float
-        let sum_returns_bits = ((stats as i64) << 24) >> 24;
+        let sum_returns_bits = (stats as i64) >> 24;
         let sum_returns_fixed = FixedI64::<U13>::from_bits(sum_returns_bits);
         let sum_returns = sum_returns_fixed.saturating_to_num::<f32>();
 
-        (num_visits, sum_returns)
+        let num_visits = ((stats << 40) >> 40) as u32;
+        (sum_returns, num_visits)
     }
 
     /// Combine sum_returns and num_visits to stats atomic
     #[inline]
     pub fn to_stats(sum_returns: f32, num_visits: u32) -> usize {
-        let num_visits = (num_visits as usize) << 40;
-
         // Get sum returns from ieee float to fixed point float
         let sum_returns_fixed = FixedI64::<U13>::saturating_from_num(sum_returns);
         let sum_returns_bits = sum_returns_fixed.to_bits() as usize;
-        let sum_returns_bits_trim = (sum_returns_bits << 24) >> 24;
+        let sum_returns_bits_trim = sum_returns_bits << 24;
+
+        let num_visits = ((num_visits as usize) << 40) >> 40;
 
         let stats = sum_returns_bits_trim | num_visits;
         stats
@@ -309,7 +304,7 @@ impl Node {
     /// Select one of the child by using uct
     #[inline]
     pub fn select_child<'a>(&self, c: f32, arena: &'a Arena) -> &'a Node {
-        let (num_visits, _) = self.from_stats();
+        let (_, num_visits) = self.from_stats();
 
         // Get child ids
         let children = self.children.borrow().unwrap();
@@ -352,7 +347,7 @@ impl Node {
     /// Upper Confidence Bound for Trees
     #[inline]
     pub fn uct(&self, c: f32, parent_visits: f32) -> f32 {
-        let (num_visits, sum_returns) = self.from_stats();
+        let (sum_returns, num_visits) = self.from_stats();
         if num_visits == 0 {
             return f32::INFINITY;
         }
@@ -363,7 +358,7 @@ impl Node {
     /// Value function
     #[inline]
     pub fn get_v(&self) -> f32 {
-        let (num_visits, sum_returns) = self.from_stats();
+        let (sum_returns, num_visits) = self.from_stats();
         if num_visits == 0 {
             return 0.0;
         }
@@ -548,9 +543,9 @@ fn main () {
     let (mut obs, mut info) = env.reset();
 
     // MCTS
-    let mcts = MCTS::new(1);
-    let state = State { obs, rew: 0.0, done: false, info, env  };
-    mcts.search(state, 6);
+    let mcts = MCTS::new(3);
+    let state = State { obs, rew: 0.0, done: false, info, env };
+    mcts.search(state, 5);
 
     thread::sleep(std::time::Duration::from_secs(2));
 
