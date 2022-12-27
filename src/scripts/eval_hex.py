@@ -14,6 +14,7 @@ from src.search.mcts.mcts import MCTS
 from src.search.state import State
 from tqdm import tqdm, trange
 from copy import deepcopy
+from hexgame import RustMCTS, RustState
 
 
 if __name__ == '__main__':
@@ -57,7 +58,17 @@ if __name__ == '__main__':
         global mcts_obj
         if mcts_obj is None:
             mcts_obj = MCTS(config)
-        result = mcts_obj.search(State(env, obs=obs), iters=300)
+        result = mcts_obj.search(State(env, obs=obs), iters=1_000)
+        act = np.argmax(result["pi"])
+        return act
+
+    mcts_rust_obj = None
+    def mcts_rust(env, obs, info):
+        global mcts_rust_obj
+        if mcts_rust_obj is None:
+            mcts_rust_obj = RustMCTS(1)
+        state_rust = RustState(env.env, obs, info["pid"], info["legal_act"])
+        result = mcts_rust_obj.search(state_rust, iters=1_000)
         act = np.argmax(result["pi"])
         return act
 
@@ -129,8 +140,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [az, pn1]
-    num_games = 1
+    players = [mcts_rust, mcts]
+    num_games = 10
     render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
@@ -143,10 +154,15 @@ if __name__ == '__main__':
             if render:
                 env.render()
 
+            # Action
+            import time
+            start = time.time()
             if black_turn:
                 act = players[0](env, obs, info)
             else:
                 act = players[1](env, obs, info)
+            end = time.time()
+            print(f"Time: {end - start:.02f} s")
 
             obs, rew, done, info = env.step(act)
 

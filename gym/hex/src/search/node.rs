@@ -5,6 +5,7 @@ use rand::Rng;
 use lazycell::AtomicLazyCell;
 use fixed::{types::extra::U13, FixedI64};
 use rand::seq::SliceRandom;
+use numpy::ndarray::{Array, Ix1};
 
 
 /// Node of Tree.
@@ -148,6 +149,25 @@ impl Node {
         sum_returns / num_visits as f32
     }
 
+    /// Action value function
+    #[inline]
+    pub fn get_q(&self, num_acts: usize, arena: &Arena, num_players: u32) -> Array<f32, Ix1> {
+        let mut q = Array::from_elem(num_acts, f32::NEG_INFINITY);
+        for child_id in self.children.borrow().unwrap().iter() {
+            let child = arena.get_node(child_id.load(Ordering::Acquire));
+            let act = child.action.borrow().unwrap().unwrap();
+
+            // Get NEGATIVE v for multiplayer
+            q[act as usize] = if num_players == 1 {
+                child.get_v()
+            } else {
+                -child.get_v()
+            };
+
+        }
+        q
+    }
+
     /// Is terminal node
     #[inline]
     pub fn is_terminal(&self) -> bool {
@@ -180,8 +200,6 @@ impl Node {
 
         // Simulate
         while !done {
-            player = (player + 1) % num_players;
-
             // Action
             let acts = info.legal_act.iter().enumerate().filter(|(_, &x)| x).map(|(i, _)| i as Action).collect::<Vec<Action>>();
             let act = *acts.choose(&mut rng).unwrap();
@@ -199,6 +217,7 @@ impl Node {
             } else {
                 ret = rew + discount_factor * ret;
             }
+            player = (player + 1) % num_players;
         }
 
         ret

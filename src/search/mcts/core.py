@@ -12,7 +12,7 @@ class MCTSCore:
         self.expl_coeff = config["uct_c"]
         self.set_root(state)
 
-    def search(self, iters, default=0):
+    def search(self, iters, default=-1e9):
         iter = 0
 
         while iter < iters:
@@ -25,6 +25,7 @@ class MCTSCore:
         qvals = self.root.get_action_values(self.config["num_acts"], default=default)
         val = -self.root.qvalue()
         return {
+            "pi": qvals,
             "Q": qvals,
             "V": val,
         }

@@ -221,7 +221,8 @@ pub struct PyState(pub State);
 #[pymethods]
 impl PyState {
     #[new]
-    pub fn new(obs: PyReadonlyArray3<f32>, rew: f32, done: bool, pid: u8, legal_act: PyReadonlyArray1<bool>, env: PyEnv) -> PyState {
+    #[args(rew="0.0", done="false")]
+    pub fn new(env: PyEnv, obs: PyReadonlyArray3<f32>, pid: u8, legal_act: PyReadonlyArray1<bool>, rew: f32, done: bool) -> PyState {
         let obs = obs.as_array().into_owned();
         let info = Info {
             pid,

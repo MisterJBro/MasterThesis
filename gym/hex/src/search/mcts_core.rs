@@ -196,25 +196,15 @@ impl MCTSCore {
     /// Get search result from root node. Value, Q function as well as policy.
     pub fn get_search_result(&self) -> SearchResult {
         let root = self.get_root();
-        let num_acts = root.num_acts.load(Ordering::Acquire);
-
         let size = root.state.borrow().unwrap().env.size as usize;
         let v = root.get_v();
-        let mut q = Array::from_elem(size*size, -1_000_000f32);
-        let mut pi = Array::from_elem(size*size, -1_000_000f32);
-        for child_id in root.children.borrow().unwrap().iter() {
-            let child = self.arena.get_node(child_id.load(Ordering::Acquire));
-            let act = child.action.borrow().unwrap().unwrap();
-
-            q[act as usize] = child.get_v();
-            pi[act as usize] = child.get_v();
-        }
+        let q = root.get_q(size*size, &self.arena, self.num_players);
 
         // Softmax for pi
+        let mut pi = q.clone();
         pi = pi.mapv(|x| x.exp());
         let pi_sum = pi.sum();
         pi = pi / pi_sum;
-
 
         SearchResult { pi, q, v }
     }

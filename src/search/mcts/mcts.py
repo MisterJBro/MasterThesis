@@ -30,6 +30,7 @@ class MCTS(ParallelSearchAlgorithm):
         qvals = np.mean([m["Q"] for m in msg], axis=0)
         vals = np.mean([m["V"] for m in msg], axis=0)
         return {
+            "pi": qvals,
             "Q": qvals,
             "V": vals,
         }
