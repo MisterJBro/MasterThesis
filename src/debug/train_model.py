@@ -2,16 +2,10 @@ from src.networks.residual_model import ValueEquivalenceModel
 import torch
 import numpy as np
 import torch
-import random
 import numpy as np
 from torch.multiprocessing import freeze_support
-from src.search.state import State
-from src.networks.residual import HexPolicy
-from src.search.alpha_zero.alpha_zero import AlphaZero
 from src.train.config import create_config
 from src.env.hex import HexEnv
-from tqdm import trange
-from copy import deepcopy
 import pickle
 
 if __name__ == '__main__':
@@ -19,7 +13,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 5
+    size = 7
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -43,7 +37,8 @@ if __name__ == '__main__':
 
     # Import data and model
     model = ValueEquivalenceModel(config)
-    with open('checkpoints/eps.pkl', 'rb') as fp:
+    #/work/scratch/jb66zuhe/eps7x7.pkl
+    with open('checkpoints/eps7x7.pkl', 'rb') as fp:
         data = pickle.load(fp)
 
     # Prepare data
@@ -71,4 +66,4 @@ if __name__ == '__main__':
     print(start_val.item())
 
     # Save model
-    model.save("checkpoints/m_5x5_10_128.pt")
+    model.save("checkpoints/m_7x7_10_128.pt")

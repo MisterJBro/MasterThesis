@@ -36,14 +36,14 @@ class ResBlock(nn.Module):
         return F.relu(x + self.layers(x))
 
 class Network(nn.Module):
-    def __init__(self):
+    def __init__(self, num_filters):
         super(Network, self).__init__()
 
         self.body = nn.Sequential(
-            nn.Conv2d(1, 32, 5, stride=2, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(1, num_filters, 5, stride=2, bias=False),
+            nn.BatchNorm2d(num_filters),
             nn.ReLU(),
-            *[ResBlock(32, 3) for _ in range(5)],
+            *[ResBlock(num_filters, 3) for _ in range(5)],
             nn.Flatten(1, -1),
         )
         self.head1 = nn.Linear(4608, 10)
@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     # Init
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    net = Network().to(device)
+    net = Network(32).to(device)
     optimizer = optim.Adam(net.parameters(), lr=2e-4)
     criterion1 = nn.CrossEntropyLoss()
     criterion2 = nn.HuberLoss()

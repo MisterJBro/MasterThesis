@@ -27,4 +27,9 @@ maturin develop --release
 # envs.step([(0,2), (1,2)], num_waits=2)
 # eps = envs.get_episodes()
 
+Executing special script in bin
 # cargo run --bin mcts
+
+Using ONNX Runtime for Rust
+# set ORT_STRATEGY=system
+# set ORT_LIB_LOCATION

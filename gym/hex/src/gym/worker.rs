@@ -1,4 +1,3 @@
-
 use std::thread;
 use core_affinity::CoreId;
 use crossbeam::channel::{Sender, Receiver};
