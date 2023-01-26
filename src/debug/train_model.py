@@ -29,7 +29,6 @@ if __name__ == '__main__':
         "model_num_filters": 128,
         "model_batch_size": 1024,
     })
-    print(config)
 
     class PythonEps():
         def __init__(self, eps):
@@ -40,11 +39,11 @@ if __name__ == '__main__':
 
     # Import data and model
     model = ValueEquivalenceModel(config)
-    model.load("/work/scratch/jb66zuhe/m_7x7_14_128.pt")
-    
+    #model.load("/work/scratch/jb66zuhe/m_7x7_14_128.pt")
+
     # Get train and test data
     #/work/scratch/jb66zuhe/eps7x7.pkl
-    with open('/work/scratch/jb66zuhe/eps7x7.pkl', 'rb') as fp:
+    with open('data/all/eps_1.pkl', 'rb') as fp:
         data = pickle.load(fp)
     shuffle(data)
     n = len(data)

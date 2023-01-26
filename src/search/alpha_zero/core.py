@@ -17,8 +17,8 @@ class AZCore(MCTSCore):
 
     def search(self, iters):
         result = super().search(iters)
-        qvals = result["Q"]
-        vals = result["V"]
+        qvals = result["q"]
+        vals = result["v"]
 
         if self.config["search_return_adv"]:
             max_visits = np.max([child.num_visits for child in self.root.children])
@@ -29,8 +29,8 @@ class AZCore(MCTSCore):
             pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
 
         return {
-            "Q": qvals,
-            "V": vals,
+            "q": qvals,
+            "v": vals,
             "pi": pi,
         }
 

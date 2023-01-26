@@ -75,7 +75,7 @@ class PGSCore(MCTSCore):
             plt.show()
         #plot()
 
-        qvals = self.root.get_action_values(self.config["num_acts"], default=self.root.val)
+        qvals = self.root.get_action_values(self.config["num_acts"], default=0)
         vals = -self.root.qvalue()
 
         if self.config["search_return_adv"]:
@@ -92,8 +92,8 @@ class PGSCore(MCTSCore):
             pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
 
         return {
-            "Q": qvals,
-            "V": vals,
+            "q": qvals,
+            "v": vals,
             "pi": pi,
         }
 
@@ -103,8 +103,6 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(node.state.obs)
             node.pol_h = pol_h
             node.val_h = val_h
-            #with torch.no_grad():
-            #    node.qval = node.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return node
         if node.is_terminal():
             return node
@@ -126,8 +124,6 @@ class PGSCore(MCTSCore):
             pol_h, val_h = self.eval_fn(child.state.obs)
             child.pol_h = pol_h
             child.val_h = val_h
-            #with torch.no_grad():
-            #    child.qval = child.state.rew + self.config["gamma"] * self.base_value(val_h).item()
             return child
         else:
             return node
@@ -146,15 +142,13 @@ class PGSCore(MCTSCore):
             pol_hs.append(pol_h)
             val_hs.append(val_h)
 
+            # Get action
             with torch.no_grad():
                 logits = self.sim_policy(pol_h)
                 logits = self.filter_actions(logits, legal_actions=[env.legal_actions()])
-                # Get principal variations
-                #if node.num_visits == 0:
-                #    act = np.argmax(logits.cpu().numpy())
-                #else:
                 act = Categorical(logits=logits).sample().item()
             acts.append(act)
+            #print("Val: ", self.base_value(val_h.cpu()).item())
             #env.render()
             obs, rew, done, _ = env.step(act)
 
@@ -223,7 +217,11 @@ class PGSCore(MCTSCore):
             val = self.base_value(val_h).reshape(-1)
             #val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
         #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
-        adv = ret - val
+        adv = val
+        #print("Ret: ", ret)
+        #print("Last Val: ", last_val)
+        #print("Val: ", val)
+        #print("Adv: ", adv)
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_h_cpu).to(self.device))
@@ -254,7 +252,9 @@ class PGSCore(MCTSCore):
         else:
             val = val.cpu().numpy().reshape(-1)
             val[::2] = -val[::2]
-            #print("flip val: ",val)
+            #print("Flip val: ", val)
+            #if self.iter
+
             p = 0.8
             k = len(val)
             log_dist = p**np.arange(k)/(-k*np.log(1-p))
@@ -262,6 +262,7 @@ class PGSCore(MCTSCore):
             total_ret = val @ log_dist
             #total_ret = val[-1]
             #print("total_ret: ", total_ret)
+        #print("Total_ret: ", total_ret)
 
         return total_ret
 

@@ -26,8 +26,8 @@ class MCTSCore:
         val = -self.root.qvalue()
         return {
             "pi": qvals,
-            "Q": qvals,
-            "V": val,
+            "q": qvals,
+            "v": val,
         }
 
     def select(self):

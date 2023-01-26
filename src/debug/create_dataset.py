@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
             # Get search results
             res = az.search(states, iters=1_000)
-            vals = np.concatenate([res["V"], [-rew if black_turn else rew]], 0)
+            vals = np.concatenate([res["v"], [-rew if black_turn else rew]], 0)
             vs.append(vals)
             dists.append(np.concatenate([res["pi"], np.zeros((1, size**2))], 0))
 

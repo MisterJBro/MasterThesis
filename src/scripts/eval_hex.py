@@ -15,6 +15,7 @@ from src.search.state import State
 from tqdm import tqdm, trange
 from copy import deepcopy
 from hexgame import RustMCTS, RustState
+import math
 
 
 if __name__ == '__main__':
@@ -27,7 +28,7 @@ if __name__ == '__main__':
     config = create_config({
         "env": env,
         "puct_c": 3.0,
-        "uct_c": np.sqrt(2),
+        "uct_c": math.sqrt(2),
         "search_num_workers": 1,
         "search_evaluator_batch_size": 1,
         "dirichlet_eps": 0.0,
@@ -41,6 +42,8 @@ if __name__ == '__main__':
         "model_num_res_blocks": 10,
         "model_num_filters": 128,
     })
+    config2 = config.copy()
+    config2["pgs_lr"] = 0e-1
 
     # Import policy and model
     policy1 = HexPolicy(config)
@@ -78,7 +81,7 @@ if __name__ == '__main__':
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
         result = az_obj.search(State(env, obs=obs), iters=10_000)
-        print(result["V"])
+        print(result["v"])
         act = np.argmax(result["pi"])
         return act
 
@@ -88,6 +91,15 @@ if __name__ == '__main__':
         if pgs_obj is None:
             pgs_obj = PGS(config, policy1)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
+        act = np.argmax(result["pi"])
+        return act
+
+    pgs_obj2 = None
+    def pgs2(env, obs, info):
+        global pgs_obj2
+        if pgs_obj2 is None:
+            pgs_obj2 = PGS(config2, policy1)
+        result = pgs_obj2.search(State(env, obs=obs), iters=100)
         act = np.argmax(result["pi"])
         return act
 
@@ -140,8 +152,8 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [mcts_rust, mcts]
-    num_games = 10
+    players = [pgs, pgs2]
+    num_games = 1
     render = True
     num_victories_first = 0
     print(f"Simulating games: {players[0].__name__.upper()} vs {players[1].__name__.upper()}!")
@@ -175,6 +187,7 @@ if __name__ == '__main__':
             num_victories_first += rew
 
     print(f"Winrate {players[0].__name__.upper()}: {num_victories_first / num_games :.02f}")
+    print("Num games:", num_games)
 
     # Close
     if mcts_obj is not None:
