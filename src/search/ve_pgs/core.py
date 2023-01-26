@@ -44,7 +44,7 @@ class VEPGSCore(PGSCore):
             return node
         if node == self.root:
             # Create new child nodes, lazy init
-            actions = np.arange(self.num_acts)
+            actions = node.get_legal_actions()
             for action in actions:
                 new_node = self.NodeClass(None, action=action, parent=node)
                 node.children.append(new_node)
@@ -146,6 +146,13 @@ class VEPGSCore(PGSCore):
         #loss_value.backward()
         #self.optim_val.zero_grad()
 
+        val = val.cpu().numpy().reshape(-1)
+        val[::2] = -val[::2]
+        p = 0.8
+        k = len(val)
+        log_dist = p**np.arange(k)/(-k*np.log(1-p))
+        total_ret = val @ log_dist
+
         return total_ret
 
     def set_root(self, state):
@@ -153,7 +160,7 @@ class VEPGSCore(PGSCore):
         self.root = PGSNode(state)
         if state is not None:
             prob, abs, val = self.eval_obs(self.root)
-            self.root.priors = prob
+            self.root.priors = prob[self.root.get_legal_actions()]
             self.root.val = val
             self.root.state.abs = abs
 
