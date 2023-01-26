@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import pathlib
 import yaml
+import math
 
 
 # Default configuration of all algorithm. Ideas adopted from ray framework.
@@ -59,7 +60,7 @@ DEFAULT_CONFIG = {
     "search_evaluator_timeout": 0.001,
     "search_return_adv": True,
 
-    "uct_c": np.sqrt(2),
+    "uct_c": math.sqrt(2),
     "puct_c": 5.0,
     "dirichlet_eps": 0.25,
     "dirichlet_noise": 1.0,
@@ -88,6 +89,7 @@ DEFAULT_CONFIG = {
     "num_checkpoints": 1,
     "experiment_path": "",
     "job_id": 0,
+    "print_config": True,
 }
 
 # Check if configuration is valid, e.g. no illegal parameter values were given like negative learning rate
@@ -162,7 +164,17 @@ def create_config(new_config):
     config.update(args_config(config))
     config = compute_config(config)
     check_config(config)
+
+    if config["print_config"]:
+        print("Config:\n\t" + to_str(config).replace("\n", "\n\t"))
     return config
+
+def to_str(config):
+    # Do not write "env" field
+    config = config.copy()
+    config = {k: v if isinstance(v, (int, str, bool, float)) else str(v) for k, v in config.items()}
+
+    return yaml.dump(config, default_flow_style=False)
 
 def to_yaml(config, path):
     # Do not write "env" field to yaml
