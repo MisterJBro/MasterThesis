@@ -77,7 +77,7 @@ if __name__ == '__main__':
         test_loss = model.test(eps_test, val_test)
         print(f"(After) Test loss: {test_loss:.04f}")
 
-        if min(test_loss) < 0.1 and test_loss > losses[-1]:
+        if min(losses) < 0.1 and test_loss > losses[-1]:
             break
         losses.append(test_loss)
 
