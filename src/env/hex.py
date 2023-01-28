@@ -39,7 +39,7 @@ class HexEnv:
         pass
 
     def __str__(self):
-        return "hex"
+        return f"hex(size={self.size})"
 
     def __getstate__(self):
         return (self.size, self.action_space, self.observation_space, self.env.to_pickle())

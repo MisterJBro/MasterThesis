@@ -180,7 +180,7 @@ def to_yaml(config, path):
     # Do not write "env" field to yaml
     config = config.copy()
     #del config["env"]
-    config = {k: str(v) for k, v in config.items()}
+    config = {k: v if isinstance(v, (int, str, bool, float)) else str(v) for k, v in config.items()}
 
     with open(path, "w") as f:
         f.write(yaml.dump(config, default_flow_style=False))
