@@ -15,19 +15,20 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 7
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
         "device": "cuda:0",
 
-        "model_lr": 6e-4,
-        "model_weight_decay": 1e-6,
-        "model_iters": 10,
+        "model_lr": 1e-4,
+        "model_weight_decay": 0,
+        "model_iters": 1,
         "model_unroll_len": 5,
-        "model_num_res_blocks": 14,
+        "model_num_res_blocks": 2,
         "model_num_filters": 128,
-        "model_batch_size": 1024,
+        "model_batch_size": 512,
+        "use_se": True,
     })
 
     class PythonEps():
@@ -38,12 +39,13 @@ if __name__ == '__main__':
             self.dist = eps["pi"]
 
     # Import data and model
+    losses = [1000]
     model = ValueEquivalenceModel(config)
     #model.load("/work/scratch/jb66zuhe/m_7x7_14_128.pt")
 
     # Get train and test data
     #/work/scratch/jb66zuhe/eps7x7.pkl
-    with open('data/all/eps_1.pkl', 'rb') as fp:
+    with open('checkpoints/eps5x5.pkl', 'rb') as fp:
         data = pickle.load(fp)
     shuffle(data)
     n = len(data)
@@ -67,17 +69,23 @@ if __name__ == '__main__':
     start_state = model.representation(start_obs)
     start_dist, start_val = model.prediction(start_state)
     print("Start obs val: ", start_val.item())
-
-    # Train
     print(f"(Before) Test loss: {model.test(eps_test, val_test):.04f}")
-    model.loss(eps_train, val_train)
-    print(f"(After) Test loss: {model.test(eps_test, val_test):.04f}")
 
-    # Print v after
-    start_obs = torch.zeros((1, 2, size, size)).float().to(config["device"])
-    start_state = model.representation(start_obs)
-    start_dist, start_val = model.prediction(start_state)
-    print("Start obs val: ", start_val.item())
+    for i in range(10):
+        # Train
+        model.loss(eps_train, val_train)
+        test_loss = model.test(eps_test, val_test)
+        print(f"(After) Test loss: {test_loss:.04f}")
 
-    # Save model
-    model.save("/work/scratch/jb66zuhe/m_7x7_14_128_impr.pt")
+        if min(test_loss) < 0.1 and test_loss > losses[-1]:
+            break
+        losses.append(test_loss)
+
+        # Print v after
+        start_obs = torch.zeros((1, 2, size, size)).float().to(config["device"])
+        start_state = model.representation(start_obs)
+        start_dist, start_val = model.prediction(start_state)
+        print("Start obs val: ", start_val.item())
+
+        # Save model
+        model.save(f"/work/scratch/jb66zuhe/m_{size}x{size}_{config['model_num_res_blocks']}_{config['model_num_filters']}.pt")
