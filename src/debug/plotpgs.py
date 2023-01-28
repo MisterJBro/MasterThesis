@@ -7,21 +7,21 @@ if __name__ == '__main__':
     with plt.style.context('seaborn-ticks'):
         # Values over several seeds
         y0 = np.array([
-            [66.6, 66.88, 69.51, 71.57, 68.1, 68.55],
+            [0.1, 0.2, 0.4, 0.5, 0.6, 0.4],
         ])
         y1 = np.array([
-            [66.46, 67.52, 63.24, 68.22, 67.99, 67.12],
+            [0.1, 0.2, 0.4, 0.5, 0.6, 0.4],
         ])
         y2 = np.array([
-            [66.57, 67.9, 69.5, 68.06, 67.88, 68.43],
+            [0.1, 0.2, 0.4, 0.5, 0.6, 0.4],
         ])
         y3 = np.array([
-            [45.529, 25.494, 39.361, 66.441, 48.360, 55],
+            [0.1, 0.2, 0.4, 0.5, 0.6, 0.4],
         ])
 
 
         # Statistics
-        x = np.array([10, 20, 40, 60, 80, 100])
+        x = np.array([10, 20, 50, 100, 150, 200])
         mean0 = np.mean(y0, 0)
         #sigma0 = np.std(y0, 0)/3
         mean1 = np.mean(y1, 0)
@@ -33,58 +33,63 @@ if __name__ == '__main__':
 
         # Parameters
         fontsize_title = 18
-        fontsize_label = 13
-        xlim = (-5, 205)
+        fontsize_label = 12
+        xlim = (-20, 220)
         ylim = (-0.1, 1.1)
-        xticks = np.arange(0, 200, step=50)
-        yticks = np.arange(0, 1, step=0.2)
+        xticks = np.arange(0, 200+50, step=50)
+        yticks = np.arange(0, 1+0.2, step=0.2)
+        grid = True
 
         # Plot
         plt.figure(figsize=(15, 3), dpi=180)
         plt.subplot(141)
-        plt.title("Variance Extension", fontsize=fontsize_title)
+        plt.title("Variance Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean0, label="PGS long horizon")
         plt.xlim(xlim)
         plt.ylim(ylim)
-        plt.xticks(xticks)
-        plt.yticks(yticks)
+        plt.xticks(xticks, fontweight="bold")
+        plt.yticks(yticks, fontweight="bold")
+        plt.grid(grid)
         #plt.fill_between(x, mean0+sigma0, mean0-sigma0, alpha=0.4)
 
         plt.subplot(142)
-        plt.title("Exploration Extension", fontsize=fontsize_title)
+        plt.title("Exploration Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean1, label="PGS short horizon")
         plt.xlim(xlim)
         plt.ylim(ylim)
-        plt.xticks(xticks)
-        plt.yticks(yticks)
+        plt.xticks(xticks, fontweight="bold")
+        plt.yticks(yticks, fontweight="bold")
+        plt.grid(grid)
         #plt.fill_between(x, mean1+sigma1, mean1-sigma1, alpha=0.4)
 
         plt.subplot(143)
-        plt.title("Visit Counts Extension", fontsize=fontsize_title)
+        plt.title("Policy Target Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean2, label="PGS short horizon")
         plt.xlim(xlim)
         plt.ylim(ylim)
-        plt.xticks(xticks)
-        plt.yticks(yticks)
+        plt.xticks(xticks, fontweight="bold")
+        plt.yticks(yticks, fontweight="bold")
+        plt.grid(grid)
         #plt.fill_between(x, mean2+sigma2, mean2-sigma2, alpha=0.4)
 
         plt.subplot(144)
-        plt.title("Update Extension", fontsize=fontsize_title)
+        plt.title("Update Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean3, label="PGS long horizon")
         plt.xlim(xlim)
         plt.ylim(ylim)
-        plt.xticks(xticks)
-        plt.yticks(yticks)
+        plt.xticks(xticks, fontweight="bold")
+        plt.yticks(yticks, fontweight="bold")
+        plt.grid(grid)
         #plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
 
-        plt.subplots_adjust(left=0.033, bottom=0.13, right=0.99, top=0.9, wspace=0.33)
+        plt.subplots_adjust(left=0.044, bottom=0.16, right=0.99, top=0.9, wspace=0.42)
         #plt.tight_layout()
         plt.show()
