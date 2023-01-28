@@ -39,11 +39,12 @@ if __name__ == '__main__':
         xticks = np.arange(0, 200+50, step=50)
         yticks = np.arange(0, 1+0.2, step=0.2)
         grid = True
+        title_pad = 10
 
         # Plot
-        plt.figure(figsize=(15, 3), dpi=180)
+        plt.figure(figsize=(15, 2.6), dpi=180)
         plt.subplot(141)
-        plt.title("Variance Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
+        plt.title("Variance Extension", fontsize=fontsize_title,  fontweight="bold", pad=title_pad)
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean0, label="PGS long horizon")
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         #plt.fill_between(x, mean0+sigma0, mean0-sigma0, alpha=0.4)
 
         plt.subplot(142)
-        plt.title("Exploration Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
+        plt.title("Exploration Extension", fontsize=fontsize_title,  fontweight="bold", pad=title_pad)
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean1, label="PGS short horizon")
@@ -67,7 +68,7 @@ if __name__ == '__main__':
         #plt.fill_between(x, mean1+sigma1, mean1-sigma1, alpha=0.4)
 
         plt.subplot(143)
-        plt.title("Policy Target Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
+        plt.title("Policy Target Extension", fontsize=fontsize_title,  fontweight="bold", pad=title_pad)
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean2, label="PGS short horizon")
@@ -79,7 +80,7 @@ if __name__ == '__main__':
         #plt.fill_between(x, mean2+sigma2, mean2-sigma2, alpha=0.4)
 
         plt.subplot(144)
-        plt.title("Update Extension", fontsize=fontsize_title, fontname="Times New Roma", fontweight="bold")
+        plt.title("Update Extension", fontsize=fontsize_title,  fontweight="bold", pad=title_pad)
         plt.xlabel("Iterations", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
         plt.plot(x, mean3, label="PGS long horizon")
@@ -90,6 +91,6 @@ if __name__ == '__main__':
         plt.grid(grid)
         #plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
 
-        plt.subplots_adjust(left=0.044, bottom=0.16, right=0.99, top=0.9, wspace=0.42)
+        plt.subplots_adjust(left=0.044, bottom=0.18, right=0.99, top=0.87, wspace=0.42)
         #plt.tight_layout()
         plt.show()
