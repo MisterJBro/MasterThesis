@@ -25,7 +25,7 @@ if __name__ == '__main__':
         "model_weight_decay": 0,
         "model_iters": 1,
         "model_unroll_len": 5,
-        "model_num_res_blocks": 2,
+        "model_num_res_blocks": 3,
         "model_num_filters": 128,
         "model_batch_size": 512,
         "use_se": True,
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     print("Start obs val: ", start_val.item())
     print(f"(Before) Test loss: {model.test(eps_test, val_test):.04f}")
 
-    for i in range(10):
+    for i in range(100):
         # Train
         model.loss(eps_train, val_train)
         test_loss = model.test(eps_test, val_test)
