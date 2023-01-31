@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from torch.multiprocessing import freeze_support
 from src.networks.fnn import PendulumPolicy
 from src.networks.model import ValueEquivalenceModel
-from src.search.pgs.mcs import MCS
+from src.search.pgs.variants import MCS
 from src.search.pgs.pgs import PGS
 from src.search.ve_pgs.ve_pgs import VEPGS
 from src.train.config import create_config

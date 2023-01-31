@@ -55,10 +55,10 @@ if __name__ == '__main__':
     ])
 
     win_matrix = np.array([
-        [ 1, 1,  1, 0.3, 0.5],
-        [ 1, 0.7, 0.95, 0.5 , 0.7],
-        [ 1, 0.35, 0.5, 0.05 , 0],
-        [ 1, 0.5, 0.65, 0.3 , 0],
+        [ 1 , 1,  1, 0.3, 0.5],
+        [ 1 , 0.7, 0.95, 0.5 , 0.7],
+        [ 1 , 0.35, 0.5, 0.05 , 0],
+        [ 1 , 0.5, 0.65, 0.3 , 0],
         [0.5, 0,  0, 0, 0 ],
     ])
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     #plt.plot(x, mean3, label="PGS long horizon")
     #plt.fill_between(x, mean3+sigma3, mean3-sigma3, alpha=0.4)
     plt.show()
-    quit()
+    #quit()
 
     # Heat map
     #sns.heatmap(pgs_dist2, linewidth=0.5, annot=True, xticklabels=['a', 'b', 'c', 'd', 'e'], yticklabels=[1,2,3,4,5])

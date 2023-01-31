@@ -23,7 +23,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 7
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -37,9 +37,9 @@ if __name__ == '__main__':
         "device": "cpu",
         "search_return_adv": True,
 
-        "num_res_blocks": 16,
+        "num_res_blocks": 8,
         "num_filters": 128,
-        "model_num_res_blocks": 10,
+        "model_num_res_blocks": 4,
         "model_num_filters": 128,
     })
     config2 = config.copy()
@@ -47,13 +47,13 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("hall_of_fame/p_7x7_16_128.pt")
+    policy1.load("../../checkpoints/p_5x5_8_128.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
     #policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    #model.load("checkpoints/m_5x5_10_128.pt")
+    model.load("../../checkpoints/m_5x5_4_128.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -80,7 +80,7 @@ if __name__ == '__main__':
         global az_obj
         if az_obj is None:
             az_obj = AlphaZero(config, policy1)
-        result = az_obj.search(State(env, obs=obs), iters=10_000)
+        result = az_obj.search(State(env, obs=obs), iters=100)
         print(result["v"])
         act = np.argmax(result["pi"])
         return act
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     def pgs(env, obs, info):
         global pgs_obj
         if pgs_obj is None:
-            pgs_obj = PGS(config, policy1)
+            pgs_obj = PGS(config, policy1, dyn_length=True)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result["pi"])
         return act
@@ -152,7 +152,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [pgs, pgs2]
+    players = [random, pgs]
     num_games = 1
     render = True
     num_victories_first = 0

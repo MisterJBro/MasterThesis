@@ -15,7 +15,7 @@ from torch.distributions.kl import kl_divergence
 class PGSCore(MCTSCore):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
-    def __init__(self, config, state, eval_channel, pol_head, val_head, idx=0):
+    def __init__(self, config, state, eval_channel, pol_head, val_head, idx, mcs, dyn_length, scale_vals, expl_entr, expl_kl, visit_counts, change_update):
         self.config = config
         self.eval_channel = eval_channel
         self.idx = idx
@@ -24,6 +24,13 @@ class PGSCore(MCTSCore):
         self.expl_coeff = config["puct_c"]
         self.device = config["device"]
         self.trunc_len = config["pgs_trunc_len"]
+        self.mcs = mcs
+        self.dyn_length = dyn_length
+        self.scale_vals = scale_vals
+        self.expl_entr = expl_entr
+        self.expl_kl = expl_kl
+        self.visit_counts = visit_counts
+        self.change_update = change_update
 
         self.sim_policy = None
         self.sim_value = None
@@ -78,7 +85,7 @@ class PGSCore(MCTSCore):
         qvals = self.root.get_action_values(self.config["num_acts"], default=0)
         vals = -self.root.qvalue()
 
-        if self.config["search_return_adv"]:
+        if self.visit_counts:
             #print("Normal visit counts:")
             #print(self.root.get_normalized_visit_counts(self.config["num_acts"]).reshape(5,5).round(2))
             #print("QVALS:")
@@ -134,6 +141,12 @@ class PGSCore(MCTSCore):
         obs = node.state.obs
         pol_h = node.pol_h
         val_h = node.val_h
+        num_visits = node.num_visits
+
+        # Option dynamic length
+        if self.dyn_length:
+            branching_factor = 7
+            self.trunc_len = int(np.log(num_visits+1) / np.log(branching_factor)) + 1
 
         player, iter = 0, 0
         acts, rews, pol_hs, val_hs = [], [], [], []
@@ -181,6 +194,7 @@ class PGSCore(MCTSCore):
             last_val = None
 
         return {
+            "num_visits": num_visits,
             "rew": np.array(rews),
             "last_val": last_val,
             "act": torch.tensor(acts).to(self.config["device"]),
@@ -193,6 +207,7 @@ class PGSCore(MCTSCore):
             return 0
 
         # Get traj values
+        num_visits = traj["num_visits"]
         rew = traj["rew"]
         last_val = traj["last_val"]
         act = traj["act"]
@@ -217,14 +232,20 @@ class PGSCore(MCTSCore):
             val = self.base_value(val_h).reshape(-1)
             #val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
         #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
-        adv = val
-        #print("Ret: ", ret)
-        #print("Last Val: ", last_val)
-        #print("Val: ", val)
-        #print("Adv: ", adv)
+        if self.change_update:
+            adv = val
+        else:
+            adv = val[-1]
+
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(pol_h_cpu).to(self.device))
+
+        # MCS
+        if self.mcs:
+            val = val.cpu().numpy().reshape(-1)
+            val[::2] = -val[::2]
+            return val[-1]
 
         # REINFORCE
         #if self.iter < 20:
@@ -233,9 +254,13 @@ class PGSCore(MCTSCore):
         logp = dist.log_prob(act)
         loss_policy = -(logp * adv).mean()
         #print(dist.entropy().mean())
-        loss_dist = kl_divergence(base_dist, dist).mean()
-        #loss_entropy = -dist.entropy().mean()
-        loss = loss_policy# + 0.1 * loss_dist
+        loss = loss_policy
+        if self.expl_entr:
+            loss_entropy = -dist.entropy().mean()
+            loss += 0.1*loss_entropy
+        if self.expl_kl:
+            loss_dist = kl_divergence(base_dist, dist).mean()
+            loss += 0.1*loss_dist
         loss.backward()
         self.optim_pol.step()
 
@@ -246,23 +271,20 @@ class PGSCore(MCTSCore):
         #self.optim_val.zero_grad()
 
         # Calculate return
-        #print("val: ", val)
         if last_val is None:
             total_ret = -ret[0].numpy()
         else:
             val = val.cpu().numpy().reshape(-1)
             val[::2] = -val[::2]
-            #print("Flip val: ", val)
-            #if self.iter
 
-            p = 0.8
-            k = len(val)
-            log_dist = p**np.arange(k)/(-k*np.log(1-p))
-            #print("log_dist: ", log_dist)
-            total_ret = val @ log_dist
-            #total_ret = val[-1]
-            #print("total_ret: ", total_ret)
-        #print("Total_ret: ", total_ret)
+            if self.scale_vals:
+                p = 0.8
+                k = len(val)
+                log_dist = p**np.arange(k)/(-k*np.log(1-p))
+                log_dist = log_dist / np.sum(log_dist)
+                total_ret = val @ log_dist
+            else:
+                total_ret = val[-1]
 
         return total_ret
 

@@ -22,7 +22,7 @@ if __name__ == '__main__':
     freeze_support()
 
     # Init for algos
-    size = 7
+    size = 5
     env = HexEnv(size)
     config = create_config({
         "env": env,
@@ -36,15 +36,15 @@ if __name__ == '__main__':
         "device": "cpu",
         "search_return_adv": True,
 
-        "num_res_blocks": 16,
+        "num_res_blocks": 8,
         "num_filters": 128,
-        "model_num_res_blocks": 10,
+        "model_num_res_blocks": 6,
         "model_num_filters": 128,
     })
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("hall_of_fame/p_7x7_16_128.pt")
+    policy1.load("checkpoints/p_5x5_8_128.pt")
     policy1.eval()
     az = AlphaZero(config, policy1)
 
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         os.makedirs(f'/work/scratch/jb66zuhe/' + name)
 
     # Sample and save
-    eps = sample_eps(500)
+    eps = sample_eps(2)
     with open(f'/work/scratch/jb66zuhe/{name}/eps_{config["job_id"]}.pkl', 'wb') as handle:
         pickle.dump(eps, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

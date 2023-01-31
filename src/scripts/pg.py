@@ -16,7 +16,7 @@ if __name__ == '__main__':
     size = 5
     env = HexEnv(size)
     config = create_config({
-        "train_iters": 200,
+        "train_iters": 100,
         "env": env,
         "max_len": size*size,
         "num_workers": 3,
@@ -25,14 +25,14 @@ if __name__ == '__main__':
         "device": "cuda:0",
         "pi_lr": 6e-4,
         "pi_entropy": 0.0,
-        "num_res_blocks": 10,
+        "num_res_blocks": 8,
         "num_filters": 128,
         "ppo_iters": 6,
         "vf_scale": 1.0,
         "clip_ratio": 0.2,
         "sp_num_eval_games": 120,
         "sp_update_win_rate": 0,
-        "sp_sampled_policies": 8,
+        "sp_sampled_policies": 10,
         "use_se": True,
         "use_amp": False,
         "log_main_metric": "win_rate",

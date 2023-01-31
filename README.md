@@ -16,6 +16,12 @@ cd gym/hex
 maturin develop --release
 ```
 
+## Execution
+Add module to path, like
+```
+set PYTHONPATH=D:/Documents/TU Darmstadt/Master/4 Semester/Master Thesis/MasterThesis/
+```
+
 ## Conda commands
 
 Export environment:
