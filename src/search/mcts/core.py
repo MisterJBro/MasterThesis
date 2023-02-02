@@ -24,8 +24,9 @@ class MCTSCore:
 
         qvals = self.root.get_action_values(self.config["num_acts"], default=default)
         val = -self.root.qvalue()
+        pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
         return {
-            "pi": qvals,
+            "pi": pi,
             "q": qvals,
             "v": val,
         }

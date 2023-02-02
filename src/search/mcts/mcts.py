@@ -27,10 +27,11 @@ class MCTS(ParallelSearchAlgorithm):
                 "iters": iters,
             })
         msg = [c.recv() for c in self.channels]
+        pi = np.mean([m["pi"] for m in msg], axis=0)
         qvals = np.mean([m["q"] for m in msg], axis=0)
         vals = np.mean([m["v"] for m in msg], axis=0)
         return {
-            "pi": qvals,
+            "pi": pi,
             "q": qvals,
             "v": vals,
         }
