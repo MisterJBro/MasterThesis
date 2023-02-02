@@ -47,13 +47,13 @@ if __name__ == '__main__':
 
     # Import policy and model
     policy1 = HexPolicy(config)
-    policy1.load("../../checkpoints/p_5x5_8_128.pt")
+    policy1.load("checkpoints/p_5x5_8_128.pt")
     policy1.eval()
     policy2 = HexPolicy(config)
     #policy2.load("checkpoints/policy_hex_9x9_2.pt")
     policy2.eval()
     model = ValueEquivalenceModel(config)
-    model.load("../../checkpoints/m_5x5_4_128.pt")
+    model.load("checkpoints/m_5x5_4_128.pt")
 
     # Algorithms /Players
     mcts_obj = None
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     def pgs(env, obs, info):
         global pgs_obj
         if pgs_obj is None:
-            pgs_obj = PGS(config, policy1, dyn_length=True)
+            pgs_obj = PGS(config, policy1, mcs=False, dyn_length=False, scale_vals=True, expl_entr=False, expl_kl=True, visit_counts=True, update=True)
         result = pgs_obj.search(State(env, obs=obs), iters=100)
         act = np.argmax(result["pi"])
         return act
@@ -152,7 +152,7 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    players = [random, pgs]
+    players = [pgs, random]
     num_games = 1
     render = True
     num_victories_first = 0

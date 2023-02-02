@@ -16,3 +16,80 @@ Iters:  100
 Win rate:  1.0
 Iters:  200
 Win rate:  0.99
+Iters:  300
+Win rate:  0.995
+Iters:  400
+Win rate:  1.0
+
+Testing variant: pgs_dyn_length against baseline
+Iters:  25
+Win rate:  0.675
+Iters:  50
+Win rate:  0.725
+Iters:  100
+Win rate:  0.625
+Iters:  200
+Win rate:  0.775
+Testing variant: pgs_scale_vals against baseline
+Iters:  25
+Win rate:  0.825
+Iters:  50
+Win rate:  0.7
+Iters:  100
+Win rate:  0.725
+Iters:  200
+Win rate:  0.775
+Testing variant: pgs_expl_entr against baseline
+Iters:  25
+Win rate:  0.425
+Iters:  50
+Win rate:  0.55
+Iters:  100
+Win rate:  0.425
+Iters:  200
+Win rate:  0.525
+Testing variant: pgs_expl_kl against baseline
+Iters:  25
+Win rate:  0.45
+Iters:  50
+Win rate:  0.5
+Iters:  100
+Win rate:  0.475
+Iters:  200
+Win rate:  0.625
+Testing variant: pgs_visit_counts against baseline
+Iters:  25
+Win rate:  0.35
+Iters:  50
+Win rate:  0.6
+Iters:  100
+Win rate:  0.4
+Iters:  200
+Win rate:  0.7
+Testing variant: pgs_update against baseline
+Iters:  25
+Win rate:  0.6
+Iters:  50
+Win rate:  0.575
+Iters:  100
+Win rate:  0.475
+Iters:  200
+Win rate:  0.4
+Testing variant: pgs_update against baseline
+Iters:  25
+Win rate:  0.55
+Iters:  50
+Win rate:  0.525
+Iters:  100
+Win rate:  0.45
+Iters:  200
+Win rate:  0.6
+Testing variant: pgs_all against baseline
+Iters:  25
+Win rate:  0.9
+Iters:  50
+Win rate:  0.6
+Iters:  100
+Win rate:  0.7
+Iters:  200
+Win rate:  0.85

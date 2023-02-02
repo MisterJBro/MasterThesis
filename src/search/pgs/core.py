@@ -15,15 +15,19 @@ from torch.distributions.kl import kl_divergence
 class PGSCore(MCTSCore):
     """ Small Tree for discrete Policy Gradient search. Only depth of one. """
 
-    def __init__(self, config, state, eval_channel, pol_head, val_head, idx, mcs, dyn_length, scale_vals, expl_entr, expl_kl, visit_counts, change_update):
+    def __init__(self, config, state, eval_channel, pol_head, val_head, idx, mcs, dyn_length, scale_vals, expl_entr, expl_kl, visit_counts, change_update, puct_c, trunc_len, pgs_lr, entr_c, kl_c, p_val):
         self.config = config
         self.eval_channel = eval_channel
         self.idx = idx
         self.num_players = config["num_players"]
         self.NodeClass = PGSNode
-        self.expl_coeff = config["puct_c"]
+        self.expl_coeff = puct_c
+        self.pgs_lr = pgs_lr
+        self.entr_c = entr_c
+        self.kl_c = kl_c
+        self.p_val = p_val
         self.device = config["device"]
-        self.trunc_len = config["pgs_trunc_len"]
+        self.trunc_len = trunc_len
         self.mcs = mcs
         self.dyn_length = dyn_length
         self.scale_vals = scale_vals
@@ -52,7 +56,7 @@ class PGSCore(MCTSCore):
             self.base_value = base_value
         self.sim_policy = deepcopy(self.base_policy.cpu()).to(self.config["device"])
         self.sim_value = deepcopy(self.base_value.cpu()).to(self.config["device"])
-        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.config["pgs_lr"])
+        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.pgs_lr)
         self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
     def search(self, iters):
@@ -98,10 +102,13 @@ class PGSCore(MCTSCore):
         else:
             pi = self.root.get_normalized_visit_counts(self.config["num_acts"])
 
+        visits = self.root.get_normalized_visit_counts(self.config["num_acts"]) * self.root.num_visits
+
         return {
             "q": qvals,
             "v": vals,
             "pi": pi,
+            "visits": visits,
         }
 
     def expand(self, node):
@@ -223,19 +230,19 @@ class PGSCore(MCTSCore):
                 ret[::-2] = rew[-1]
             else:
                 ret = np.full(len(rew), -last_val)
-                ret[::-2] = last_val
+                ret[:-1][::-2] = last_val
         else:
             ret = discount_cumsum(rew, self.config["gamma"])[:-1]
         ret = torch.as_tensor(ret).to(self.device)
+        adv = ret
 
         with torch.no_grad():
             val = self.base_value(val_h).reshape(-1)
             #val = np.concatenate((val.cpu().numpy(), [rew[-1]]))
         #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
-        if self.change_update:
-            adv = val
-        else:
-            adv = val[-1]
+
+        if self.change_update and self.num_players == 2 and last_val is not None:
+            ret = val
 
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
@@ -257,10 +264,10 @@ class PGSCore(MCTSCore):
         loss = loss_policy
         if self.expl_entr:
             loss_entropy = -dist.entropy().mean()
-            loss += 0.1*loss_entropy
+            loss += self.entr_c*loss_entropy
         if self.expl_kl:
             loss_dist = kl_divergence(base_dist, dist).mean()
-            loss += 0.1*loss_dist
+            loss += self.kl_c*loss_dist
         loss.backward()
         self.optim_pol.step()
 
@@ -278,7 +285,7 @@ class PGSCore(MCTSCore):
             val[::2] = -val[::2]
 
             if self.scale_vals:
-                p = 0.8
+                p = self.p_val
                 k = len(val)
                 log_dist = p**np.arange(k)/(-k*np.log(1-p))
                 log_dist = log_dist / np.sum(log_dist)
