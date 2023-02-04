@@ -56,7 +56,10 @@ class PGSCore(MCTSCore):
             self.base_value = base_value
         self.sim_policy = deepcopy(self.base_policy.cpu()).to(self.config["device"])
         self.sim_value = deepcopy(self.base_value.cpu()).to(self.config["device"])
-        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.pgs_lr)
+        if self.change_update:
+            self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.pgs_lr)
+        else:
+            self.optim_pol = optim.SGD(self.sim_policy.parameters(), lr=self.pgs_lr)
         self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
     def search(self, iters):
@@ -242,7 +245,7 @@ class PGSCore(MCTSCore):
         #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
 
         if self.change_update and self.num_players == 2 and last_val is not None:
-            ret = val
+            ret = val - val.mean()
 
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():

@@ -133,3 +133,111 @@ Testing: mcts vs pgs_orig
 Iters: 50 Win rate: 0.175
 Iters: 100 Win rate: 0.075
 Iters: 200 Win rate: 0.125
+Testing: mcts vs pgs_ext
+Iters: 50 Win rate: 0.175
+Iters: 100 Win rate: 0.25
+Iters: 200 Win rate: 0.1
+Testing: mcts vs pn
+Iters: 50 Win rate: 0.275
+Iters: 100 Win rate: 0.225
+Iters: 200 Win rate: 0.25
+Testing: az vs mcts
+Iters: 50 Win rate: 0.95
+Iters: 100 Win rate: 1.0
+Iters: 200 Win rate: 0.975
+Testing: az vs mcs
+Iters: 50 Win rate: 0.75
+Iters: 100 Win rate: 0.55
+Iters: 200 Win rate: 0.5
+Testing: az vs pgs_orig
+Iters: 50 Win rate: 0.65
+Iters: 100 Win rate: 0.525
+Iters: 200 Win rate: 0.5
+Testing: az vs pgs_ext
+Iters: 50 Win rate: 0.875
+Iters: 100 Win rate: 0.65
+Iters: 200 Win rate: 0.65
+Testing: az vs pn
+Iters: 50 Win rate: 0.85
+Iters: 100 Win rate: 0.9
+Iters: 200 Win rate: 0.775
+Testing: mcs vs mcts
+Iters: 50 Win rate: 0.875
+Iters: 100 Win rate: 0.825
+Iters: 200 Win rate: 0.925
+Testing: mcs vs az
+Iters: 50 Win rate: 0.175
+Iters: 100 Win rate: 0.375
+Iters: 200 Win rate: 0.575
+Testing: mcs vs pgs_orig
+Iters: 50 Win rate: 0.275
+Iters: 100 Win rate: 0.45
+Iters: 200 Win rate: 0.625
+Testing: mcs vs pgs_ext
+Iters: 50 Win rate: 0.625
+Iters: 100 Win rate: 0.575
+Iters: 200 Win rate: 0.45
+Testing: mcs vs pn
+Iters: 50 Win rate: 0.65
+Iters: 100 Win rate: 0.725
+Iters: 200 Win rate: 0.775
+Testing: pgs_orig vs mcts
+Iters: 50 Win rate: 0.8
+Iters: 100 Win rate: 0.9
+Iters: 200 Win rate: 0.975
+Testing: pgs_orig vs az
+Iters: 50 Win rate: 0.225
+Iters: 100 Win rate: 0.4
+Iters: 200 Win rate: 0.475
+Testing: pgs_orig vs mcs
+Iters: 50 Win rate: 0.6
+Iters: 100 Win rate: 0.575
+Iters: 200 Win rate: 0.4
+Testing: pgs_orig vs pgs_ext
+Iters: 50 Win rate: 0.625
+Iters: 100 Win rate: 0.475
+Iters: 200 Win rate: 0.7
+Testing: pgs_orig vs pn
+Iters: 50 Win rate: 0.75
+Iters: 100 Win rate: 0.675
+Iters: 200 Win rate: 0.85
+Testing: pgs_ext vs mcts
+Iters: 50 Win rate: 0.8
+Iters: 100 Win rate: 0.75
+Iters: 200 Win rate: 0.825
+Testing: pgs_ext vs az
+Iters: 50 Win rate: 0.15
+Iters: 100 Win rate: 0.3
+Iters: 200 Win rate: 0.4
+Testing: pgs_ext vs mcs
+Iters: 50 Win rate: 0.325
+Iters: 100 Win rate: 0.425
+Iters: 200 Win rate: 0.45
+Testing: pgs_ext vs pgs_orig
+Iters: 50 Win rate: 0.3
+Iters: 100 Win rate: 0.4
+Iters: 200 Win rate: 0.375
+Testing: pgs_ext vs pn
+Iters: 50 Win rate: 0.525
+Iters: 100 Win rate: 0.625
+Iters: 200 Win rate: 0.7
+Testing: pn vs mcts
+Iters: 50 Win rate: 0.775
+Iters: 100 Win rate: 0.75
+Iters: 200 Win rate: 0.75
+Testing: pn vs az
+Iters: 50 Win rate: 0.225
+Iters: 100 Win rate: 0.1
+Iters: 200 Win rate: 0.2
+Testing: pn vs mcs
+Iters: 50 Win rate: 0.375
+Iters: 100 Win rate: 0.25
+Iters: 200 Win rate: 0.175
+Testing: pn vs pgs_orig
+Iters: 50 Win rate: 0.3
+Iters: 100 Win rate: 0.2
+Iters: 200 Win rate: 0.15
+Testing: pn vs pgs_ext
+Iters: 50 Win rate: 0.575
+Iters: 100 Win rate: 0.525
+Iters: 200 Win rate: 0.2

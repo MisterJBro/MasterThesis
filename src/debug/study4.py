@@ -137,7 +137,7 @@ if __name__ == '__main__':
             if i1 == 3 or j1 == 3:
                 pgs_obj = PGS(config, policy, pgs_lr=1e-1)
             if i1 == 4 or j1 == 4:
-                pgs_ext_obj = PGS(config, policy, pgs_lr=1e-1, dyn_length=True, scale_vals=True, expl_entr=True, expl_kl=True, visit_counts=True, update=True)
+                pgs_ext_obj = PGS(config, policy, pgs_lr=1e-1, dyn_length=False, scale_vals=True, expl_entr=True, expl_kl=True, visit_counts=True, update=True)
 
             method1 = methods[i1]
             method2 = methods[j1]
@@ -158,14 +158,14 @@ if __name__ == '__main__':
                             # Action
                             if black_turn:
                                 if pid == 0:
-                                    act = method1(env, obs, info, iters)
+                                    act = method1(env, obs, info, iters, sample=False)
                                 else:
-                                    act = method2(env, obs, info, iters)
+                                    act = method2(env, obs, info, iters, sample=False)
                             else:
                                 if pid == 0:
-                                    act = method2(env, obs, info, iters)
+                                    act = method2(env, obs, info, iters, sample=False)
                                 else:
-                                    act = method1(env, obs, info, iters)
+                                    act = method1(env, obs, info, iters, sample=False)
                             obs, rew, done, info = env.step(act)
 
                             black_turn = not black_turn
