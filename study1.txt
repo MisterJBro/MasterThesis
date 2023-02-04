@@ -93,3 +93,43 @@ Iters:  100
 Win rate:  0.7
 Iters:  200
 Win rate:  0.85
+
+Study4:
+Testing: mcts vs az
+Iters: 50 Win rate: 0.0
+Testing: mcts vs pgs_orig
+Iters: 50 Win rate: 0.1
+Testing: mcts vs pn
+Iters: 50 Win rate: 0.15
+Testing: az vs mcts
+Iters: 50 Win rate: 0.975
+Testing: az vs pgs_orig
+Iters: 50 Win rate: 0.65
+Testing: az vs pn
+Iters: 50 Win rate: 0.825
+Testing: pgs_orig vs mcts
+Iters: 50 Win rate: 0.875
+Testing: pgs_orig vs az
+Iters: 50 Win rate: 0.35
+Testing: pgs_orig vs pn
+Iters: 50 Win rate: 0.575
+Testing: pn vs mcts
+Iters: 50 Win rate: 0.75
+Testing: pn vs az
+Iters: 50 Win rate: 0.15
+Testing: pn vs pgs_orig
+Iters: 50 Win rate: 0.2
+
+5x5 Hex:
+Testing: mcts vs az
+Iters: 50 Win rate: 0.025
+Iters: 100 Win rate: 0.0
+Iters: 200 Win rate: 0.025
+Testing: mcts vs mcs
+Iters: 50 Win rate: 0.125
+Iters: 100 Win rate: 0.05
+Iters: 200 Win rate: 0.05
+Testing: mcts vs pgs_orig
+Iters: 50 Win rate: 0.175
+Iters: 100 Win rate: 0.075
+Iters: 200 Win rate: 0.125

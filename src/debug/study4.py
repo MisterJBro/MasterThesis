@@ -50,18 +50,10 @@ if __name__ == '__main__':
     policy.load(path1)
     policy.eval()
 
-    # Methods
-    mcts_obj = MCTS(config)
-    az_obj = AlphaZero(config, policy)
-    #mcs_obj = PGS(config, policy, pgs_lr=0e-1)
-    pgs_obj = PGS(config, policy, pgs_lr=1e-1)
-    pgs_ext = PGS(config, policy, pgs_lr=1e-1, dyn_length=True, scale_vals=True, expl_entr=True, expl_kl=True, visit_counts=True, update=True)
-
     # Algorithms /Players
     def mcts(env, obs, info, iters, sample=True):
         result = mcts_obj.search(State(env, obs=obs), iters=iters)
         pi = result["pi"].reshape(-1)
-        print(pi.reshape(5,5).round(2))
         if sample:
             act = np.random.choice(len(pi), p=pi)
         else:
@@ -96,8 +88,9 @@ if __name__ == '__main__':
         return act
 
     def pgs_ext(env, obs, info, iters, sample=True):
-        result = pgs_ext.search(State(env, obs=obs), iters=iters)
+        result = pgs_ext_obj.search(State(env, obs=obs), iters=iters)
         pi = result["pi"].reshape(-1)
+        pi = np.exp(pi) / np.sum(np.exp(pi))
         if sample:
             act = np.random.choice(len(pi), p=pi)
         else:
@@ -108,7 +101,7 @@ if __name__ == '__main__':
         obs = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0).to(policy.device)
         with torch.no_grad():
             dist, val = policy(obs, legal_actions=info["legal_act"][np.newaxis])
-        print("Probs:\n", dist.probs.cpu().numpy().reshape(size, size).round(2))
+        #print("Probs:\n", dist.probs.cpu().numpy().reshape(size, size).round(2))
         if sample:
             act = dist.sample().cpu().item()
         else:
@@ -116,18 +109,42 @@ if __name__ == '__main__':
         return act
 
     # Simulate
-    methods = [mcts, az, pgs_orig, pgs_ext, pn]
-    names = ["mcts", "az", "pgs_orig", "pgs_ext", "pn"]
-    for i, name1 in enumerate(names):
-        for j, name2 in enumerate(names):
-            if i == j:
+    mcts_obj = None
+    az_obj = None
+    mcs_obj = None
+    pgs_obj = None
+    pgs_ext_obj = None
+    methods = [mcts, az, mcs, pgs_orig, pgs_ext, pn]
+    names = ["mcts", "az", "mcs", "pgs_orig", "pgs_ext", "pn"]
+    total_iters = 0
+    for i1, name1 in enumerate(names):
+        for j1, name2 in enumerate(names):
+            # Get method
+            if i1 == j1:
                 continue
-            method1 = methods[i]
-            method2 = methods[j]
+
+            # Skipper
+            if total_iters <= 2:
+                total_iters += 1
+                continue
+
+            if i1 == 0 or j1 == 0:
+                mcts_obj = MCTS(config)
+            if i1 == 1 or j1 == 1:
+                az_obj = AlphaZero(config, policy)
+            if i1 == 2 or j1 == 2:
+                mcs_obj = PGS(config, policy, pgs_lr=0e-1)
+            if i1 == 3 or j1 == 3:
+                pgs_obj = PGS(config, policy, pgs_lr=1e-1)
+            if i1 == 4 or j1 == 4:
+                pgs_ext_obj = PGS(config, policy, pgs_lr=1e-1, dyn_length=True, scale_vals=True, expl_entr=True, expl_kl=True, visit_counts=True, update=True)
+
+            method1 = methods[i1]
+            method2 = methods[j1]
 
             print(f"Testing: {name1} vs {name2}")
 
-            for iters in [50]:
+            for iters in [50, 100, 200]:
                 num_victories = 0
                 num_games = 20
                 for pid in range(2):
@@ -157,3 +174,20 @@ if __name__ == '__main__':
                         if (black_turn and pid == 0) or (not black_turn and pid == 1):
                             num_victories += rew
                 print(f"Iters: {iters} Win rate: {num_victories / (num_games*2)}")
+
+            if i1 == 0 or j1 == 0:
+                mcts_obj.close()
+                del mcts_obj
+            if i1 == 1 or j1 == 1:
+                az_obj.close()
+                del az_obj
+            if i1 == 2 or j1 == 2:
+                mcs_obj.close()
+                del mcs_obj
+            if i1 == 3 or j1 == 3:
+                pgs_obj.close()
+                del pgs_obj
+            if i1 == 4 or j1 == 4:
+                pgs_ext_obj.close()
+                del pgs_ext_obj
+            total_iters  += 1
