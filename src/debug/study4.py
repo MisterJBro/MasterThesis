@@ -40,7 +40,7 @@ if __name__ == '__main__':
     config["num_filters"] = 128
 
     # Seed
-    seed_all(0)
+    seed_all(int(config["job_id"]))
 
     # Paths
     path1 = "checkpoints/p_5x5_8_128_weak.pt"
@@ -121,11 +121,6 @@ if __name__ == '__main__':
         for j1, name2 in enumerate(names):
             # Get method
             if i1 == j1:
-                continue
-
-            # Skipper
-            if total_iters <= 2:
-                total_iters += 1
                 continue
 
             if i1 == 0 or j1 == 0:

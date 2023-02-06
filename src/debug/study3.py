@@ -11,6 +11,7 @@ import numpy as np
 from src.search.pgs.pgs import PGS
 import math
 from src.search.state import State
+from src.debug.util import seed_all
 
 
 if __name__ == '__main__':
@@ -34,6 +35,9 @@ if __name__ == '__main__':
     })
     config["num_res_blocks"] = 8
     config["num_filters"] = 128
+
+    # Seed
+    seed_all(int(config["job_id"]))
 
     # Paths
     path1 = "checkpoints/p_5x5_8_128_weak.pt"
@@ -69,25 +73,18 @@ if __name__ == '__main__':
     names = ["pgs_mcs", "pgs_dyn_length", "pgs_scale_vals", "pgs_expl_entr", "pgs_expl_kl", "pgs_visit_counts", "pgs_update", "pgs_all"]
     for i, name in enumerate(names):
         if i == 0:
-            continue
             pgs_variant = PGS(config, policy1, puct_c=5.0, pgs_lr=0e-1)
         elif i == 1:
-            continue
             pgs_variant = PGS(config, policy1, dyn_length=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 2:
-            continue
             pgs_variant = PGS(config, policy1, scale_vals=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 3:
-            continue
             pgs_variant = PGS(config, policy1, expl_entr=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 4:
-            continue
             pgs_variant = PGS(config, policy1, expl_kl=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 5:
-            continue
             pgs_variant = PGS(config, policy1, visit_counts=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 6:
-            continue
             pgs_variant = PGS(config, policy1, update=True, puct_c=5.0, pgs_lr=1e-1)
         elif i == 7:
             pgs_variant = PGS(config, policy1, puct_c=5.0, pgs_lr=1e-1, dyn_length=True, scale_vals=True, expl_entr=True, expl_kl=True, visit_counts=True, update=True)
