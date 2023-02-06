@@ -16,8 +16,8 @@ from torch.distributions.kl import kl_divergence
 class VEPGSCore(PGSCore):
     """ Core of Value Equivalent Policy Gradient Search. """
 
-    def __init__(self, config, state, num_acts, eval_channel, pol_head, val_head, idx=0):
-        super().__init__(config, state, eval_channel, pol_head, val_head, idx=idx)
+    def __init__(self, config, state, num_acts, eval_channel, pol_head, val_head, idx, mcs, dyn_length, scale_vals, expl_entr, expl_kl, visit_counts, change_update, puct_c, trunc_len, pgs_lr, entr_c, kl_c, p_val):
+        super().__init__(config, state, eval_channel, pol_head, val_head, idx, mcs, dyn_length, scale_vals, expl_entr, expl_kl, visit_counts, change_update, puct_c, trunc_len, pgs_lr, entr_c, kl_c, p_val)
         self.num_acts = num_acts
 
     def reset(self, base_policy=None, base_value=None):
@@ -33,7 +33,10 @@ class VEPGSCore(PGSCore):
             self.base_value = base_value
         self.sim_policy = deepcopy(self.base_policy)
         self.sim_value = deepcopy(self.base_value)
-        self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=1e-4)
+        if self.change_update:
+            self.optim_pol = optim.Adam(self.sim_policy.parameters(), lr=self.pgs_lr)
+        else:
+            self.optim_pol = optim.SGD(self.sim_policy.parameters(), lr=self.pgs_lr)
         self.optim_val = optim.Adam(self.sim_value.parameters(), lr=1e-3)
 
     def expand(self, node):
@@ -66,6 +69,12 @@ class VEPGSCore(PGSCore):
     def simulate(self, node):
         abs = node.state.abs
         hidden = node.hidden
+        num_visits = node.num_visits
+
+        # Option dynamic length
+        if self.dyn_length:
+            branching_factor = 7
+            self.trunc_len = int(np.log(num_visits+1) / np.log(branching_factor)) + 1
 
         player = 0
         acts, rews, hs = [], [], []
@@ -93,13 +102,12 @@ class VEPGSCore(PGSCore):
         # Bootstrap last value
         with torch.no_grad():
             last_val = self.base_value(hidden).item()
-        rews.append(last_val)
-        rews = np.array(rews)
-        acts = np.array(acts)
 
         return {
-            "rew": rews,
-            "act": torch.as_tensor(acts),
+            "num_visits": num_visits,
+            "rew": np.array(rews),
+            "last_val": last_val,
+            "act": torch.as_tensor(np.array(acts)),
             "hidden": torch.concat(hs, 0),
         }
 
@@ -111,32 +119,51 @@ class VEPGSCore(PGSCore):
         rew = traj["rew"]
         act = traj["act"]
         hidden = traj["hidden"].to(self.device)
+        last_val = traj["last_val"]
 
-        # Get ret, vals and adv
-        #ret = discount_cumsum(rew, self.config["gamma"])[:-1]
-        #total_ret = ret[0]
-        #ret = torch.as_tensor(ret).to(self.device)
+        # Get return
+        if self.num_players == 2:
+            # Finished Game
+            ret = np.full(len(rew), -last_val)
+            ret[:-1][::-2] = last_val
+        else:
+            ret = discount_cumsum(rew, self.config["gamma"])[:-1]
+        ret = torch.as_tensor(ret).to(self.device)
 
+        # Value
         with torch.no_grad():
             val = self.base_value(hidden).reshape(-1)
             #val = np.concatenate((val.numpy(), [rew[-1]]))
-        total_ret = val[-1]
-        val = torch.as_tensor(val).to(self.device)
+
+        if self.change_update and self.num_players == 2:
+            ret = val - val.mean()
+        adv = ret
+
         #adv = gen_adv_estimation(rew[:-1], val, self.config["gamma"], self.config["lam"])
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
             base_dist = Categorical(logits=self.base_policy(hidden))
+
+        # MCS
+        if self.mcs:
+            val = val.cpu().numpy().reshape(-1)
+            val[::2] = -val[::2]
+            return val[-1]
 
         # REINFORCE
         #if self.iter < 20:
         self.optim_pol.zero_grad()
         dist = Categorical(logits=self.sim_policy(hidden))
         logp = dist.log_prob(act)
-        loss_policy = -(logp * val).mean()
-        loss_dist = kl_divergence(base_dist, dist).mean()
-        #loss_entropy = -dist.entropy().mean()
+        loss_policy = -(logp * adv).mean()
         #print(dist.entropy().mean())
-        loss = loss_policy# + 0.1 * loss_dist
+        loss = loss_policy
+        if self.expl_entr:
+            loss_entropy = -dist.entropy().mean()
+            loss += self.entr_c*loss_entropy
+        if self.expl_kl:
+            loss_dist = kl_divergence(base_dist, dist).mean()
+            loss += self.kl_c*loss_dist
         loss.backward()
         self.optim_pol.step()
 
@@ -146,12 +173,18 @@ class VEPGSCore(PGSCore):
         #loss_value.backward()
         #self.optim_val.zero_grad()
 
+        # Calculate return
         val = val.cpu().numpy().reshape(-1)
         val[::2] = -val[::2]
-        p = 0.8
-        k = len(val)
-        log_dist = p**np.arange(k)/(-k*np.log(1-p))
-        total_ret = val @ log_dist
+
+        if self.scale_vals:
+            p = self.p_val
+            k = len(val)
+            log_dist = p**np.arange(k)/(-k*np.log(1-p))
+            log_dist = log_dist / np.sum(log_dist)
+            total_ret = val @ log_dist
+        else:
+            total_ret = val[-1]
 
         return total_ret
 

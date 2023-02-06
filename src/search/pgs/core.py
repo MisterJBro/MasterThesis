@@ -204,7 +204,6 @@ class PGSCore(MCTSCore):
             last_val = None
 
         return {
-            "num_visits": num_visits,
             "rew": np.array(rews),
             "last_val": last_val,
             "act": torch.tensor(acts).to(self.config["device"]),
@@ -237,7 +236,6 @@ class PGSCore(MCTSCore):
         else:
             ret = discount_cumsum(rew, self.config["gamma"])[:-1]
         ret = torch.as_tensor(ret).to(self.device)
-        adv = ret
 
         with torch.no_grad():
             val = self.base_value(val_h).reshape(-1)
@@ -246,6 +244,7 @@ class PGSCore(MCTSCore):
 
         if self.change_update and self.num_players == 2 and last_val is not None:
             ret = val - val.mean()
+        adv = ret
 
         #adv = torch.as_tensor(adv).to(self.device)
         with torch.no_grad():
