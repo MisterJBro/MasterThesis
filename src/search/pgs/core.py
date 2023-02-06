@@ -216,7 +216,6 @@ class PGSCore(MCTSCore):
             return 0
 
         # Get traj values
-        num_visits = traj["num_visits"]
         rew = traj["rew"]
         last_val = traj["last_val"]
         act = traj["act"]
