@@ -27,7 +27,7 @@ if __name__ == '__main__':
         xlim = (20, 205)
         ylim = (-0.05, 1.05)
         xticks = np.arange(50, 200+50, step=50)
-        yticks = np.arange(0, 1+0.25, step=0.25)
+        yticks = np.arange(0, 1+0.5, step=0.5)
         grid = True
         title_pad = 10
 
@@ -36,6 +36,7 @@ if __name__ == '__main__':
         plt.title("Combinations of Extensions", fontsize=fontsize_title,  fontweight="bold", pad=title_pad)
         plt.xlabel("Previous Versions", fontsize=fontsize_label, fontweight="bold")
         plt.ylabel("Win Rate", fontsize=fontsize_label, fontweight="bold")
+        plt.axhline(y = 0.5, color='orange', linestyle = '--')
         m, h1, h2 = mean_confidence_interval(y0)
         plt.plot(x, m, label="")
         plt.fill_between(x, h1, h2, alpha=0.4)

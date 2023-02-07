@@ -54,6 +54,7 @@ if __name__ == '__main__':
     policy2.eval()
     model = ValueEquivalenceModel(config)
     model.load("checkpoints/m_5x5_4_128.pt")
+    model.eval()
 
     # Algorithms /Players
     mcts_obj = None
