@@ -1,5 +1,7 @@
 # hexgame
 
+From https://github.com/MartinAltmayer/hexgame
+
 This is a simple and performant implementation of the Hex board game.
 
 While it was mainly written to be used in Monte-Carlo Tree Search bots for Hex, it aims to be a general-purpose library for Hex.
